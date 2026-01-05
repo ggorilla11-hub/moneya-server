@@ -1,0 +1,27 @@
+{
+  "name": "moneya-server",
+  "version": "1.0.0",
+  "description": "AI머니야 백엔드 서버 - Claude API 연동",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ggorilla11-hub/moneya-server.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ggorilla11-hub/moneya-server/issues"
+  },
+  "homepage": "https://github.com/ggorilla11-hub/moneya-server#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1"
+  }
+}
