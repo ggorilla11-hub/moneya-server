@@ -1,20 +1,18 @@
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import websocket from '@fastify/websocket';
-import OpenAI from 'openai';
-import WebSocket from 'ws';
-import dotenv from 'dotenv';
+const express = require('express');
+const WebSocket = require('ws');
+const cors = require('cors');
+const OpenAI = require('openai');
+require('dotenv').config();
 
-dotenv.config();
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-const fastify = Fastify({ logger: true });
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-await fastify.register(cors, { origin: true });
-await fastify.register(websocket);
-
+// 시스템 프롬프트 생성 함수
 const createSystemPrompt = (userName, financialContext, budgetInfo) => {
-  const name = financialContext?.name || userName || '사용자';
+  const name = financialContext?.name || userName || '고객';
   const age = financialContext?.age || 0;
   const monthlyIncome = financialContext?.monthlyIncome || 0;
   const totalAssets = financialContext?.totalAssets || 0;
@@ -34,16 +32,26 @@ const createSystemPrompt = (userName, financialContext, budgetInfo) => {
   const dailyBudget = budgetInfo?.dailyBudget || financialContext?.dailyBudget || 0;
   const todaySpent = budgetInfo?.todaySpent || financialContext?.todaySpent || 0;
   const remainingBudget = budgetInfo?.remainingBudget || financialContext?.remainingBudget || 0;
-  const todaySaved = financialContext?.todaySaved || 0;
 
   return `당신은 "머니야"입니다. ${name}님의 개인 AI 금융코치입니다.
+
+## 호출 규칙 (최우선!)
+- "${name}" 또는 "머니야"라고 부르면: "네, ${name}님!" 이것만 말하고 멈추세요
+- 절대 추가 설명하지 마세요
+- 그 다음 질문부터 정상 대화하세요
+
+## 말투 규칙 (필수!)
+- 반드시 존댓말을 사용하세요
+- 공손하고 예의바르게 말하세요
+- "~입니다", "~해요", "~하세요", "~할게요" 체를 사용하세요
+- 절대 반말 금지: "~했어", "~할게", "~해봐" 사용하지 마세요
 
 ## 기본 규칙
 - 한국어로만 대화하세요
 - 이모지 절대 사용 금지
-- 짧고 친근하게 말하세요 (최대 2-3문장)
-- 반말로 친근하게 대화하세요
+- 짧고 간결하게 말하세요 (최대 2-3문장)
 - 숫자는 읽기 쉽게 만원, 억 단위로 말하세요
+- 항상 "${name}님"으로 호칭하세요
 
 ## ${name}님의 재무 현황
 
@@ -72,16 +80,27 @@ const createSystemPrompt = (userName, financialContext, budgetInfo) => {
 - 오늘 지출: ${todaySpent.toLocaleString()}원
 - 남은 예산: ${remainingBudget.toLocaleString()}원
 
-${name}님의 든든한 금융 친구가 되어줄게요!`;
+## 대화 예시 (존댓말!)
+- "오늘 남은 예산은 ${remainingBudget.toLocaleString()}원이에요. 무엇이 필요하세요?"
+- "${name}님, 이번 달 저축 잘 하고 계시네요!"
+- "커피 한 잔 정도는 괜찮으세요. 여유 있으시거든요."
+
+${name}님의 든든한 금융 친구가 되어드릴게요!`;
 };
 
-fastify.get('/api/health', async () => {
-  return { status: 'ok', timestamp: new Date().toISOString() };
+// Health check
+app.get('/', (req, res) => {
+  res.json({ status: 'AI머니야 서버 실행 중!', version: '3.0' });
 });
 
-fastify.post('/api/chat', async (request, reply) => {
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// 텍스트 채팅 API
+app.post('/api/chat', async (req, res) => {
   try {
-    const { message, userName, financialContext, budgetInfo } = request.body;
+    const { message, userName, financialContext, budgetInfo } = req.body;
     const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo);
     
     const response = await openai.chat.completions.create({
@@ -95,16 +114,17 @@ fastify.post('/api/chat', async (request, reply) => {
     });
 
     const aiMessage = response.choices[0]?.message?.content || '다시 말씀해주세요!';
-    return { success: true, message: aiMessage };
+    res.json({ success: true, message: aiMessage });
   } catch (error) {
     console.error('Chat API Error:', error);
-    return { success: false, message: '잠시 후 다시 시도해주세요.' };
+    res.json({ success: false, message: '잠시 후 다시 시도해주세요.' });
   }
 });
 
-fastify.post('/api/tts', async (request, reply) => {
+// TTS API
+app.post('/api/tts', async (req, res) => {
   try {
-    const { text, voice = 'shimmer' } = request.body;
+    const { text, voice = 'shimmer' } = req.body;
     const response = await openai.audio.speech.create({
       model: 'tts-1',
       voice: voice,
@@ -113,129 +133,139 @@ fastify.post('/api/tts', async (request, reply) => {
     });
     const buffer = Buffer.from(await response.arrayBuffer());
     const base64Audio = buffer.toString('base64');
-    return { success: true, audio: base64Audio };
+    res.json({ success: true, audio: base64Audio });
   } catch (error) {
     console.error('TTS Error:', error);
-    return { success: false, error: 'TTS failed' };
+    res.json({ success: false, error: 'TTS failed' });
   }
 });
 
-fastify.register(async function (fastify) {
-  fastify.get('/ws/realtime', { websocket: true }, (connection, req) => {
-    console.log('[Realtime] WebSocket connected');
-    
-    let openaiWs = null;
-    let userName = '사용자';
-    let financialContext = null;
-    let budgetInfo = null;
+// HTTP 서버 시작
+const PORT = process.env.PORT || 3001;
+const server = app.listen(PORT, () => {
+  console.log(`AI머니야 서버 시작! 포트: ${PORT}`);
+});
 
-    connection.on('message', async (message) => {
-      try {
-        const data = JSON.parse(message.toString());
+// WebSocket 서버 (AI지니와 동일한 구조)
+const wss = new WebSocket.Server({ server });
+
+wss.on('connection', (ws, req) => {
+  console.log('[Realtime] WebSocket 연결됨');
+  
+  let openaiWs = null;
+  let userName = '고객';
+  let financialContext = null;
+  let budgetInfo = null;
+
+  ws.on('message', (message) => {
+    try {
+      const msg = JSON.parse(message);
+
+      if (msg.type === 'start_app') {
+        console.log('[Realtime] 앱 시작 요청');
+        userName = msg.userName || '고객';
+        financialContext = msg.financialContext || null;
+        budgetInfo = msg.budgetInfo || null;
         
-        if (data.type === 'start_app') {
-          console.log('[Realtime] App start request');
-          userName = data.userName || '사용자';
-          financialContext = data.financialContext || null;
-          budgetInfo = data.budgetInfo || null;
-          
-          console.log('[Realtime] Financial info received:', {
-            name: financialContext?.name,
-            age: financialContext?.age,
-            wealthIndex: financialContext?.wealthIndex,
-            dailyBudget: budgetInfo?.dailyBudget
-          });
-          
-          openaiWs = new WebSocket(
-            'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01',
-            { headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' } }
-          );
+        console.log('[Realtime] 재무 정보 수신:', {
+          name: financialContext?.name,
+          age: financialContext?.age,
+          wealthIndex: financialContext?.wealthIndex
+        });
 
-          openaiWs.on('open', () => {
-            console.log('[Realtime] OpenAI connected!');
-            const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo);
-            
-            openaiWs.send(JSON.stringify({
-              type: 'session.update',
-              session: {
-                modalities: ['text', 'audio'],
-                instructions: systemPrompt,
-                voice: 'shimmer',
-                input_audio_format: 'pcm16',
-                output_audio_format: 'pcm16',
-                input_audio_transcription: { model: 'whisper-1' },
-                turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 500 },
-                temperature: 0.7,
-                max_response_output_tokens: 300,
-              }
-            }));
-            
-            connection.send(JSON.stringify({ type: 'session_started' }));
-          });
+        openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
+          headers: {
+            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+            'OpenAI-Beta': 'realtime=v1'
+          }
+        });
 
-          openaiWs.on('message', (msg) => {
-            try {
-              const event = JSON.parse(msg.toString());
-              
-              if (event.type === 'response.audio.delta' && event.delta) {
-                connection.send(JSON.stringify({ type: 'audio', data: event.delta }));
+        openaiWs.on('open', () => {
+          console.log('[Realtime] OpenAI 연결됨!');
+          const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo);
+          
+          openaiWs.send(JSON.stringify({
+            type: 'session.update',
+            session: {
+              modalities: ['text', 'audio'],
+              instructions: systemPrompt,
+              voice: 'shimmer',
+              input_audio_format: 'pcm16',
+              output_audio_format: 'pcm16',
+              input_audio_transcription: { model: 'whisper-1', language: 'ko' },
+              turn_detection: {
+                type: 'server_vad',
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 1500
               }
-              if (event.type === 'response.audio_transcript.done' && event.transcript) {
-                connection.send(JSON.stringify({ type: 'transcript', role: 'assistant', text: event.transcript }));
-              }
-              if (event.type === 'conversation.item.input_audio_transcription.completed' && event.transcript) {
-                connection.send(JSON.stringify({ type: 'transcript', role: 'user', text: event.transcript }));
-              }
-              if (event.type === 'input_audio_buffer.speech_started') {
-                connection.send(JSON.stringify({ type: 'interrupt' }));
-              }
-              if (event.type === 'error') {
-                console.error('OpenAI error:', event.error);
-                connection.send(JSON.stringify({ type: 'error', error: event.error?.message }));
-              }
-            } catch (e) {
-              console.error('Message parse error:', e);
             }
-          });
+          }));
 
-          openaiWs.on('error', (err) => {
-            console.error('OpenAI WebSocket error:', err);
-            connection.send(JSON.stringify({ type: 'error', error: 'Connection error' }));
-          });
+          ws.send(JSON.stringify({ type: 'session_started' }));
+        });
 
-          openaiWs.on('close', () => {
-            console.log('OpenAI WebSocket closed');
-          });
-        }
-        
-        if (data.type === 'audio' && openaiWs?.readyState === WebSocket.OPEN) {
-          openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: data.data }));
-        }
-        
-        if (data.type === 'stop') {
-          if (openaiWs) { openaiWs.close(); openaiWs = null; }
-        }
-      } catch (e) {
-        console.error('Message handling error:', e);
+        openaiWs.on('message', (data) => {
+          try {
+            const event = JSON.parse(data.toString());
+
+            if (event.type === 'response.audio.delta' && event.delta) {
+              ws.send(JSON.stringify({ type: 'audio', data: event.delta }));
+            }
+
+            if (event.type === 'input_audio_buffer.speech_started') {
+              ws.send(JSON.stringify({ type: 'interrupt' }));
+            }
+
+            if (event.type === 'response.audio_transcript.done') {
+              console.log('머니야:', event.transcript);
+              ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
+            }
+
+            if (event.type === 'conversation.item.input_audio_transcription.completed') {
+              console.log('사용자:', event.transcript);
+              ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'user' }));
+            }
+
+            if (event.type === 'error') {
+              console.error('OpenAI 에러:', event.error);
+              ws.send(JSON.stringify({ type: 'error', error: event.error?.message }));
+            }
+          } catch (e) {
+            console.error('OpenAI 메시지 파싱 에러:', e);
+          }
+        });
+
+        openaiWs.on('error', (err) => {
+          console.error('OpenAI WebSocket 에러:', err.message);
+          ws.send(JSON.stringify({ type: 'error', error: err.message }));
+        });
+
+        openaiWs.on('close', () => {
+          console.log('OpenAI 연결 종료');
+        });
       }
-    });
 
-    connection.on('close', () => {
-      console.log('[Realtime] Client disconnected');
-      if (openaiWs) { openaiWs.close(); openaiWs = null; }
-    });
+      if (msg.type === 'audio' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+        openaiWs.send(JSON.stringify({
+          type: 'input_audio_buffer.append',
+          audio: msg.data
+        }));
+      }
+
+      if (msg.type === 'stop') {
+        console.log('[Realtime] 종료 요청');
+        if (openaiWs) openaiWs.close();
+      }
+    } catch (e) {
+      console.error('메시지 처리 에러:', e);
+    }
+  });
+
+  ws.on('close', () => {
+    console.log('[Realtime] 클라이언트 연결 종료');
+    if (openaiWs) openaiWs.close();
   });
 });
 
-const start = async () => {
-  try {
-    const port = process.env.PORT || 3001;
-    await fastify.listen({ port: Number(port), host: '0.0.0.0' });
-    console.log(`Server running on port ${port}`);
-  } catch (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
-};
-
-start();
+console.log('AI머니야 서버 초기화 완료!');
