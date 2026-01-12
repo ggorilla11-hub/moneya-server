@@ -1,92 +1,241 @@
-const express = require('express');
-const cors = require('cors');
-const Anthropic = require('@anthropic-ai/sdk').default;
-require('dotenv').config();
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import websocket from '@fastify/websocket';
+import OpenAI from 'openai';
+import WebSocket from 'ws';
+import dotenv from 'dotenv';
 
-const app = express();
-const PORT = process.env.PORT || 10000;
+dotenv.config();
 
-// 미들웨어
-app.use(cors());
-app.use(express.json());
+const fastify = Fastify({ logger: true });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Claude 클라이언트
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+await fastify.register(cors, { origin: true });
+await fastify.register(websocket);
+
+const createSystemPrompt = (userName, financialContext, budgetInfo) => {
+  const name = financialContext?.name || userName || '사용자';
+  const age = financialContext?.age || 0;
+  const monthlyIncome = financialContext?.monthlyIncome || 0;
+  const totalAssets = financialContext?.totalAssets || 0;
+  const totalDebt = financialContext?.totalDebt || 0;
+  const netAssets = financialContext?.netAssets || (totalAssets - totalDebt);
+  const wealthIndex = financialContext?.wealthIndex || 0;
+  const financialLevel = financialContext?.financialLevel || 0;
+  const houseName = financialContext?.houseName || '';
+  
+  const livingExpense = financialContext?.livingExpense || 0;
+  const savings = financialContext?.savings || 0;
+  const pension = financialContext?.pension || 0;
+  const insurance = financialContext?.insurance || 0;
+  const loanPayment = financialContext?.loanPayment || 0;
+  const surplus = financialContext?.surplus || 0;
+  
+  const dailyBudget = budgetInfo?.dailyBudget || financialContext?.dailyBudget || 0;
+  const todaySpent = budgetInfo?.todaySpent || financialContext?.todaySpent || 0;
+  const remainingBudget = budgetInfo?.remainingBudget || financialContext?.remainingBudget || 0;
+  const todaySaved = financialContext?.todaySaved || 0;
+
+  return `당신은 "머니야"입니다. ${name}님의 개인 AI 금융코치입니다.
+
+## 기본 규칙
+- 한국어로만 대화하세요
+- 이모지 절대 사용 금지
+- 짧고 친근하게 말하세요 (최대 2-3문장)
+- 반말로 친근하게 대화하세요
+- 숫자는 읽기 쉽게 만원, 억 단위로 말하세요
+
+## ${name}님의 재무 현황
+
+### 기본 정보
+- 이름: ${name}
+- 나이: ${age}세
+- 월수입: ${monthlyIncome}만원
+
+### 자산/부채 현황
+- 총자산: ${totalAssets}만원
+- 총부채: ${totalDebt}만원  
+- 순자산: ${netAssets}만원
+- 부자지수: ${wealthIndex}점
+- 금융집 레벨: ${financialLevel}단계 (${houseName})
+
+### 월 예산 배분
+- 생활비: ${livingExpense.toLocaleString()}원
+- 저축투자: ${savings.toLocaleString()}원
+- 노후연금: ${pension.toLocaleString()}원
+- 보장성보험: ${insurance.toLocaleString()}원
+- 대출상환: ${loanPayment.toLocaleString()}원
+- 잉여자금: ${surplus.toLocaleString()}원
+
+### 오늘 예산
+- 일일 예산: ${dailyBudget.toLocaleString()}원
+- 오늘 지출: ${todaySpent.toLocaleString()}원
+- 남은 예산: ${remainingBudget.toLocaleString()}원
+
+${name}님의 든든한 금융 친구가 되어줄게요!`;
+};
+
+fastify.get('/api/health', async () => {
+  return { status: 'ok', timestamp: new Date().toISOString() };
 });
 
-// AI머니야 시스템 프롬프트
-const MONEYA_SYSTEM_PROMPT = `당신은 AI머니야입니다. 오상열 CFP의 20년 재무설계 노하우를 학습한 AI 금융코치입니다.
-
-## 역할
-- 친근하고 유머러스한 금융코치
-- 상품 판매 없이 순수하게 고객의 재무 건강을 돕는 조력자
-- "이거 사도 돼?"라는 질문에 현명한 조언을 주는 친구
-
-## 대화 스타일 (4단계 원칙)
-1. 좋은 것 먼저 (긍정): "대표님, 이번 달 저축률이 올랐어요!"
-2. 살짝 아쉬운 것 (현실): "다만, 식비가 예산보다 15% 초과했어요"
-3. 근거 제시 (시뮬레이션): "지금 페이스라면 3년 후 순자산 2억 달성 가능해요"
-4. 마무리 (선택권 부여): "어떻게 하실까요?"
-
-## 핵심 원칙
-1. 절대 특정 금융상품을 추천하지 않습니다
-2. 투자 수익을 보장하는 발언을 하지 않습니다
-3. 10년 후가 아닌 3년 이내 시뮬레이션을 제시합니다
-4. 응답은 간결하게 2-3문장으로 합니다
-
-## 금지 표현
-- "결정은 대표님 몫이에요" → "어떻게 하실까요?"로 대체
-- 책임 회피 표현 금지, 손 잡고 안내하는 표현 사용`;
-
-// 서버 상태 확인
-app.get('/', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    service: 'AI머니야 백엔드',
-    version: '1.0.0',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// AI 채팅 엔드포인트
-app.post('/api/chat', async (req, res) => {
+fastify.post('/api/chat', async (request, reply) => {
   try {
-    const { message, context = [] } = req.body;
-
-    const messages = [
-      ...context,
-      { role: 'user', content: message }
-    ];
-
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      system: MONEYA_SYSTEM_PROMPT,
-      messages: messages
+    const { message, userName, financialContext, budgetInfo } = request.body;
+    const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo);
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: message }
+      ],
+      max_tokens: 200,
+      temperature: 0.7,
     });
 
-    res.json({ 
-      success: true, 
-      response: response.content[0].text,
-      timestamp: new Date().toISOString()
-    });
+    const aiMessage = response.choices[0]?.message?.content || '다시 말씀해주세요!';
+    return { success: true, message: aiMessage };
   } catch (error) {
-    console.error('Chat Error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Chat API Error:', error);
+    return { success: false, message: '잠시 후 다시 시도해주세요.' };
   }
 });
 
-// 서버 시작
-app.listen(PORT, () => {
-  console.log(`
-╔════════════════════════════════════════╗
-║         AI머니야 백엔드 서버            ║
-║                                        ║
-║  PORT: ${PORT}                           ║
-║  STATUS: Running                       ║
-║                                        ║
-║  오원트금융연구소 | 오상열 CFP          ║
-╚════════════════════════════════════════╝
-  `);
+fastify.post('/api/tts', async (request, reply) => {
+  try {
+    const { text, voice = 'shimmer' } = request.body;
+    const response = await openai.audio.speech.create({
+      model: 'tts-1',
+      voice: voice,
+      input: text,
+      response_format: 'mp3',
+    });
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const base64Audio = buffer.toString('base64');
+    return { success: true, audio: base64Audio };
+  } catch (error) {
+    console.error('TTS Error:', error);
+    return { success: false, error: 'TTS failed' };
+  }
 });
+
+fastify.register(async function (fastify) {
+  fastify.get('/ws/realtime', { websocket: true }, (connection, req) => {
+    console.log('[Realtime] WebSocket connected');
+    
+    let openaiWs = null;
+    let userName = '사용자';
+    let financialContext = null;
+    let budgetInfo = null;
+
+    connection.on('message', async (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        
+        if (data.type === 'start_app') {
+          console.log('[Realtime] App start request');
+          userName = data.userName || '사용자';
+          financialContext = data.financialContext || null;
+          budgetInfo = data.budgetInfo || null;
+          
+          console.log('[Realtime] Financial info received:', {
+            name: financialContext?.name,
+            age: financialContext?.age,
+            wealthIndex: financialContext?.wealthIndex,
+            dailyBudget: budgetInfo?.dailyBudget
+          });
+          
+          openaiWs = new WebSocket(
+            'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01',
+            { headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' } }
+          );
+
+          openaiWs.on('open', () => {
+            console.log('[Realtime] OpenAI connected!');
+            const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo);
+            
+            openaiWs.send(JSON.stringify({
+              type: 'session.update',
+              session: {
+                modalities: ['text', 'audio'],
+                instructions: systemPrompt,
+                voice: 'shimmer',
+                input_audio_format: 'pcm16',
+                output_audio_format: 'pcm16',
+                input_audio_transcription: { model: 'whisper-1' },
+                turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 500 },
+                temperature: 0.7,
+                max_response_output_tokens: 300,
+              }
+            }));
+            
+            connection.send(JSON.stringify({ type: 'session_started' }));
+          });
+
+          openaiWs.on('message', (msg) => {
+            try {
+              const event = JSON.parse(msg.toString());
+              
+              if (event.type === 'response.audio.delta' && event.delta) {
+                connection.send(JSON.stringify({ type: 'audio', data: event.delta }));
+              }
+              if (event.type === 'response.audio_transcript.done' && event.transcript) {
+                connection.send(JSON.stringify({ type: 'transcript', role: 'assistant', text: event.transcript }));
+              }
+              if (event.type === 'conversation.item.input_audio_transcription.completed' && event.transcript) {
+                connection.send(JSON.stringify({ type: 'transcript', role: 'user', text: event.transcript }));
+              }
+              if (event.type === 'input_audio_buffer.speech_started') {
+                connection.send(JSON.stringify({ type: 'interrupt' }));
+              }
+              if (event.type === 'error') {
+                console.error('OpenAI error:', event.error);
+                connection.send(JSON.stringify({ type: 'error', error: event.error?.message }));
+              }
+            } catch (e) {
+              console.error('Message parse error:', e);
+            }
+          });
+
+          openaiWs.on('error', (err) => {
+            console.error('OpenAI WebSocket error:', err);
+            connection.send(JSON.stringify({ type: 'error', error: 'Connection error' }));
+          });
+
+          openaiWs.on('close', () => {
+            console.log('OpenAI WebSocket closed');
+          });
+        }
+        
+        if (data.type === 'audio' && openaiWs?.readyState === WebSocket.OPEN) {
+          openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: data.data }));
+        }
+        
+        if (data.type === 'stop') {
+          if (openaiWs) { openaiWs.close(); openaiWs = null; }
+        }
+      } catch (e) {
+        console.error('Message handling error:', e);
+      }
+    });
+
+    connection.on('close', () => {
+      console.log('[Realtime] Client disconnected');
+      if (openaiWs) { openaiWs.close(); openaiWs = null; }
+    });
+  });
+});
+
+const start = async () => {
+  try {
+    const port = process.env.PORT || 3001;
+    await fastify.listen({ port: Number(port), host: '0.0.0.0' });
+    console.log(`Server running on port ${port}`);
+  } catch (err) {
+    fastify.log.error(err);
+    process.exit(1);
+  }
+};
+
+start();
