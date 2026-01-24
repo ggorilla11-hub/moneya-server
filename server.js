@@ -2,6 +2,8 @@ const express = require('express');
 const WebSocket = require('ws');
 const cors = require('cors');
 const OpenAI = require('openai');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -10,7 +12,44 @@ app.use(express.json());
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// 시스템 프롬프트 생성 함수
+// ============================================
+// RAG 데이터 로드 (1단계)
+// ============================================
+let ragChunks = [];
+
+const loadRAGData = () => {
+  try {
+    const files = [
+      'rag_chunks.json',
+      'consultation_chunks.json',
+      'bantoe_cases_436.json',
+      'lecture_chunks.json',
+      'quotes_100.json',
+      'customer_questions_100.json',
+      'nagging_100.json',
+      'cfha_script_chunks.json'
+    ];
+    
+    files.forEach(file => {
+      const filePath = path.join(__dirname, file);
+      if (fs.existsSync(filePath)) {
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        ragChunks = ragChunks.concat(data);
+        console.log(`[RAG] ${file} 로드: ${data.length}개`);
+      }
+    });
+    
+    console.log(`[RAG] 총 ${ragChunks.length}개 청크 로드 완료`);
+  } catch (e) {
+    console.error('[RAG] 데이터 로드 실패:', e.message);
+  }
+};
+
+loadRAGData();
+
+// ============================================
+// 시스템 프롬프트 생성 함수 (기존 그대로)
+// ============================================
 const createSystemPrompt = (userName, financialContext, budgetInfo) => {
   const name = financialContext?.name || userName || '고객';
   const age = financialContext?.age || 0;
@@ -113,16 +152,20 @@ const createSystemPrompt = (userName, financialContext, budgetInfo) => {
 ${name}님의 든든한 금융 친구가 되어드릴게요!`;
 };
 
-// Health check
+// Health check (버전 업데이트)
 app.get('/', (req, res) => {
-  res.json({ status: 'AI머니야 서버 실행 중!', version: '3.0' });
+  res.json({ 
+    status: 'AI머니야 서버 실행 중!', 
+    version: '3.1',
+    rag: { enabled: true, chunks: ragChunks.length }
+  });
 });
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// 텍스트 채팅 API
+// 텍스트 채팅 API (기존 그대로)
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, userName, financialContext, budgetInfo } = req.body;
@@ -146,7 +189,7 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// TTS API
+// TTS API (기존 그대로)
 app.post('/api/tts', async (req, res) => {
   try {
     const { text, voice = 'shimmer' } = req.body;
@@ -171,7 +214,9 @@ const server = app.listen(PORT, () => {
   console.log(`AI머니야 서버 시작! 포트: ${PORT}`);
 });
 
-// WebSocket 서버 (AI지니와 동일한 구조)
+// ============================================
+// ⚠️ 아래 WebSocket 코드는 절대 수정 금지!
+// ============================================
 const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws, req) => {
