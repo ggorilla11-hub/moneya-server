@@ -48,6 +48,46 @@ const loadRAGData = () => {
 loadRAGData();
 
 // ============================================
+// RAG 검색 함수 (2단계)
+// ============================================
+const searchRAG = (query, maxResults = 3) => {
+  if (!ragChunks.length || !query) return [];
+  
+  // 키워드 추출 (특수문자 제거, 공백 분리)
+  const keywords = query.toLowerCase()
+    .replace(/[?!.,~"'()]/g, '')
+    .split(/\s+/)
+    .filter(w => w.length > 1);
+  
+  if (!keywords.length) return [];
+  
+  // 각 청크에 점수 부여
+  const scored = ragChunks.map(chunk => {
+    const content = (chunk.content || chunk.text || '').toLowerCase();
+    const title = (chunk.title || chunk.source || '').toLowerCase();
+    const category = (chunk.category || '').toLowerCase();
+    
+    let score = 0;
+    keywords.forEach(keyword => {
+      // 내용에 키워드 포함 시 +2점
+      if (content.includes(keyword)) score += 2;
+      // 제목에 키워드 포함 시 +3점
+      if (title.includes(keyword)) score += 3;
+      // 카테고리에 키워드 포함 시 +1점
+      if (category.includes(keyword)) score += 1;
+    });
+    
+    return { ...chunk, score };
+  });
+  
+  // 점수순 정렬 후 상위 결과 반환
+  return scored
+    .filter(c => c.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxResults);
+};
+
+// ============================================
 // 시스템 프롬프트 생성 함수 (기존 그대로)
 // ============================================
 const createSystemPrompt = (userName, financialContext, budgetInfo) => {
@@ -156,13 +196,34 @@ ${name}님의 든든한 금융 친구가 되어드릴게요!`;
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.1',
+    version: '3.2',
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// RAG 검색 테스트 API (2단계 추가)
+app.post('/api/rag-search', (req, res) => {
+  try {
+    const { query } = req.body;
+    const results = searchRAG(query, 5);
+    res.json({ 
+      success: true, 
+      query,
+      count: results.length,
+      results: results.map(r => ({
+        title: r.title || r.source,
+        content: (r.content || r.text || '').substring(0, 200) + '...',
+        score: r.score
+      }))
+    });
+  } catch (error) {
+    console.error('RAG Search Error:', error);
+    res.json({ success: false, error: error.message });
+  }
 });
 
 // 텍스트 채팅 API (기존 그대로)
