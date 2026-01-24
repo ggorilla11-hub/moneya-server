@@ -82,6 +82,21 @@ const searchRAG = (query, maxResults = 3) => {
 };
 
 // ============================================
+// RAG 컨텍스트 생성 헬퍼 함수
+// ============================================
+const buildRAGContext = (query) => {
+  const results = searchRAG(query, 3);
+  if (results.length === 0) return '';
+  
+  let context = '';
+  results.forEach((r, i) => {
+    const content = (r.content || r.text || '').substring(0, 300);
+    context += `${i + 1}. ${content}\n`;
+  });
+  return context;
+};
+
+// ============================================
 // 시스템 프롬프트 생성 함수 (3단계: RAG 연결)
 // ============================================
 const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
@@ -193,24 +208,11 @@ ${name}님의 든든한 금융 친구가 되어드릴게요!`;
   return prompt;
 };
 
-// RAG 컨텍스트 생성 헬퍼 함수
-const buildRAGContext = (query) => {
-  const results = searchRAG(query, 3);
-  if (results.length === 0) return '';
-  
-  let context = '';
-  results.forEach((r, i) => {
-    const content = (r.content || r.text || '').substring(0, 300);
-    context += `${i + 1}. ${content}\n`;
-  });
-  return context;
-};
-
 // Health check (버전 업데이트)
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.3',
+    version: '3.4',
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
@@ -295,7 +297,7 @@ const server = app.listen(PORT, () => {
 });
 
 // ============================================
-// ⚠️ 아래 WebSocket 코드는 절대 수정 금지!
+// WebSocket 서버 (3.5단계: 음성에 RAG 연결)
 // ============================================
 const wss = new WebSocket.Server({ server });
 
@@ -332,7 +334,7 @@ wss.on('connection', (ws, req) => {
 
         openaiWs.on('open', () => {
           console.log('[Realtime] OpenAI 연결됨!');
-          // 음성 모드는 RAG 없이 기본 프롬프트만 사용 (안정성)
+          // 초기 세션은 기본 프롬프트로 시작
           const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo);
           
           openaiWs.send(JSON.stringify({
@@ -373,9 +375,30 @@ wss.on('connection', (ws, req) => {
               ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
             }
 
+            // ============================================
+            // 3.5단계: 사용자 음성 텍스트 수신 시 RAG 검색
+            // ============================================
             if (event.type === 'conversation.item.input_audio_transcription.completed') {
-              console.log('사용자:', event.transcript);
-              ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'user' }));
+              const userText = event.transcript;
+              console.log('사용자:', userText);
+              ws.send(JSON.stringify({ type: 'transcript', text: userText, role: 'user' }));
+              
+              // RAG 검색 수행
+              const ragContext = buildRAGContext(userText);
+              
+              if (ragContext) {
+                console.log('[Realtime] RAG 검색 결과 있음, 세션 업데이트');
+                
+                // RAG 결과를 포함한 새 프롬프트로 세션 업데이트
+                const updatedPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext);
+                
+                openaiWs.send(JSON.stringify({
+                  type: 'session.update',
+                  session: {
+                    instructions: updatedPrompt
+                  }
+                }));
+              }
             }
 
             if (event.type === 'error') {
