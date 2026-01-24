@@ -97,9 +97,9 @@ const buildRAGContext = (query) => {
 };
 
 // ============================================
-// 시스템 프롬프트 생성 함수 (3단계: RAG 연결)
+// 시스템 프롬프트 생성 함수 (4단계: 3차 데이터 포함)
 // ============================================
-const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
+const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '', designData = null) => {
   const name = financialContext?.name || userName || '고객';
   const age = financialContext?.age || 0;
   const monthlyIncome = financialContext?.monthlyIncome || 0;
@@ -168,7 +168,7 @@ const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext =
 
 ## ${name}님의 재무 현황
 
-### 기본 정보
+### 기본 정보 (1차 재무진단)
 - 이름: ${name}
 - 나이: ${age}세
 - 월수입: ${monthlyIncome}만원
@@ -180,7 +180,7 @@ const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext =
 - 부자지수: ${wealthIndex}점
 - 금융집 레벨: ${financialLevel}단계 (${houseName})
 
-### 월 예산 배분
+### 월 예산 배분 (2차 예산조정)
 - 생활비: ${livingExpense.toLocaleString()}원
 - 저축투자: ${savings.toLocaleString()}원
 - 노후연금: ${pension.toLocaleString()}원
@@ -191,9 +191,88 @@ const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext =
 ### 오늘 예산
 - 일일 예산: ${dailyBudget.toLocaleString()}원
 - 오늘 지출: ${todaySpent.toLocaleString()}원
-- 남은 예산: ${remainingBudget.toLocaleString()}원
+- 남은 예산: ${remainingBudget.toLocaleString()}원`;
 
-## 대화 예시 (존댓말!)
+  // 3차 금융집짓기 데이터 추가
+  if (designData) {
+    prompt += `\n\n### 금융집짓기 재무설계 (3차 데이터)`;
+    
+    // 은퇴설계
+    if (designData.retire) {
+      const r = designData.retire;
+      prompt += `\n\n#### 은퇴설계
+- 현재나이: ${r.currentAge || 0}세
+- 은퇴예정: ${r.retireAge || 0}세
+- 기대수명: ${r.lifeExpectancy || 0}세
+- 월 필요생활비: ${(r.monthlyExpense || 0).toLocaleString()}원
+- 국민연금 예상: ${(r.nationalPension || 0).toLocaleString()}원
+- 개인연금 예상: ${(r.personalPension || 0).toLocaleString()}원`;
+    }
+    
+    // 부채관리
+    if (designData.debt) {
+      const d = designData.debt;
+      prompt += `\n\n#### 부채관리
+- 월소득: ${(d.monthlyIncome || 0).toLocaleString()}원
+- 주택담보대출 잔액: ${(d.mortgageBalance || 0).toLocaleString()}원 (금리 ${d.mortgageRate || 0}%)
+- 주택담보대출 월상환: ${(d.mortgageMonthly || 0).toLocaleString()}원
+- 신용대출 잔액: ${(d.creditBalance || 0).toLocaleString()}원 (금리 ${d.creditRate || 0}%)
+- 신용대출 월상환: ${(d.creditMonthly || 0).toLocaleString()}원`;
+    }
+    
+    // 저축설계
+    if (designData.save) {
+      const s = designData.save;
+      prompt += `\n\n#### 저축설계
+- 월소득: ${(s.monthlyIncome || 0).toLocaleString()}원
+- 월저축액: ${(s.monthlySaving || 0).toLocaleString()}원
+- 목표수익률: ${s.targetRate || 0}%`;
+    }
+    
+    // 투자설계
+    if (designData.invest) {
+      const i = designData.invest;
+      prompt += `\n\n#### 투자설계
+- 현재나이: ${i.currentAge || 0}세
+- 현재자산: ${(i.currentAssets || 0).toLocaleString()}원
+- 월투자액: ${(i.monthlyInvestment || 0).toLocaleString()}원
+- 기대수익률: ${i.expectedReturn || 0}%`;
+    }
+    
+    // 세금설계
+    if (designData.tax) {
+      const t = designData.tax;
+      prompt += `\n\n#### 세금설계
+- 연소득: ${(t.annualIncome || 0).toLocaleString()}원
+- 연금저축: ${(t.pensionSaving || 0).toLocaleString()}원
+- IRP: ${(t.irpContribution || 0).toLocaleString()}원
+- 주택청약: ${(t.housingSubscription || 0).toLocaleString()}원`;
+    }
+    
+    // 부동산설계
+    if (designData.estate) {
+      const e = designData.estate;
+      prompt += `\n\n#### 부동산설계
+- 현재시세: ${(e.currentPrice || 0).toLocaleString()}원
+- 대출잔액: ${(e.loanBalance || 0).toLocaleString()}원
+- 월임대료: ${(e.monthlyRent || 0).toLocaleString()}원
+- 보유기간: ${e.holdingYears || 0}년
+- 예상상승률: ${e.expectedGrowth || 0}%`;
+    }
+    
+    // 보험설계
+    if (designData.insurance) {
+      const ins = designData.insurance;
+      prompt += `\n\n#### 보험설계
+- 월보험료: ${(ins.monthlyPremium || 0).toLocaleString()}원
+- 사망보장: ${(ins.deathCoverage || 0).toLocaleString()}원
+- 질병보장: ${(ins.diseaseCoverage || 0).toLocaleString()}원
+- 실손보험: ${ins.hasHealthInsurance ? '가입' : '미가입'}
+- 연금보험: ${(ins.pensionInsurance || 0).toLocaleString()}원`;
+    }
+  }
+
+  prompt += `\n\n## 대화 예시 (존댓말!)
 - "오늘 남은 예산은 ${remainingBudget.toLocaleString()}원이에요. 무엇이 필요하세요?"
 - "${name}님, 이번 달 저축 잘 하고 계시네요!"
 - "커피 한 잔 정도는 괜찮으세요. 여유 있으시거든요."
@@ -212,7 +291,7 @@ ${name}님의 든든한 금융 친구가 되어드릴게요!`;
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.4',
+    version: '3.5',
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
@@ -242,16 +321,17 @@ app.post('/api/rag-search', (req, res) => {
   }
 });
 
-// 텍스트 채팅 API (3단계: RAG 연결)
+// 텍스트 채팅 API (4단계: 3차 데이터 포함)
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, userName, financialContext, budgetInfo } = req.body;
+    const { message, userName, financialContext, budgetInfo, designData } = req.body;
     
     // RAG 검색 및 컨텍스트 생성
     const ragContext = buildRAGContext(message);
-    const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext);
+    const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext, designData);
     
     console.log('[Chat] RAG 검색 결과:', ragContext ? '있음' : '없음');
+    console.log('[Chat] 3차 데이터:', designData ? '있음' : '없음');
     
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -297,7 +377,7 @@ const server = app.listen(PORT, () => {
 });
 
 // ============================================
-// WebSocket 서버 (3.5단계: 음성에 RAG 연결)
+// WebSocket 서버 (4단계: 3차 데이터 포함)
 // ============================================
 const wss = new WebSocket.Server({ server });
 
@@ -308,6 +388,7 @@ wss.on('connection', (ws, req) => {
   let userName = '고객';
   let financialContext = null;
   let budgetInfo = null;
+  let designData = null;  // 3차 금융집짓기 데이터
 
   ws.on('message', (message) => {
     try {
@@ -318,11 +399,13 @@ wss.on('connection', (ws, req) => {
         userName = msg.userName || '고객';
         financialContext = msg.financialContext || null;
         budgetInfo = msg.budgetInfo || null;
+        designData = msg.designData || null;  // 3차 데이터 수신
         
         console.log('[Realtime] 재무 정보 수신:', {
           name: financialContext?.name,
           age: financialContext?.age,
-          wealthIndex: financialContext?.wealthIndex
+          wealthIndex: financialContext?.wealthIndex,
+          hasDesignData: !!designData
         });
 
         openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
@@ -334,8 +417,8 @@ wss.on('connection', (ws, req) => {
 
         openaiWs.on('open', () => {
           console.log('[Realtime] OpenAI 연결됨!');
-          // 초기 세션은 기본 프롬프트로 시작
-          const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo);
+          // 초기 세션: 1차 + 2차 + 3차 데이터 포함
+          const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, '', designData);
           
           openaiWs.send(JSON.stringify({
             type: 'session.update',
@@ -375,9 +458,7 @@ wss.on('connection', (ws, req) => {
               ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
             }
 
-            // ============================================
-            // 3.5단계: 사용자 음성 텍스트 수신 시 RAG 검색
-            // ============================================
+            // 사용자 음성 텍스트 수신 시 RAG 검색
             if (event.type === 'conversation.item.input_audio_transcription.completed') {
               const userText = event.transcript;
               console.log('사용자:', userText);
@@ -389,8 +470,8 @@ wss.on('connection', (ws, req) => {
               if (ragContext) {
                 console.log('[Realtime] RAG 검색 결과 있음, 세션 업데이트');
                 
-                // RAG 결과를 포함한 새 프롬프트로 세션 업데이트
-                const updatedPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext);
+                // RAG 결과 + 3차 데이터를 포함한 새 프롬프트로 세션 업데이트
+                const updatedPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext, designData);
                 
                 openaiWs.send(JSON.stringify({
                   type: 'session.update',
