@@ -53,7 +53,6 @@ loadRAGData();
 const searchRAG = (query, maxResults = 3) => {
   if (!ragChunks.length || !query) return [];
   
-  // 키워드 추출 (특수문자 제거, 공백 분리)
   const keywords = query.toLowerCase()
     .replace(/[?!.,~"'()]/g, '')
     .split(/\s+/)
@@ -61,7 +60,6 @@ const searchRAG = (query, maxResults = 3) => {
   
   if (!keywords.length) return [];
   
-  // 각 청크에 점수 부여
   const scored = ragChunks.map(chunk => {
     const content = (chunk.content || chunk.text || '').toLowerCase();
     const title = (chunk.title || chunk.source || '').toLowerCase();
@@ -69,18 +67,14 @@ const searchRAG = (query, maxResults = 3) => {
     
     let score = 0;
     keywords.forEach(keyword => {
-      // 내용에 키워드 포함 시 +2점
       if (content.includes(keyword)) score += 2;
-      // 제목에 키워드 포함 시 +3점
       if (title.includes(keyword)) score += 3;
-      // 카테고리에 키워드 포함 시 +1점
       if (category.includes(keyword)) score += 1;
     });
     
     return { ...chunk, score };
   });
   
-  // 점수순 정렬 후 상위 결과 반환
   return scored
     .filter(c => c.score > 0)
     .sort((a, b) => b.score - a.score)
@@ -88,9 +82,9 @@ const searchRAG = (query, maxResults = 3) => {
 };
 
 // ============================================
-// 시스템 프롬프트 생성 함수 (기존 그대로)
+// 시스템 프롬프트 생성 함수 (3단계: RAG 연결)
 // ============================================
-const createSystemPrompt = (userName, financialContext, budgetInfo) => {
+const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
   const name = financialContext?.name || userName || '고객';
   const age = financialContext?.age || 0;
   const monthlyIncome = financialContext?.monthlyIncome || 0;
@@ -112,7 +106,7 @@ const createSystemPrompt = (userName, financialContext, budgetInfo) => {
   const todaySpent = budgetInfo?.todaySpent || financialContext?.todaySpent || 0;
   const remainingBudget = budgetInfo?.remainingBudget || financialContext?.remainingBudget || 0;
 
-  return `당신은 "머니야"입니다. ${name}님의 개인 AI 금융코치입니다.
+  let prompt = `당신은 "머니야"입니다. ${name}님의 개인 AI 금융코치입니다.
 
 ## 호출 규칙 (최우선!)
 - "${name}" 또는 "머니야"라고 부르면: "네, ${name}님!" 이것만 말하고 멈추세요
@@ -190,13 +184,33 @@ const createSystemPrompt = (userName, financialContext, budgetInfo) => {
 - "커피 한 잔 정도는 괜찮으세요. 여유 있으시거든요."
 
 ${name}님의 든든한 금융 친구가 되어드릴게요!`;
+
+  // RAG 컨텍스트가 있으면 추가
+  if (ragContext) {
+    prompt += `\n\n## 참고 자료 (오상열 CFP 지식)\n아래 내용을 참고하여 답변하되, 자연스럽게 녹여서 말하세요:\n${ragContext}`;
+  }
+
+  return prompt;
+};
+
+// RAG 컨텍스트 생성 헬퍼 함수
+const buildRAGContext = (query) => {
+  const results = searchRAG(query, 3);
+  if (results.length === 0) return '';
+  
+  let context = '';
+  results.forEach((r, i) => {
+    const content = (r.content || r.text || '').substring(0, 300);
+    context += `${i + 1}. ${content}\n`;
+  });
+  return context;
 };
 
 // Health check (버전 업데이트)
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.2',
+    version: '3.3',
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
@@ -205,7 +219,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// RAG 검색 테스트 API (2단계 추가)
+// RAG 검색 테스트 API
 app.post('/api/rag-search', (req, res) => {
   try {
     const { query } = req.body;
@@ -226,11 +240,16 @@ app.post('/api/rag-search', (req, res) => {
   }
 });
 
-// 텍스트 채팅 API (기존 그대로)
+// 텍스트 채팅 API (3단계: RAG 연결)
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, userName, financialContext, budgetInfo } = req.body;
-    const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo);
+    
+    // RAG 검색 및 컨텍스트 생성
+    const ragContext = buildRAGContext(message);
+    const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext);
+    
+    console.log('[Chat] RAG 검색 결과:', ragContext ? '있음' : '없음');
     
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -313,6 +332,7 @@ wss.on('connection', (ws, req) => {
 
         openaiWs.on('open', () => {
           console.log('[Realtime] OpenAI 연결됨!');
+          // 음성 모드는 RAG 없이 기본 프롬프트만 사용 (안정성)
           const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo);
           
           openaiWs.send(JSON.stringify({
