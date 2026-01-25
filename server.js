@@ -5,6 +5,7 @@ const OpenAI = require('openai');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');  // 🆕 v3.7: OCR용 추가
+const sharp = require('sharp');    // 🆕 v3.11: 이미지 리사이징용 추가
 require('dotenv').config();
 
 const app = express();
@@ -385,8 +386,8 @@ ${analysisContext.analysis}
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.10',
-    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트강화', 'OCR디버깅'],
+    version: '3.11',
+    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트강화', '이미지최적화'],
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
@@ -396,7 +397,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // ============================================
-// 🆕 v3.7: OCR 파일 분석 API (v3.10: 디버깅 로그 추가)
+// 🆕 v3.11: OCR 파일 분석 API (이미지 최적화 + 프롬프트 강화)
 // ============================================
 app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
   try {
@@ -407,15 +408,35 @@ app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
       return res.json({ success: false, error: '파일이 없습니다.' });
     }
     
-    // ★★★ v3.10: 디버깅 로그 추가 ★★★
     console.log(`[OCR] 분석 요청: ${fileName} (${fileType}), 탭: ${currentTab}`);
-    console.log(`[OCR] 파일 상세 - MIME: ${file.mimetype}, 크기: ${file.size}바이트, 버퍼: ${file.buffer ? file.buffer.length + '바이트' : 'null'}`);
+    console.log(`[OCR] 원본 파일 - MIME: ${file.mimetype}, 크기: ${file.size}바이트`);
     
-    const base64Data = file.buffer.toString('base64');
-    const mimeType = file.mimetype || 'image/jpeg';
+    // ★★★ v3.11: 이미지 최적화 (sharp 사용) ★★★
+    let optimizedBuffer = file.buffer;
+    let finalMimeType = file.mimetype || 'image/jpeg';
     
-    // ★★★ v3.10: base64 길이 로그 ★★★
-    console.log(`[OCR] Base64 변환 완료 - 길이: ${base64Data.length}자, MIME: ${mimeType}`);
+    try {
+      // 이미지 리사이징 + 품질 최적화
+      optimizedBuffer = await sharp(file.buffer)
+        .resize(2048, 2048, { 
+          fit: 'inside',           // 비율 유지하며 최대 2048px
+          withoutEnlargement: true // 작은 이미지는 확대 안함
+        })
+        .jpeg({ 
+          quality: 90,             // JPEG 품질 90%
+          mozjpeg: true            // 최적화 압축
+        })
+        .toBuffer();
+      
+      finalMimeType = 'image/jpeg';
+      console.log(`[OCR] 이미지 최적화 완료 - 원본: ${file.size}바이트 → 최적화: ${optimizedBuffer.length}바이트`);
+    } catch (sharpError) {
+      console.log(`[OCR] 이미지 최적화 실패, 원본 사용: ${sharpError.message}`);
+      optimizedBuffer = file.buffer;
+    }
+    
+    const base64Data = optimizedBuffer.toString('base64');
+    console.log(`[OCR] Base64 변환 완료 - 길이: ${base64Data.length}자, MIME: ${finalMimeType}`);
     
     const tabPrompts = {
       retire: '연금증권, 국민연금 가입내역, 퇴직연금 관련 서류',
@@ -429,8 +450,16 @@ app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
     
     const tabContext = tabPrompts[currentTab] || '재무 관련 서류';
     
+    // ★★★ v3.11: 프롬프트 강화 (흐릿해도 최대한 분석) ★★★
     const expertPrompt = `당신은 20년 경력의 재무설계사이자 OCR 분석 전문가입니다.
 현재 분석 대상: ${tabContext}
+
+## 🚨 최우선 규칙: 반드시 분석 시도!
+1. 이미지가 흐릿하거나 화질이 낮아도 **반드시 최대한 분석을 시도**하세요.
+2. 일부만 보여도 보이는 부분을 분석하세요.
+3. **절대로 "분석할 수 없습니다", "식별이 어렵습니다"라고 답하지 마세요.**
+4. 확실하지 않은 부분은 "추정" 또는 "불명확"으로 표시하되, 분석은 진행하세요.
+5. 만약 정말 아무것도 보이지 않는 경우에만 "해당 이미지로 한번 더 업로드 해주세요"라고 안내하세요.
 
 ## OCR 핵심 규칙
 ### 보험증권:
@@ -445,13 +474,13 @@ app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
 - 총 급여액, 소득세, 공제 항목
 
 ## 분석 결과 형식
-1. 서류 종류
-2. 기본 정보 (발급기관, 계약자, 발급일)
-3. 주요 내용 (표 형식)
+1. 서류 종류 (추정 포함)
+2. 기본 정보 (발급기관, 계약자, 발급일) - 보이는 것만
+3. 주요 내용 (표 형식) - 읽을 수 있는 것 모두
 4. 핵심 요약 3가지
 5. 재무설계 관점 조언
 
-정확한 숫자 추출이 가장 중요합니다!`;
+정확한 숫자 추출이 가장 중요합니다! 흐릿해도 최대한 읽어주세요.`;
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -460,8 +489,8 @@ app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
         { 
           role: 'user', 
           content: [
-            { type: 'text', text: `파일명: ${fileName}\n이 이미지를 분석해주세요.` },
-            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Data}`, detail: 'high' } }
+            { type: 'text', text: `파일명: ${fileName}\n이 이미지를 분석해주세요. 흐릿하거나 화질이 낮아도 보이는 부분을 최대한 분석해주세요.` },
+            { type: 'image_url', image_url: { url: `data:${finalMimeType};base64,${base64Data}`, detail: 'high' } }
           ]
         }
       ],
@@ -470,7 +499,6 @@ app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
     
     const analysis = response.choices[0]?.message?.content;
     
-    // ★★★ v3.10: GPT 응답 앞부분 로그 (디버깅용) ★★★
     console.log(`[OCR] 분석 완료: ${fileName}`);
     console.log(`[OCR] GPT 응답 앞 100자: ${analysis ? analysis.substring(0, 100) : 'null'}...`);
     
@@ -555,9 +583,9 @@ app.post('/api/tts', async (req, res) => {
 // HTTP 서버 시작
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
-  console.log(`AI머니야 서버 v3.10 시작! 포트: ${PORT}`);
-  console.log(`[OCR] /api/analyze-file 활성화 (디버깅 로그 추가)`);
-  console.log(`[OCR] 분석 컨텍스트 음성 연동 강화`);
+  console.log(`AI머니야 서버 v3.11 시작! 포트: ${PORT}`);
+  console.log(`[OCR] 이미지 최적화 (sharp) 활성화`);
+  console.log(`[OCR] 프롬프트 강화 - 흐릿해도 분석 시도`);
 });
 
 // ============================================
