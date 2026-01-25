@@ -105,9 +105,9 @@ const buildRAGContext = (query) => {
 };
 
 // ============================================
-// 시스템 프롬프트 생성 함수 (v3.8: OCR 컨텍스트 추가)
+// 시스템 프롬프트 생성 함수 (v3.14: 지출 내역 추가)
 // ============================================
-const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '', designData = null, analysisContext = null) => {
+const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '', designData = null, analysisContext = null, spendData = null) => {
   const name = financialContext?.name || userName || '고객';
   const age = financialContext?.age || 0;
   const monthlyIncome = financialContext?.monthlyIncome || 0;
@@ -379,6 +379,23 @@ ${analysisContext.analysis}
 - "이 보험 어때?" → 위 분석 결과를 바탕으로 재무설계 관점에서 조언`;
   }
 
+  // 🆕 v3.14: 오늘 지출 내역 추가
+  if (spendData && spendData.length > 0) {
+    prompt += `\n\n## 📊 오늘 ${name}님의 지출 내역
+
+### 지출 목록 (${spendData.length}건)
+${spendData.map((item, i) => `${i + 1}. ${item.time} - ${item.memo}: ${item.amount.toLocaleString()}원 (${item.category}${item.emotionType ? ', ' + item.emotionType : ''})`).join('\n')}
+
+### 지출 관련 질문 답변 예시
+- "스타벅스에서 얼마 썼어?" → 위 목록에서 스타벅스 관련 항목 찾아 답변
+- "오늘 뭐 먹었어?" → 식비 카테고리 항목 찾아 답변
+- "카페에서 얼마나 썼어?" → 카페 카테고리 합계 계산해서 답변
+- "오늘 지출 내역 알려줘" → 위 목록 전체 요약해서 답변
+
+### 중요!
+위 지출 내역은 ${name}님이 직접 기록한 실제 데이터입니다. 질문에 답변할 때 이 데이터를 활용하세요.`;
+  }
+
   return prompt;
 };
 
@@ -386,8 +403,8 @@ ${analysisContext.analysis}
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.13',
-    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트유지', '이미지최적화', '영수증OCR'],
+    version: '3.14',
+    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트유지', '이미지최적화', '영수증OCR', '지출내역연동'],
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
@@ -575,17 +592,18 @@ app.post('/api/rag-search', (req, res) => {
   }
 });
 
-// 텍스트 채팅 API (4단계: 3차 데이터 포함)
+// 텍스트 채팅 API (v3.14: 지출 내역 포함)
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, userName, financialContext, budgetInfo, designData } = req.body;
+    const { message, userName, financialContext, budgetInfo, designData, spendData } = req.body;
     
     // RAG 검색 및 컨텍스트 생성
     const ragContext = buildRAGContext(message);
-    const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext, designData);
+    const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext, designData, null, spendData);
     
     console.log('[Chat] RAG 검색 결과:', ragContext ? '있음' : '없음');
     console.log('[Chat] 3차 데이터:', designData ? '있음' : '없음');
+    console.log('[Chat] 지출 내역:', spendData ? `${spendData.length}건` : '없음');
     
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -627,9 +645,9 @@ app.post('/api/tts', async (req, res) => {
 // HTTP 서버 시작
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
-  console.log(`AI머니야 서버 v3.13 시작! 포트: ${PORT}`);
+  console.log(`AI머니야 서버 v3.14 시작! 포트: ${PORT}`);
   console.log(`[OCR] 이미지 최적화 (sharp) 활성화`);
-  console.log(`[OCR] 영수증 전용 프롬프트 추가`);
+  console.log(`[지출] 오늘 지출 내역 프롬프트 연동`);
 });
 
 // ============================================
@@ -646,6 +664,7 @@ wss.on('connection', (ws, req) => {
   let budgetInfo = null;
   let designData = null;  // 3차 금융집짓기 데이터
   let analysisContext = null;  // 🆕 v3.8: OCR 분석 컨텍스트
+  let spendData = null;  // 🆕 v3.14: 오늘 지출 내역
 
   ws.on('message', (message) => {
     try {
@@ -658,7 +677,7 @@ wss.on('connection', (ws, req) => {
         
         // OpenAI 세션이 연결되어 있으면 프롬프트 업데이트
         if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-          const updatedPrompt = createSystemPrompt(userName, financialContext, budgetInfo, '', designData, analysisContext);
+          const updatedPrompt = createSystemPrompt(userName, financialContext, budgetInfo, '', designData, analysisContext, spendData);
           openaiWs.send(JSON.stringify({
             type: 'session.update',
             session: {
@@ -677,13 +696,15 @@ wss.on('connection', (ws, req) => {
         budgetInfo = msg.budgetInfo || null;
         designData = msg.designData || null;  // 3차 데이터 수신
         analysisContext = msg.analysisContext || null;  // 🆕 OCR 분석 컨텍스트
+        spendData = msg.spendData || null;  // 🆕 v3.14: 지출 내역 수신
         
         console.log('[Realtime] 재무 정보 수신:', {
           name: financialContext?.name,
           age: financialContext?.age,
           wealthIndex: financialContext?.wealthIndex,
           hasDesignData: !!designData,
-          hasAnalysisContext: !!analysisContext
+          hasAnalysisContext: !!analysisContext,
+          spendCount: spendData ? spendData.length : 0
         });
 
         openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
@@ -695,8 +716,8 @@ wss.on('connection', (ws, req) => {
 
         openaiWs.on('open', () => {
           console.log('[Realtime] OpenAI 연결됨!');
-          // 초기 세션: 1차 + 2차 + 3차 데이터 + OCR 컨텍스트 포함
-          const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, '', designData, analysisContext);
+          // 초기 세션: 1차 + 2차 + 3차 데이터 + OCR 컨텍스트 + 지출 내역 포함
+          const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, '', designData, analysisContext, spendData);
           
           openaiWs.send(JSON.stringify({
             type: 'session.update',
@@ -748,8 +769,8 @@ wss.on('connection', (ws, req) => {
               if (ragContext) {
                 console.log('[Realtime] RAG 검색 결과 있음, 세션 업데이트');
                 
-                // ★★★ v3.12: RAG 결과 + 3차 데이터 + OCR 분석 컨텍스트 모두 포함! ★★★
-                const updatedPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext, designData, analysisContext);
+                // ★★★ v3.14: RAG 결과 + 3차 데이터 + OCR 분석 컨텍스트 + 지출 내역 모두 포함! ★★★
+                const updatedPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext, designData, analysisContext, spendData);
                 
                 openaiWs.send(JSON.stringify({
                   type: 'session.update',
