@@ -386,8 +386,8 @@ ${analysisContext.analysis}
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.12',
-    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트유지', '이미지최적화'],
+    version: '3.13',
+    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트유지', '이미지최적화', '영수증OCR'],
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
@@ -445,13 +445,56 @@ app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
       invest: '투자 관련 서류, 증권계좌',
       tax: '근로소득원천징수영수증, 세금 관련 서류',
       estate: '부동산 관련 서류, 등기부등본',
-      insurance: '보험증권, 보험 관련 서류'
+      insurance: '보험증권, 보험 관련 서류',
+      receipt: '영수증, 결제 내역서'  // 🆕 v3.13: 영수증 추가
     };
     
     const tabContext = tabPrompts[currentTab] || '재무 관련 서류';
     
-    // ★★★ v3.11: 프롬프트 강화 (흐릿해도 최대한 분석) ★★★
-    const expertPrompt = `당신은 20년 경력의 재무설계사이자 OCR 분석 전문가입니다.
+    // 🆕 v3.13: 영수증 전용 프롬프트
+    let expertPrompt;
+    
+    if (currentTab === 'receipt') {
+      expertPrompt = `당신은 영수증 OCR 분석 전문가입니다.
+
+## 🚨 최우선 규칙
+1. 이미지가 흐릿해도 **반드시 최대한 분석**하세요.
+2. **절대로 "분석할 수 없습니다"라고 답하지 마세요.**
+
+## 추출할 정보
+1. **상호명** (가게/매장 이름) - 가장 상단에 크게 적힌 이름
+2. **결제 금액** (총액, 합계) - 숫자만 추출 (예: 8500)
+3. **카테고리 추천** - 아래 중 하나 선택:
+   - 식비 (식당, 배달, 음식점)
+   - 카페 (스타벅스, 투썸, 이디야 등)
+   - 편의점 (이마트24, GS25, CU, 세븐일레븐)
+   - 교통 (택시, 지하철, 버스, 주유소)
+   - 쇼핑 (마트, 백화점, 의류)
+   - 기타
+
+## 출력 형식 (반드시 JSON으로!)
+\`\`\`json
+{
+  "storeName": "상호명",
+  "amount": 숫자만,
+  "category": "카테고리명"
+}
+\`\`\`
+
+## 예시
+영수증에 "스타벅스 역삼점 / 아메리카노 4,500원" 이면:
+\`\`\`json
+{
+  "storeName": "스타벅스 역삼점",
+  "amount": 4500,
+  "category": "카페"
+}
+\`\`\`
+
+정확한 금액 추출이 가장 중요합니다!`;
+    } else {
+      // 기존 프롬프트 (보험증권, 연금 등)
+      expertPrompt = `당신은 20년 경력의 재무설계사이자 OCR 분석 전문가입니다.
 현재 분석 대상: ${tabContext}
 
 ## 🚨 최우선 규칙: 반드시 분석 시도!
@@ -481,6 +524,7 @@ app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
 5. 재무설계 관점 조언
 
 정확한 숫자 추출이 가장 중요합니다! 흐릿해도 최대한 읽어주세요.`;
+    }
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -583,9 +627,9 @@ app.post('/api/tts', async (req, res) => {
 // HTTP 서버 시작
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
-  console.log(`AI머니야 서버 v3.12 시작! 포트: ${PORT}`);
+  console.log(`AI머니야 서버 v3.13 시작! 포트: ${PORT}`);
   console.log(`[OCR] 이미지 최적화 (sharp) 활성화`);
-  console.log(`[OCR] RAG 업데이트 시에도 분석 컨텍스트 유지!`);
+  console.log(`[OCR] 영수증 전용 프롬프트 추가`);
 });
 
 // ============================================
