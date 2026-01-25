@@ -104,9 +104,9 @@ const buildRAGContext = (query) => {
 };
 
 // ============================================
-// 시스템 프롬프트 생성 함수 (v3.6: 정체성 강화)
+// 시스템 프롬프트 생성 함수 (v3.8: OCR 컨텍스트 추가)
 // ============================================
-const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '', designData = null) => {
+const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '', designData = null, analysisContext = null) => {
   const name = financialContext?.name || userName || '고객';
   const age = financialContext?.age || 0;
   const monthlyIncome = financialContext?.monthlyIncome || 0;
@@ -356,6 +356,17 @@ ${name}님의 든든한 금융 친구가 되어드릴게요!`;
     prompt += `\n\n## 참고 자료 (오상열 CFP 지식)\n아래 내용을 참고하여 답변하되, 출처는 절대 언급하지 말고 자연스럽게 녹여서 말하세요:\n${ragContext}`;
   }
 
+  // 🆕 v3.8: OCR 분석 컨텍스트가 있으면 추가
+  if (analysisContext && analysisContext.analysis) {
+    prompt += `\n\n## 방금 분석한 서류 정보 (중요!)
+${name}님이 방금 "${analysisContext.fileName}" 파일을 업로드하셨고, 제가 분석한 결과는 다음과 같습니다:
+
+${analysisContext.analysis}
+
+위 분석 결과를 기억하고 있습니다. ${name}님이 이 서류에 대해 질문하시면 위 내용을 바탕으로 정확하게 답변해주세요.
+예를 들어 "방금 분석한 보험 내용 설명해줘", "월 보험료가 얼마야?", "이 보험 괜찮아?" 등의 질문에 답변할 수 있습니다.`;
+  }
+
   return prompt;
 };
 
@@ -363,8 +374,8 @@ ${name}님의 든든한 금융 친구가 되어드릴게요!`;
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.7',
-    features: ['음성대화', 'RAG', 'OCR분석'],
+    version: '3.8',
+    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트'],
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
@@ -525,8 +536,9 @@ app.post('/api/tts', async (req, res) => {
 // HTTP 서버 시작
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
-  console.log(`AI머니야 서버 v3.7 시작! 포트: ${PORT}`);
+  console.log(`AI머니야 서버 v3.8 시작! 포트: ${PORT}`);
   console.log(`[OCR] /api/analyze-file 활성화`);
+  console.log(`[OCR] 분석 컨텍스트 음성 연동 활성화`);
 });
 
 // ============================================
@@ -542,10 +554,30 @@ wss.on('connection', (ws, req) => {
   let financialContext = null;
   let budgetInfo = null;
   let designData = null;  // 3차 금융집짓기 데이터
+  let analysisContext = null;  // 🆕 v3.8: OCR 분석 컨텍스트
 
   ws.on('message', (message) => {
     try {
       const msg = JSON.parse(message);
+
+      // 🆕 v3.8: OCR 분석 컨텍스트 업데이트 처리
+      if (msg.type === 'update_context' && msg.analysisContext) {
+        analysisContext = msg.analysisContext;
+        console.log('[Realtime] OCR 분석 컨텍스트 수신:', analysisContext.fileName);
+        
+        // OpenAI 세션이 연결되어 있으면 프롬프트 업데이트
+        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+          const updatedPrompt = createSystemPrompt(userName, financialContext, budgetInfo, '', designData, analysisContext);
+          openaiWs.send(JSON.stringify({
+            type: 'session.update',
+            session: {
+              instructions: updatedPrompt
+            }
+          }));
+          console.log('[Realtime] OCR 컨텍스트로 세션 업데이트 완료');
+        }
+        return;
+      }
 
       if (msg.type === 'start_app') {
         console.log('[Realtime] 앱 시작 요청');
@@ -553,12 +585,14 @@ wss.on('connection', (ws, req) => {
         financialContext = msg.financialContext || null;
         budgetInfo = msg.budgetInfo || null;
         designData = msg.designData || null;  // 3차 데이터 수신
+        analysisContext = msg.analysisContext || null;  // 🆕 OCR 분석 컨텍스트
         
         console.log('[Realtime] 재무 정보 수신:', {
           name: financialContext?.name,
           age: financialContext?.age,
           wealthIndex: financialContext?.wealthIndex,
-          hasDesignData: !!designData
+          hasDesignData: !!designData,
+          hasAnalysisContext: !!analysisContext
         });
 
         openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
@@ -570,8 +604,8 @@ wss.on('connection', (ws, req) => {
 
         openaiWs.on('open', () => {
           console.log('[Realtime] OpenAI 연결됨!');
-          // 초기 세션: 1차 + 2차 + 3차 데이터 포함
-          const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, '', designData);
+          // 초기 세션: 1차 + 2차 + 3차 데이터 + OCR 컨텍스트 포함
+          const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, '', designData, analysisContext);
           
           openaiWs.send(JSON.stringify({
             type: 'session.update',
