@@ -356,15 +356,26 @@ ${name}님의 든든한 금융 친구가 되어드릴게요!`;
     prompt += `\n\n## 참고 자료 (오상열 CFP 지식)\n아래 내용을 참고하여 답변하되, 출처는 절대 언급하지 말고 자연스럽게 녹여서 말하세요:\n${ragContext}`;
   }
 
-  // 🆕 v3.8: OCR 분석 컨텍스트가 있으면 추가
+  // 🆕 v3.9: OCR 분석 컨텍스트 (강화된 프롬프트)
   if (analysisContext && analysisContext.analysis) {
-    prompt += `\n\n## 방금 분석한 서류 정보 (중요!)
-${name}님이 방금 "${analysisContext.fileName}" 파일을 업로드하셨고, 제가 분석한 결과는 다음과 같습니다:
+    prompt += `\n\n## 🚨 최우선 규칙: 방금 분석한 서류 정보
 
+### 절대 지켜야 할 규칙!
+1. 아래 내용은 제가 OCR로 이미 분석 완료한 **텍스트 데이터**입니다.
+2. 이것은 이미지가 아닙니다. **이미 추출된 텍스트**입니다.
+3. ${name}님이 이 서류에 대해 질문하면 **반드시 아래 내용을 바탕으로 답변**하세요.
+4. **절대로 "이미지를 볼 수 없다", "파일을 확인할 수 없다"고 말하지 마세요!**
+5. 아래 텍스트에 있는 정보로 답변할 수 있습니다.
+
+### 분석한 서류: ${analysisContext.fileName}
+
+### 분석 결과 (이 내용으로 답변하세요!):
 ${analysisContext.analysis}
 
-위 분석 결과를 기억하고 있습니다. ${name}님이 이 서류에 대해 질문하시면 위 내용을 바탕으로 정확하게 답변해주세요.
-예를 들어 "방금 분석한 보험 내용 설명해줘", "월 보험료가 얼마야?", "이 보험 괜찮아?" 등의 질문에 답변할 수 있습니다.`;
+### 답변 예시
+- "계약자가 누구야?" → 위 분석 결과에서 계약자 정보를 찾아 답변
+- "월 보험료가 얼마야?" → 위 분석 결과에서 보험료 정보를 찾아 답변
+- "이 보험 어때?" → 위 분석 결과를 바탕으로 재무설계 관점에서 조언`;
   }
 
   return prompt;
@@ -374,8 +385,8 @@ ${analysisContext.analysis}
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.8',
-    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트'],
+    version: '3.9',
+    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트강화'],
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
@@ -536,9 +547,9 @@ app.post('/api/tts', async (req, res) => {
 // HTTP 서버 시작
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
-  console.log(`AI머니야 서버 v3.8 시작! 포트: ${PORT}`);
+  console.log(`AI머니야 서버 v3.9 시작! 포트: ${PORT}`);
   console.log(`[OCR] /api/analyze-file 활성화`);
-  console.log(`[OCR] 분석 컨텍스트 음성 연동 활성화`);
+  console.log(`[OCR] 분석 컨텍스트 음성 연동 강화`);
 });
 
 // ============================================
