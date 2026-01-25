@@ -4,6 +4,7 @@ const cors = require('cors');
 const OpenAI = require('openai');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');  // 🆕 v3.7: OCR용 추가
 require('dotenv').config();
 
 const app = express();
@@ -11,6 +12,12 @@ app.use(cors());
 app.use(express.json());
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// 🆕 v3.7: Multer 설정 (OCR 파일 업로드용)
+const upload = multer({ 
+  storage: multer.memoryStorage(), 
+  limits: { fileSize: 10 * 1024 * 1024 }
+});
 
 // ============================================
 // RAG 데이터 로드 (1단계)
@@ -356,13 +363,93 @@ ${name}님의 든든한 금융 친구가 되어드릴게요!`;
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.6',
+    version: '3.7',
+    features: ['음성대화', 'RAG', 'OCR분석'],
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ============================================
+// 🆕 v3.7: OCR 파일 분석 API
+// ============================================
+app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    const { fileName, fileType, currentTab } = req.body;
+    
+    if (!file) {
+      return res.json({ success: false, error: '파일이 없습니다.' });
+    }
+    
+    console.log(`[OCR] 분석 요청: ${fileName} (${fileType}), 탭: ${currentTab}`);
+    
+    const base64Data = file.buffer.toString('base64');
+    const mimeType = file.mimetype || 'image/jpeg';
+    
+    const tabPrompts = {
+      retire: '연금증권, 국민연금 가입내역, 퇴직연금 관련 서류',
+      debt: '대출 관련 서류, 부채 증명서',
+      save: '저축 관련 서류, 예금증서',
+      invest: '투자 관련 서류, 증권계좌',
+      tax: '근로소득원천징수영수증, 세금 관련 서류',
+      estate: '부동산 관련 서류, 등기부등본',
+      insurance: '보험증권, 보험 관련 서류'
+    };
+    
+    const tabContext = tabPrompts[currentTab] || '재무 관련 서류';
+    
+    const expertPrompt = `당신은 20년 경력의 재무설계사이자 OCR 분석 전문가입니다.
+현재 분석 대상: ${tabContext}
+
+## OCR 핵심 규칙
+### 보험증권:
+- 보험가입금액 = 보장받는 금액 (만원 단위)
+- 보험료 = 매월 내는 돈 (원 단위)
+- 절대 혼동 금지!
+
+### 연금증권/국민연금:
+- 예상 연금 수령액, 가입 기간, 수령 시작 연령
+
+### 근로소득원천징수영수증:
+- 총 급여액, 소득세, 공제 항목
+
+## 분석 결과 형식
+1. 서류 종류
+2. 기본 정보 (발급기관, 계약자, 발급일)
+3. 주요 내용 (표 형식)
+4. 핵심 요약 3가지
+5. 재무설계 관점 조언
+
+정확한 숫자 추출이 가장 중요합니다!`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: expertPrompt },
+        { 
+          role: 'user', 
+          content: [
+            { type: 'text', text: `파일명: ${fileName}\n이 이미지를 분석해주세요.` },
+            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Data}`, detail: 'high' } }
+          ]
+        }
+      ],
+      max_tokens: 2500
+    });
+    
+    const analysis = response.choices[0]?.message?.content;
+    console.log(`[OCR] 분석 완료: ${fileName}`);
+    
+    res.json({ success: true, analysis, fileName, fileType, currentTab, timestamp: new Date().toISOString() });
+    
+  } catch (error) {
+    console.error('[OCR] 에러:', error);
+    res.json({ success: false, error: error.message });
+  }
 });
 
 // RAG 검색 테스트 API
@@ -438,11 +525,12 @@ app.post('/api/tts', async (req, res) => {
 // HTTP 서버 시작
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
-  console.log(`AI머니야 서버 시작! 포트: ${PORT}`);
+  console.log(`AI머니야 서버 v3.7 시작! 포트: ${PORT}`);
+  console.log(`[OCR] /api/analyze-file 활성화`);
 });
 
 // ============================================
-// WebSocket 서버 (4단계: 3차 데이터 포함)
+// WebSocket 서버 (기존 v3.6 그대로 - 변경 없음)
 // ============================================
 const wss = new WebSocket.Server({ server });
 
