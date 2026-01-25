@@ -396,6 +396,46 @@ ${spendData.map((item, i) => `${i + 1}. ${item.time} - ${item.memo}: ${item.amou
 위 지출 내역은 ${name}님이 직접 기록한 실제 데이터입니다. 질문에 답변할 때 이 데이터를 활용하세요.`;
   }
 
+  // 🆕 v3.15: 음성 지출 입력 기능
+  prompt += `\n\n## 🎤 음성 지출 입력 기능 (매우 중요!)
+
+### 지출 입력 감지
+${name}님이 지출을 말하면 자동으로 기록해주세요.
+
+### 지출 입력 패턴 예시
+- "점심 8천원 썼어" → 지출 기록
+- "커피 4500원" → 지출 기록
+- "택시비 만오천원 나왔어" → 지출 기록
+- "스타벅스에서 아메리카노 4500원 결제했어" → 지출 기록
+- "오늘 삼겹살 먹는데 5만원 들었어" → 지출 기록
+
+### 응답 형식 (반드시 지켜주세요!)
+지출을 감지하면 다음 형식으로 응답하세요:
+
+[SPEND_RECORD]{"memo":"내용","amount":금액,"category":"카테고리"}[/SPEND_RECORD]
+네, {내용} {금액}원 지출 기록했어요!
+
+### 카테고리 자동 분류
+- 식사, 밥, 점심, 저녁, 고기, 찌개, 국밥 → "식비"
+- 커피, 카페, 스타벅스, 빽다방, 투썸 → "카페"
+- 편의점, GS25, CU, 이마트24 → "편의점"
+- 택시, 버스, 지하철, 주유 → "교통"
+- 쇼핑, 옷, 마트 → "쇼핑"
+- 그 외 → "기타"
+
+### 예시 대화
+사용자: "점심 김치찌개 8천원 먹었어"
+머니야: [SPEND_RECORD]{"memo":"점심 김치찌개","amount":8000,"category":"식비"}[/SPEND_RECORD]
+네, 점심 김치찌개 8,000원 지출 기록했어요!
+
+사용자: "스타벅스 아메리카노 4500원"
+머니야: [SPEND_RECORD]{"memo":"스타벅스 아메리카노","amount":4500,"category":"카페"}[/SPEND_RECORD]
+네, 스타벅스 아메리카노 4,500원 지출 기록했어요!
+
+### 중요!
+- 금액이 명확하지 않으면 "얼마 쓰셨어요?"라고 물어보세요
+- 지출이 아닌 일반 대화에는 [SPEND_RECORD] 태그를 사용하지 마세요`;
+
   return prompt;
 };
 
@@ -403,8 +443,8 @@ ${spendData.map((item, i) => `${i + 1}. ${item.time} - ${item.memo}: ${item.amou
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.14',
-    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트유지', '이미지최적화', '영수증OCR', '지출내역연동'],
+    version: '3.15',
+    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트유지', '이미지최적화', '영수증OCR', '지출내역연동', '음성지출입력'],
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
@@ -645,9 +685,9 @@ app.post('/api/tts', async (req, res) => {
 // HTTP 서버 시작
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
-  console.log(`AI머니야 서버 v3.14 시작! 포트: ${PORT}`);
+  console.log(`AI머니야 서버 v3.15 시작! 포트: ${PORT}`);
   console.log(`[OCR] 이미지 최적화 (sharp) 활성화`);
-  console.log(`[지출] 오늘 지출 내역 프롬프트 연동`);
+  console.log(`[음성지출] 음성 지출 입력 기능 활성화`);
 });
 
 // ============================================
