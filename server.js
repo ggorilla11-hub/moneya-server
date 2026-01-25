@@ -385,8 +385,8 @@ ${analysisContext.analysis}
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.9',
-    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트강화'],
+    version: '3.10',
+    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트강화', 'OCR디버깅'],
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
@@ -396,7 +396,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // ============================================
-// 🆕 v3.7: OCR 파일 분석 API
+// 🆕 v3.7: OCR 파일 분석 API (v3.10: 디버깅 로그 추가)
 // ============================================
 app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
   try {
@@ -407,10 +407,15 @@ app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
       return res.json({ success: false, error: '파일이 없습니다.' });
     }
     
+    // ★★★ v3.10: 디버깅 로그 추가 ★★★
     console.log(`[OCR] 분석 요청: ${fileName} (${fileType}), 탭: ${currentTab}`);
+    console.log(`[OCR] 파일 상세 - MIME: ${file.mimetype}, 크기: ${file.size}바이트, 버퍼: ${file.buffer ? file.buffer.length + '바이트' : 'null'}`);
     
     const base64Data = file.buffer.toString('base64');
     const mimeType = file.mimetype || 'image/jpeg';
+    
+    // ★★★ v3.10: base64 길이 로그 ★★★
+    console.log(`[OCR] Base64 변환 완료 - 길이: ${base64Data.length}자, MIME: ${mimeType}`);
     
     const tabPrompts = {
       retire: '연금증권, 국민연금 가입내역, 퇴직연금 관련 서류',
@@ -464,7 +469,10 @@ app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
     });
     
     const analysis = response.choices[0]?.message?.content;
+    
+    // ★★★ v3.10: GPT 응답 앞부분 로그 (디버깅용) ★★★
     console.log(`[OCR] 분석 완료: ${fileName}`);
+    console.log(`[OCR] GPT 응답 앞 100자: ${analysis ? analysis.substring(0, 100) : 'null'}...`);
     
     res.json({ success: true, analysis, fileName, fileType, currentTab, timestamp: new Date().toISOString() });
     
@@ -547,8 +555,8 @@ app.post('/api/tts', async (req, res) => {
 // HTTP 서버 시작
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
-  console.log(`AI머니야 서버 v3.9 시작! 포트: ${PORT}`);
-  console.log(`[OCR] /api/analyze-file 활성화`);
+  console.log(`AI머니야 서버 v3.10 시작! 포트: ${PORT}`);
+  console.log(`[OCR] /api/analyze-file 활성화 (디버깅 로그 추가)`);
   console.log(`[OCR] 분석 컨텍스트 음성 연동 강화`);
 });
 
