@@ -386,8 +386,8 @@ ${analysisContext.analysis}
 app.get('/', (req, res) => {
   res.json({ 
     status: 'AI머니야 서버 실행 중!', 
-    version: '3.11',
-    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트강화', '이미지최적화'],
+    version: '3.12',
+    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트유지', '이미지최적화'],
     rag: { enabled: true, chunks: ragChunks.length }
   });
 });
@@ -583,9 +583,9 @@ app.post('/api/tts', async (req, res) => {
 // HTTP 서버 시작
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
-  console.log(`AI머니야 서버 v3.11 시작! 포트: ${PORT}`);
+  console.log(`AI머니야 서버 v3.12 시작! 포트: ${PORT}`);
   console.log(`[OCR] 이미지 최적화 (sharp) 활성화`);
-  console.log(`[OCR] 프롬프트 강화 - 흐릿해도 분석 시도`);
+  console.log(`[OCR] RAG 업데이트 시에도 분석 컨텍스트 유지!`);
 });
 
 // ============================================
@@ -704,8 +704,8 @@ wss.on('connection', (ws, req) => {
               if (ragContext) {
                 console.log('[Realtime] RAG 검색 결과 있음, 세션 업데이트');
                 
-                // RAG 결과 + 3차 데이터를 포함한 새 프롬프트로 세션 업데이트
-                const updatedPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext, designData);
+                // ★★★ v3.12: RAG 결과 + 3차 데이터 + OCR 분석 컨텍스트 모두 포함! ★★★
+                const updatedPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext, designData, analysisContext);
                 
                 openaiWs.send(JSON.stringify({
                   type: 'session.update',
