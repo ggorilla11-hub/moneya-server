@@ -479,13 +479,15 @@ wss.on('connection', (ws, req) => {
         });
 
         openaiWs.on('open', () => {
-          console.log('[상담WS] OpenAI Realtime 연결 - STT 전용');
+          console.log('[상담WS] OpenAI Realtime 연결 - STT+TTS(shimmer)');
           openaiWs.send(JSON.stringify({
             type: 'session.update',
             session: {
-              modalities: ['text'],            // 텍스트만 - 음성출력 없음
-              instructions: '사용자의 말을 한국어로 정확하게 전사해주세요. 절대 답변하지 마세요.',
+              modalities: ['text', 'audio'],   // 텍스트+음성 출력
+              instructions: '사용자의 말을 한국어로 정확하게 전사해주세요. 절대 스스로 답변하지 마세요. 전사만 하세요.',
+              voice: 'shimmer',                 // shimmer 목소리
               input_audio_format: 'pcm16',
+              output_audio_format: 'pcm16',
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
               turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 1500 }
             }
@@ -500,6 +502,16 @@ wss.on('connection', (ws, req) => {
             // 말하기 시작 → 재생 중단 신호
             if (event.type === 'input_audio_buffer.speech_started') {
               ws.send(JSON.stringify({ type: 'interrupt' }));
+            }
+
+            // shimmer 음성 청크 → 프론트로 전달 (PCM16)
+            if (event.type === 'response.audio.delta' && event.delta) {
+              ws.send(JSON.stringify({ type: 'audio', data: event.delta }));
+            }
+
+            // shimmer 음성 완료
+            if (event.type === 'response.audio.done') {
+              ws.send(JSON.stringify({ type: 'audio_end' }));
             }
 
             // STT 완료 → 사용자 텍스트 확정
@@ -533,32 +545,25 @@ wss.on('connection', (ws, req) => {
                 conversationHistory.push({ role: 'assistant', content: aiText });
                 if (conversationHistory.length > 20) conversationHistory = conversationHistory.slice(-20);
 
-                // 4. 입: ElevenLabs 오상열 목소리 생성
-                try {
-                  const audioBuffer = await elevenLabsTTS(aiText);
-                  // MP3를 청크로 나눠서 전송
-                  const chunkSize = 8192;
-                  for (let i = 0; i < audioBuffer.length; i += chunkSize) {
-                    const chunk = audioBuffer.slice(i, i + chunkSize);
-                    if (ws.readyState === WebSocket.OPEN) {
-                      ws.send(JSON.stringify({ type: 'audio', data: chunk.toString('base64'), format: 'mp3' }));
+                // 4. 입: OpenAI Realtime shimmer 목소리로 출력
+                if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+                  // 파인튜닝 모델 답변을 Realtime에 전달 → shimmer 목소리로 읽어줌
+                  openaiWs.send(JSON.stringify({
+                    type: 'conversation.item.create',
+                    item: {
+                      type: 'message',
+                      role: 'assistant',
+                      content: [{ type: 'text', text: aiText }]
                     }
-                  }
-                  // 음성 전송 완료 신호
-                  ws.send(JSON.stringify({ type: 'audio_end' }));
-                  console.log('[상담WS] ElevenLabs 음성 전송 완료');
-                } catch (ttsError) {
-                  console.error('[상담WS] ElevenLabs 실패, OpenAI fallback:', ttsError.message);
-                  // fallback: OpenAI TTS
-                  const fallback = await openai.audio.speech.create({ model: 'tts-1', voice: 'onyx', input: aiText, response_format: 'mp3' });
-                  const buffer = Buffer.from(await fallback.arrayBuffer());
-                  const chunkSize = 8192;
-                  for (let i = 0; i < buffer.length; i += chunkSize) {
-                    if (ws.readyState === WebSocket.OPEN) {
-                      ws.send(JSON.stringify({ type: 'audio', data: buffer.slice(i, i + chunkSize).toString('base64'), format: 'mp3' }));
+                  }));
+                  openaiWs.send(JSON.stringify({
+                    type: 'response.create',
+                    response: {
+                      modalities: ['audio'],
+                      instructions: '위 텍스트를 그대로 자연스럽게 읽어주세요. 내용을 변경하지 마세요.'
                     }
-                  }
-                  ws.send(JSON.stringify({ type: 'audio_end' }));
+                  }));
+                  console.log('[상담WS] OpenAI Realtime shimmer 음성 출력 요청');
                 }
               } catch (claudeError) {
                 console.error('[상담WS] Claude 에러:', claudeError.message);
