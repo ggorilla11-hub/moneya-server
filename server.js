@@ -391,13 +391,12 @@ app.post('/api/consult-chat', async (req, res) => {
       ...conversationHistory.map(m => ({ role: m.role, content: m.content })),
       { role: 'user', content: message },
     ];
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+    const response = await openai.chat.completions.create({
+      model: 'ft:gpt-4o-mini-2024-07-18:personal::DG29N8pS',
       max_tokens: 1024,
-      system: systemPrompt,
-      messages,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
     });
-    const aiText = response.content[0]?.text || '다시 말씀해주세요!';
+    const aiText = response.choices[0]?.message?.content || '다시 말씀해주세요!';
     res.json({ success: true, message: aiText });
   } catch (error) {
     console.error('[상담채팅] Claude API 에러:', error);
@@ -518,13 +517,12 @@ wss.on('connection', (ws, req) => {
                   ...conversationHistory.map(m => ({ role: m.role, content: m.content || m.text })),
                   { role: 'user', content: userText }
                 ];
-                const claudeRes = await anthropic.messages.create({
-                  model: 'claude-sonnet-4-20250514',
+                const claudeRes = await openai.chat.completions.create({
+                  model: 'ft:gpt-4o-mini-2024-07-18:personal::DG29N8pS',
                   max_tokens: 1024,
-                  system: systemPrompt,
-                  messages: claudeMessages,
+                  messages: [{ role: 'system', content: systemPrompt }, ...claudeMessages],
                 });
-                const aiText = claudeRes.content[0]?.text || '다시 말씀해주세요.';
+                const aiText = claudeRes.choices[0]?.message?.content || '다시 말씀해주세요.';
                 console.log('[상담WS] 머니야 답변:', aiText.slice(0, 50) + '...');
 
                 // 3. 화면에 머니야 답변 텍스트 표시
