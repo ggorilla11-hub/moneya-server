@@ -557,7 +557,7 @@ wss.on('connection', (ws, req) => {
                     response: {
                       modalities: ['audio'],
                       output_audio_format: 'pcm16',
-                      instructions: aiText,
+                      input: [{ type: 'text', text: aiText }]
                     }
                   }));
                   console.log('[상담WS] OpenAI Realtime shimmer TTS 요청:', aiText.slice(0, 30) + '...');
