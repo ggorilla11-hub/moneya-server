@@ -185,7 +185,90 @@ ${name}님의 든든한 지출관리 친구가 되어드릴게요!`;
 };
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  상담탭 전용 프롬프트 (8단계 재무상담)
+//  상담탭 Realtime 전용 프롬프트 (음성 상담)
+//  지출탭과 동일한 Realtime 구조 + 금융집짓기 상담 지식
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const createConsultRealtimePrompt = (userName, financialContext) => {
+  const name = financialContext?.name || userName || '고객';
+  const age = financialContext?.age || 0;
+  const monthlyIncome = financialContext?.monthlyIncome || 0;
+
+  return `당신은 AI 재무설계사 "머니야"입니다. 오상열 CFP(20년 경력)가 만든 AI입니다.
+
+## 호출 규칙 (최우선!)
+- "${name}" 또는 "머니야"라고 부르면: "네, ${name}님!" 이것만 말하고 멈추세요
+- 절대 추가 설명하지 마세요
+
+## 말투 규칙 (필수!)
+- 반드시 존댓말 사용
+- 짧고 간결하게 (최대 2~3문장)
+- 항상 "${name}님"으로 호칭
+- 한국어로만 대화
+- 이모지 절대 사용 금지
+
+## 숫자 표기
+- 금액은 반드시 한글로: 삼백만원, 오천만원, 일억원
+- 아라비아 숫자 사용 금지
+
+## 금칙어 (절대 금지)
+- 특정 상품명/종목명 추천 금지
+- 매수/매도 판단 금지
+- 수익/원금 보장 발언 금지
+- 탈세 조언 금지
+
+## 금융집짓기® 핵심 지식
+
+금융집짓기는 집을 짓는 순서와 같습니다.
+
+지하(기초): 보장자산(보험) + 비상예비자금
+- 보험이 기초. 사망 연봉3배, 장해 3배, 암 1~2배, 뇌/심장 1배, 실손 오천만원
+- 비상예비자금: 월 생활비 6개월 이상
+- "기초 없이 지붕(투자)만 올리면 집은 무너집니다"
+
+기둥(1층): 부채설계 + 저축설계 + 은퇴설계
+- 거실=부채: 신용대출 즉시 상환(금액 작은 것부터), 담보대출은 은퇴시까지
+- 건넌방=저축: 목적/기간/금액
+- 안방=은퇴: 인생에서 가장 중요한 방. 소득 중단+지출 계속=파산 위험
+
+처마보: 생로병사 (생활/노후/질병/사망)
+
+지붕: 은퇴 전=투자설계, 은퇴 후=세금설계
+- 투자는 기초(보험)+기둥(저축) 다진 후에!
+
+굴뚝: 부동산설계 (우리나라에서 주택은 하나 있어야)
+
+## 가구원수별 예산 기준 (오원트 공식)
+생활비: 1인20% 2인30% 3인40% 4인50% 5인60%
+저축투자: 1인50% 2인40% 3인30% 4인20% 5인10%
+노후연금: 전 가구 10%
+보장성보험: 전 가구 10%
+대출원리금: 전 가구 10%
+
+## 인생 7단계 (비정기 수입)
+1.비상자금 백만원 2.신용대출상환 3.비상비자금 4~6.목돈(1억→10억) 7.담보대출상환→FIRE
+
+## 핵심 공식
+부자지수 = 순자산÷총자산×100
+은퇴일시금 = 월부족자금×12×은퇴기간
+10억×3.5%÷12 = 월 삼백만원 연금
+
+## 상담 리딩 (질문으로 주도)
+상담사가 처음부터 끝까지 리딩합니다. 고객이 리딩하면 안 됩니다.
+"집을 한번 그려보시겠습니까?" "혹시 재무설계 받아보신 적 있으세요?"
+숫자로 놀라게 하고, 따뜻하지만 직설적으로 말합니다.
+"이건 고객님 잘못이 아니에요. 제대로 안내받지 못하신 거예요. 지금 알게 되셨으니까 고칠 수 있어요!"
+
+## 보험 분석 안내
+"보장 분석은 오상열 대표님께서 전문가이시니 정확한 분석이 가능합니다."
+
+## 고객 정보
+이름: ${name} | 나이: ${age}세 | 월수입: ${monthlyIncome}만원
+
+${name}님의 든든한 금융 친구가 되어드릴게요!`;
+};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  상담탭 전용 프롬프트 (텍스트 채팅 — Claude용)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
   const name = financialContext?.name || userName || '고객';
@@ -471,170 +554,55 @@ wss.on('connection', (ws, req) => {
       const msg = JSON.parse(message);
 
       // ════════════════════════════════════════════════════
-      //  상담탭 전용: 귀(OpenAI Realtime STT) → 뇌(Claude API) → 입(OpenAI REST TTS)
+      //  상담탭 전용: OpenAI Realtime 올인원 (귀+뇌+입) + 금융집짓기 상담 지식
       // ════════════════════════════════════════════════════
       if (msg.type === 'start_consult' || (msg.type === 'start_app' && mode === 'consult')) {
-        console.log('[상담WS] 상담탭 음성 세션 시작');
+        console.log('[상담WS] 상담탭 음성 세션 시작 (Realtime 올인원)');
         userName = msg.userName || '고객';
+        financialContext = msg.financialContext || null;
         conversationHistory = msg.conversationHistory || [];
 
-        // OpenAI Realtime — STT(귀)만 담당, 음성 출력 안 함
         openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
           headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' }
         });
 
         openaiWs.on('open', () => {
-          console.log('[상담WS] OpenAI Realtime 연결 — STT(귀)만 사용');
+          console.log('[상담WS] OpenAI Realtime 연결 — 올인원(귀+뇌+입)');
+          const name = financialContext?.name || userName || '고객';
+          const consultPrompt = createConsultRealtimePrompt(name, financialContext);
           openaiWs.send(JSON.stringify({
             type: 'session.update',
             session: {
-              modalities: ['text'],
-              instructions: '사용자의 음성을 한국어로 전사하세요. 절대 답변하지 마세요.',
+              modalities: ['text', 'audio'],
+              instructions: consultPrompt,
+              voice: 'shimmer',
               input_audio_format: 'pcm16',
+              output_audio_format: 'pcm16',
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
-              turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 1500 }
+              turn_detection: { type: 'server_vad', threshold: 0.6, prefix_padding_ms: 400, silence_duration_ms: 1800 }
             }
           }));
           ws.send(JSON.stringify({ type: 'session_started' }));
         });
 
-        let isProcessing = false;
-
-        openaiWs.on('message', async (data) => {
+        openaiWs.on('message', (data) => {
           try {
             const event = JSON.parse(data.toString());
-
-            // 사용자가 말하기 시작 → 현재 재생 중단
-            if (event.type === 'input_audio_buffer.speech_started') {
+            if (event.type === 'response.audio.delta' && event.delta)
+              ws.send(JSON.stringify({ type: 'audio', data: event.delta }));
+            if (event.type === 'input_audio_buffer.speech_started')
               ws.send(JSON.stringify({ type: 'interrupt' }));
+            if (event.type === 'response.audio_transcript.done') {
+              console.log('[상담WS] 머니야:', event.transcript?.slice(0, 50));
+              ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
             }
-
-            // Realtime이 자체 응답 생성 시도 시 즉시 취소
-            if (event.type === 'response.created') {
-              try { openaiWs.send(JSON.stringify({ type: 'response.cancel' })); } catch {}
+            if (event.type === 'conversation.item.input_audio_transcription.completed') {
+              console.log('[상담WS] 사용자:', event.transcript);
+              ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'user' }));
             }
-
-            // STT 완료 → 사용자 텍스트 확정
-            if (event.type === 'conversation.item.input_audio_transcription.completed' && event.transcript?.trim()) {
-              if (isProcessing) return;
-              isProcessing = true;
-
-              const userText = event.transcript.trim();
-              console.log('[상담WS] 사용자 STT:', userText);
-
-              // 1. 화면에 사용자 텍스트 표시
-              ws.send(JSON.stringify({ type: 'transcript', role: 'user', text: userText }));
-
-              // 2. 뇌: Claude API 스트리밍 호출 (첫 문장 나오면 바로 TTS 시작)
-              try {
-                const ragResults = searchRAG(userText, 3);
-                const formulaResults = searchFormulaRAG(userText, 2);
-                const ragContext = ragResults.map(r => `[${r.source}] ${r.content}`).join('\n');
-                const formulaContext = buildFormulaContext(formulaResults);
-                const systemPrompt = createSystemPrompt(userName, financialContext, null, ragContext + formulaContext);
-
-                const claudeMessages = [
-                  ...conversationHistory.slice(-10).map(m => ({ role: m.role, content: m.content || m.text })),
-                  { role: 'user', content: userText }
-                ];
-
-                // 스트리밍으로 Claude 호출 — 첫 문장이 나오면 즉시 TTS 시작
-                const stream = await anthropic.messages.stream({
-                  model: 'claude-sonnet-4-20250514',
-                  max_tokens: 512,
-                  system: systemPrompt,
-                  messages: claudeMessages
-                });
-
-                let fullText = '';
-                let firstSentence = '';
-                let firstTtsSent = false;
-
-                stream.on('text', (text) => {
-                  fullText += text;
-
-                  // 첫 문장 완성 감지 (마침표, 물음표, 느낌표, 줄바꿈)
-                  if (!firstTtsSent) {
-                    firstSentence += text;
-                    const sentenceEnd = firstSentence.match(/[.!?。]\s|[.!?。]$/);
-                    if (sentenceEnd && firstSentence.length > 15) {
-                      firstTtsSent = true;
-                      const ttsFirst = firstSentence.trim();
-                      console.log('[상담WS] 첫 문장 즉시 TTS:', ttsFirst.slice(0, 40) + '...');
-
-                      // 첫 문장 즉시 TTS (비동기, 기다리지 않음)
-                      openai.audio.speech.create({
-                        model: 'tts-1',
-                        voice: 'shimmer',
-                        input: ttsFirst,
-                        response_format: 'mp3',
-                        speed: 1.1
-                      }).then(async (ttsRes) => {
-                        const buf = Buffer.from(await ttsRes.arrayBuffer());
-                        if (ws.readyState === WebSocket.OPEN) {
-                          ws.send(JSON.stringify({ type: 'tts_audio', data: buf.toString('base64') }));
-                        }
-                      }).catch(e => console.error('[상담WS] 첫 문장 TTS 에러:', e.message));
-                    }
-                  }
-                });
-
-                // 스트리밍 완료 대기
-                const finalMessage = await stream.finalMessage();
-                const aiText = finalMessage.content[0]?.text || fullText || '다시 말씀해주세요.';
-                console.log('[상담WS] 머니야 답변 (Claude):', aiText.slice(0, 50) + '...');
-
-                // 3. 화면에 머니야 답변 전체 텍스트 표시
-                ws.send(JSON.stringify({ type: 'transcript', role: 'assistant', text: aiText }));
-
-                // 대화 이력 업데이트
-                conversationHistory.push({ role: 'user', content: userText });
-                conversationHistory.push({ role: 'assistant', content: aiText });
-                if (conversationHistory.length > 20) conversationHistory = conversationHistory.slice(-20);
-
-                // 4. 나머지 부분 TTS (첫 문장 이후 부분)
-                if (firstTtsSent && aiText.length > firstSentence.length) {
-                  const remainText = aiText.slice(firstSentence.length).trim();
-                  if (remainText.length > 5) {
-                    try {
-                      const ttsText = remainText.length > 150 ? remainText.slice(0, 150) + '...' : remainText;
-                      const ttsResponse = await openai.audio.speech.create({
-                        model: 'tts-1',
-                        voice: 'shimmer',
-                        input: ttsText,
-                        response_format: 'mp3',
-                        speed: 1.1
-                      });
-                      const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
-                      if (ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({ type: 'tts_audio', data: audioBuffer.toString('base64') }));
-                      }
-                    } catch (e) { console.error('[상담WS] 후속 TTS 에러:', e.message); }
-                  }
-                } else if (!firstTtsSent) {
-                  // 짧은 답변이라 첫 문장 TTS가 안 갔으면 전체를 TTS
-                  try {
-                    const ttsText = aiText.length > 200 ? aiText.slice(0, 200) + '...' : aiText;
-                    const ttsResponse = await openai.audio.speech.create({
-                      model: 'tts-1',
-                      voice: 'shimmer',
-                      input: ttsText,
-                      response_format: 'mp3',
-                      speed: 1.1
-                    });
-                    const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
-                    if (ws.readyState === WebSocket.OPEN) {
-                      ws.send(JSON.stringify({ type: 'tts_audio', data: audioBuffer.toString('base64') }));
-                    }
-                  } catch (e) { console.error('[상담WS] TTS 에러:', e.message); }
-                }
-
-              } catch (claudeError) {
-                console.error('[상담WS] Claude 에러:', claudeError.message);
-                ws.send(JSON.stringify({ type: 'error', error: '답변 생성 중 오류가 발생했습니다.' }));
-              } finally {
-                isProcessing = false;
-              }
+            if (event.type === 'error') {
+              console.error('[상담WS] OpenAI 에러:', event.error);
+              ws.send(JSON.stringify({ type: 'error', error: event.error?.message }));
             }
           } catch (e) { console.error('[상담WS] 메시지 파싱 에러:', e); }
         });
