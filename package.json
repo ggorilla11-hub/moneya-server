@@ -1,18 +1,22 @@
 {
   "name": "moneya-server",
-  "version": "3.11.0",
-  "description": "AI머니야 서버",
+  "version": "3.16.0",
+  "description": "AI머니야 서버 — Mega System Prompt v3.1",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "ws": "^8.17.0",
-    "cors": "^2.8.5",
-    "openai": "^4.52.0",
-    "dotenv": "^16.4.5",
-    "multer": "^1.4.5-lts.1",
-    "sharp": "^0.33.2"
+    "express": "latest",
+    "ws": "latest",
+    "cors": "latest",
+    "openai": "latest",
+    "@anthropic-ai/sdk": "latest",
+    "dotenv": "latest",
+    "multer": "latest",
+    "sharp": "latest"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
