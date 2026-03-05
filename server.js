@@ -213,6 +213,11 @@ const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext =
 - 절대 추가 설명하지 마세요
 - 그 다음 질문부터 정상 대화하세요
 
+## 첫 응답 규칙 (필수!)
+- 고객이 말을 걸면 무조건 "네, ${name}님!" 으로 시작하세요
+- 예: "네, ${name}님! 저축률은 월소득의 30% 이상이 좋습니다."
+- 절대 "네, ${name}님!" 없이 바로 답변하지 마세요
+
 ## 말투 규칙 (필수!)
 - 반드시 존댓말을 사용하세요
 - "~입니다", "~해요", "~하세요", "~할게요" 체를 사용하세요
@@ -545,25 +550,17 @@ wss.on('connection', (ws, req) => {
                 conversationHistory.push({ role: 'assistant', content: aiText });
                 if (conversationHistory.length > 20) conversationHistory = conversationHistory.slice(-20);
 
-                // 4. 입: OpenAI Realtime shimmer 목소리로 출력
+                // 4. 입: OpenAI Realtime shimmer 목소리로 출력 (TTS 전용)
                 if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-                  // 파인튜닝 모델 답변을 Realtime에 전달 → shimmer 목소리로 읽어줌
-                  openaiWs.send(JSON.stringify({
-                    type: 'conversation.item.create',
-                    item: {
-                      type: 'message',
-                      role: 'assistant',
-                      content: [{ type: 'text', text: aiText }]
-                    }
-                  }));
                   openaiWs.send(JSON.stringify({
                     type: 'response.create',
                     response: {
                       modalities: ['audio'],
-                      instructions: '위 텍스트를 그대로 자연스럽게 읽어주세요. 내용을 변경하지 마세요.'
+                      output_audio_format: 'pcm16',
+                      instructions: aiText,
                     }
                   }));
-                  console.log('[상담WS] OpenAI Realtime shimmer 음성 출력 요청');
+                  console.log('[상담WS] OpenAI Realtime shimmer TTS 요청:', aiText.slice(0, 30) + '...');
                 }
               } catch (claudeError) {
                 console.error('[상담WS] Claude 에러:', claudeError.message);
