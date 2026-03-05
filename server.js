@@ -2,6 +2,7 @@ const express = require('express');
 const WebSocket = require('ws');
 const cors = require('cors');
 const OpenAI = require('openai');
+const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
@@ -11,6 +12,7 @@ app.use(cors());
 app.use(express.json());
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 let ragData = {
   books: [], afpk: [], bantoe: [], quotes: [], keywords: {},
@@ -384,8 +386,6 @@ app.post('/api/tts', async (req, res) => {
 // ════════════════════════════════════════════════════════════
 //  상담탭 전용 API (뇌: Claude / 입: ElevenLabs)
 // ════════════════════════════════════════════════════════════
-const Anthropic = require('@anthropic-ai/sdk');
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // 텍스트 상담 (뇌: Claude) - 텍스트 답변만
 app.post('/api/consult-chat', async (req, res) => {
@@ -471,28 +471,26 @@ wss.on('connection', (ws, req) => {
       const msg = JSON.parse(message);
 
       // ════════════════════════════════════════════════════
-      //  상담탭 전용: 귀(Whisper) → 뇌(Claude) → 입(ElevenLabs)
+      //  상담탭 전용: 귀(OpenAI Realtime STT) → 뇌(Claude API) → 입(OpenAI REST TTS)
       // ════════════════════════════════════════════════════
       if (msg.type === 'start_consult' || (msg.type === 'start_app' && mode === 'consult')) {
         console.log('[상담WS] 상담탭 음성 세션 시작');
         userName = msg.userName || '고객';
         conversationHistory = msg.conversationHistory || [];
 
-        // OpenAI Realtime - STT(귀)만 사용, 음성출력 없음
+        // OpenAI Realtime — STT(귀)만 담당, 음성 출력 안 함
         openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
           headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' }
         });
 
         openaiWs.on('open', () => {
-          console.log('[상담WS] OpenAI Realtime 연결 - STT+TTS(shimmer)');
+          console.log('[상담WS] OpenAI Realtime 연결 — STT(귀)만 사용');
           openaiWs.send(JSON.stringify({
             type: 'session.update',
             session: {
-              modalities: ['text', 'audio'],   // 텍스트+음성 출력
-              instructions: '사용자의 말을 한국어로 정확하게 전사해주세요. 절대 스스로 답변하지 마세요. 전사만 하세요.',
-              voice: 'shimmer',                 // shimmer 목소리
+              modalities: ['text'],
+              instructions: '사용자의 음성을 한국어로 전사하세요. 절대 답변하지 마세요.',
               input_audio_format: 'pcm16',
-              output_audio_format: 'pcm16',
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
               turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 1500 }
             }
@@ -500,47 +498,55 @@ wss.on('connection', (ws, req) => {
           ws.send(JSON.stringify({ type: 'session_started' }));
         });
 
+        let isProcessing = false;
+
         openaiWs.on('message', async (data) => {
           try {
             const event = JSON.parse(data.toString());
 
-            // 말하기 시작 → 재생 중단 신호
+            // 사용자가 말하기 시작 → 현재 재생 중단
             if (event.type === 'input_audio_buffer.speech_started') {
               ws.send(JSON.stringify({ type: 'interrupt' }));
             }
 
-            // shimmer 음성 청크 → 프론트로 전달 (PCM16)
-            if (event.type === 'response.audio.delta' && event.delta) {
-              ws.send(JSON.stringify({ type: 'audio', data: event.delta }));
-            }
-
-            // shimmer 음성 완료
-            if (event.type === 'response.audio.done') {
-              ws.send(JSON.stringify({ type: 'audio_end' }));
+            // Realtime이 자체 응답 생성 시도 시 즉시 취소
+            if (event.type === 'response.created') {
+              try { openaiWs.send(JSON.stringify({ type: 'response.cancel' })); } catch {}
             }
 
             // STT 완료 → 사용자 텍스트 확정
             if (event.type === 'conversation.item.input_audio_transcription.completed' && event.transcript?.trim()) {
+              if (isProcessing) return;
+              isProcessing = true;
+
               const userText = event.transcript.trim();
               console.log('[상담WS] 사용자 STT:', userText);
 
               // 1. 화면에 사용자 텍스트 표시
               ws.send(JSON.stringify({ type: 'transcript', role: 'user', text: userText }));
 
-              // 2. 뇌: Claude API 호출
+              // 2. 뇌: Claude API 호출 (RAG + 공식 포함)
               try {
-                const systemPrompt = createSystemPrompt(userName, financialContext, null);
+                const ragResults = searchRAG(userText, 3);
+                const formulaResults = searchFormulaRAG(userText, 2);
+                const ragContext = ragResults.map(r => `[${r.source}] ${r.content}`).join('\n');
+                const formulaContext = buildFormulaContext(formulaResults);
+                const systemPrompt = createSystemPrompt(userName, financialContext, null, ragContext + formulaContext);
+
                 const claudeMessages = [
-                  ...conversationHistory.map(m => ({ role: m.role, content: m.content || m.text })),
+                  ...conversationHistory.slice(-10).map(m => ({ role: m.role, content: m.content || m.text })),
                   { role: 'user', content: userText }
                 ];
-                const claudeRes = await openai.chat.completions.create({
-                  model: 'ft:gpt-4o-mini-2024-07-18:personal::DG29N8pS',
+
+                const claudeRes = await anthropic.messages.create({
+                  model: 'claude-sonnet-4-20250514',
                   max_tokens: 1024,
-                  messages: [{ role: 'system', content: systemPrompt }, ...claudeMessages],
+                  system: systemPrompt,
+                  messages: claudeMessages
                 });
-                const aiText = claudeRes.choices[0]?.message?.content || '다시 말씀해주세요.';
-                console.log('[상담WS] 머니야 답변:', aiText.slice(0, 50) + '...');
+
+                const aiText = claudeRes.content[0]?.text || '다시 말씀해주세요.';
+                console.log('[상담WS] 머니야 답변 (Claude):', aiText.slice(0, 50) + '...');
 
                 // 3. 화면에 머니야 답변 텍스트 표시
                 ws.send(JSON.stringify({ type: 'transcript', role: 'assistant', text: aiText }));
@@ -550,21 +556,28 @@ wss.on('connection', (ws, req) => {
                 conversationHistory.push({ role: 'assistant', content: aiText });
                 if (conversationHistory.length > 20) conversationHistory = conversationHistory.slice(-20);
 
-                // 4. 입: OpenAI Realtime shimmer 목소리로 출력 (TTS 전용)
-                if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-                  openaiWs.send(JSON.stringify({
-                    type: 'response.create',
-                    response: {
-                      modalities: ['audio'],
-                      output_audio_format: 'pcm16',
-                      input: [{ type: 'text', text: aiText }]
-                    }
-                  }));
-                  console.log('[상담WS] OpenAI Realtime shimmer TTS 요청:', aiText.slice(0, 30) + '...');
+                // 4. 입: OpenAI REST TTS (Realtime과 완전 분리)
+                try {
+                  const ttsText = aiText.length > 200 ? aiText.slice(0, 200) + '...' : aiText;
+                  const ttsResponse = await openai.audio.speech.create({
+                    model: 'tts-1',
+                    voice: 'shimmer',
+                    input: ttsText,
+                    response_format: 'mp3'
+                  });
+                  const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
+                  const audioBase64 = audioBuffer.toString('base64');
+                  console.log('[상담WS] TTS MP3 생성 완료:', Math.round(audioBase64.length / 1024) + 'KB');
+                  ws.send(JSON.stringify({ type: 'tts_audio', data: audioBase64 }));
+                } catch (ttsError) {
+                  console.error('[상담WS] TTS 에러:', ttsError.message);
                 }
+
               } catch (claudeError) {
                 console.error('[상담WS] Claude 에러:', claudeError.message);
                 ws.send(JSON.stringify({ type: 'error', error: '답변 생성 중 오류가 발생했습니다.' }));
+              } finally {
+                isProcessing = false;
               }
             }
           } catch (e) { console.error('[상담WS] 메시지 파싱 에러:', e); }
