@@ -579,7 +579,7 @@ wss.on('connection', (ws, req) => {
               input_audio_format: 'pcm16',
               output_audio_format: 'pcm16',
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
-              turn_detection: { type: 'server_vad', threshold: 0.6, prefix_padding_ms: 400, silence_duration_ms: 1800 }
+              turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 1500 }
             }
           }));
           ws.send(JSON.stringify({ type: 'session_started' }));
