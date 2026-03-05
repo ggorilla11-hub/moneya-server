@@ -371,7 +371,7 @@ ${name}님의 든든한 금융 친구가 되어드릴게요!`;
 
 app.get('/', (req, res) => {
   res.json({
-    status: 'AI머니야 서버 실행 중!', version: '5.0',  // 4.3 → 5.0 (8단계 상담 리딩 통합)
+    status: 'AI머니야 서버 실행 중!', version: '6.0',  // 4.3 → 5.0 (8단계 상담 리딩 통합)
     rag: {
       저서3권: ragData.books.length, AFPK: ragData.afpk.length,
       반퇴시대: ragData.bantoe.length, 명언: ragData.quotes.length,
@@ -433,6 +433,72 @@ app.post('/api/tts', async (req, res) => {
     const buffer = Buffer.from(await response.arrayBuffer());
     res.json({ success: true, audio: buffer.toString('base64') });
   } catch (error) { res.json({ success: false, error: 'TTS failed' }); }
+});
+
+
+// ════════════════════════════════════════════════════════════
+//  상담탭 전용 API (뇌: Claude / 입: ElevenLabs)
+// ════════════════════════════════════════════════════════════
+const Anthropic = require('@anthropic-ai/sdk');
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// ── 텍스트 상담 (뇌: Claude) ────────────────────────────────
+app.post('/api/consult-chat', async (req, res) => {
+  try {
+    const { message, userName, financialContext, conversationHistory = [] } = req.body;
+    const systemPrompt = createSystemPrompt(userName, financialContext, null);
+    const messages = [
+      ...conversationHistory.map(m => ({ role: m.role, content: m.content })),
+      { role: 'user', content: message },
+    ];
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages,
+    });
+    const aiText = response.content[0]?.text || '다시 말씀해주세요!';
+    res.json({ success: true, message: aiText });
+  } catch (error) {
+    console.error('[상담채팅] Claude API 에러:', error);
+    res.json({ success: false, message: '잠시 후 다시 시도해주세요.' });
+  }
+});
+
+// ── 음성 출력 (입: ElevenLabs 오상열 목소리) ────────────────
+app.post('/api/consult-tts', async (req, res) => {
+  try {
+    const { text } = req.body;
+    const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+    const VOICE_ID           = process.env.ELEVENLABS_VOICE_ID;
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+      {
+        method: 'POST',
+        headers: { 'xi-api-key': ELEVENLABS_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        }),
+      }
+    );
+    if (!response.ok) throw new Error(`ElevenLabs 에러: ${response.status}`);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    res.json({ success: true, audio: buffer.toString('base64') });
+  } catch (error) {
+    console.error('[상담TTS] ElevenLabs 에러:', error);
+    try {
+      const { text } = req.body;
+      const fallback = await openai.audio.speech.create({
+        model: 'tts-1', voice: 'onyx', input: text, response_format: 'mp3'
+      });
+      const buffer = Buffer.from(await fallback.arrayBuffer());
+      res.json({ success: true, audio: buffer.toString('base64'), fallback: true });
+    } catch {
+      res.json({ success: false, error: 'TTS 실패' });
+    }
+  }
 });
 
 const PORT = process.env.PORT || 3001;
