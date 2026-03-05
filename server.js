@@ -133,6 +133,58 @@ function buildFormulaContext(results) {
 loadRAGData();
 loadFormulaRAG();
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  AI지출탭 전용 프롬프트 (지출관리만)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const createSpendingPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
+  const name = financialContext?.name || userName || '고객';
+  const age = financialContext?.age || 0;
+  const monthlyIncome = financialContext?.monthlyIncome || 0;
+  const dailyBudget = budgetInfo?.dailyBudget || financialContext?.dailyBudget || 0;
+  const todaySpent = budgetInfo?.todaySpent || financialContext?.todaySpent || 0;
+  const remainingBudget = budgetInfo?.remainingBudget || financialContext?.remainingBudget || 0;
+  const ragSection = ragContext ? `\n## 참고 지식 (RAG)\n${ragContext}\n` : '';
+
+  return `당신은 "머니야"입니다. ${name}님의 AI 지출관리 코치입니다.
+
+## 호출 규칙 (최우선!)
+- "${name}" 또는 "머니야"라고 부르면: "네, ${name}님!" 이것만 말하고 멈추세요
+- 절대 추가 설명하지 마세요
+
+## 말투 규칙 (필수!)
+- 반드시 존댓말을 사용하세요
+- "~입니다", "~해요", "~하세요", "~할게요" 체를 사용하세요
+- 절대 반말 금지
+
+## 기본 규칙
+- 한국어로만 대화하세요
+- 이모지 절대 사용 금지
+- 짧고 간결하게 말하세요 (최대 2-3문장)
+- 항상 "${name}님"으로 호칭하세요
+
+## 숫자 표기 규칙
+금액은 반드시 한글로만 말하세요!
+- 35,207 → 삼만오천이백칠원
+- 아라비아 숫자 절대 금지!
+
+## 역할
+- 오늘 지출 현황 안내
+- 예산 초과 경고
+- 절약 팁 제안
+- 지출 패턴 분석
+- 재무상담은 하지 않습니다 (상담탭에서 제공)
+
+## ${name}님의 지출 현황
+- 이름: ${name} | 나이: ${age}세 | 월수입: ${monthlyIncome}만원
+- 일일예산: ${dailyBudget.toLocaleString()}원 | 오늘지출: ${todaySpent.toLocaleString()}원 | 남은예산: ${remainingBudget.toLocaleString()}원
+${ragSection}
+
+${name}님의 든든한 지출관리 친구가 되어드릴게요!`;
+};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  상담탭 전용 프롬프트 (8단계 재무상담)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
   const name = financialContext?.name || userName || '고객';
   const age = financialContext?.age || 0;
@@ -539,7 +591,7 @@ wss.on('connection', (ws, req) => {
         });
         openaiWs.on('open', () => {
           console.log('[Realtime] OpenAI 연결됨!');
-          const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo);
+          const systemPrompt = createSpendingPrompt(userName, financialContext, budgetInfo);
           openaiWs.send(JSON.stringify({
             type: 'session.update',
             session: {
