@@ -12,6 +12,9 @@ app.use(express.json());
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// ════════════════════════════════════════════════════════════
+//  기존 RAG 데이터 (책·AFPK·반퇴시대 등)
+// ════════════════════════════════════════════════════════════
 let ragData = {
   books: [], afpk: [], bantoe: [], quotes: [], keywords: {},
   questions: [], workbook: [], consultation: [], lecture: [],
@@ -91,7 +94,64 @@ function searchRAG(query, topK = 3) {
   return results.sort((a, b) => b.score - a.score).slice(0, topK);
 }
 
+// ════════════════════════════════════════════════════════════
+//  NEW ▶ 공식 RAG (오상열 CFP 43개 공식·기준·로직)
+// ════════════════════════════════════════════════════════════
+let formulaChunks = [];
+
+function loadFormulaRAG() {
+  try {
+    const filePath = path.join(__dirname, 'rag_formulas.json');
+    if (!fs.existsSync(filePath)) {
+      console.log('[RAG-공식] ⚠️  rag_formulas.json 없음 — 건너뜀');
+      return;
+    }
+    const data    = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    formulaChunks = data.chunks || [];
+    console.log(`[RAG-공식] ✅ ${formulaChunks.length}개 공식 청크 로드 완료`);
+  } catch (e) {
+    console.error('[RAG-공식] ❌ 로드 실패:', e.message);
+    formulaChunks = [];
+  }
+}
+
+function searchFormulaRAG(query, maxResults = 2) {
+  if (!formulaChunks.length || !query) return [];
+  const tokens = query.replace(/[^\w가-힣]/g, ' ').split(/\s+/).filter(t => t.length >= 2);
+  if (!tokens.length) return [];
+
+  const scored = formulaChunks.map(chunk => {
+    const text = (chunk.content + ' ' + (chunk.keywords || []).join(' ')).toLowerCase();
+    let s = 0;
+    tokens.forEach(t => {
+      s += ((text.match(new RegExp(t.toLowerCase(), 'g')) || []).length) * 2;
+      if (chunk.name.toLowerCase().includes(t.toLowerCase())) s += 4;
+    });
+    return { ...chunk, _s: s };
+  });
+
+  return scored
+    .filter(c => c._s > 0)
+    .sort((a, b) => b._s - a._s)
+    .slice(0, maxResults)
+    .map(({ _s, ...c }) => c);
+}
+
+function buildFormulaContext(results) {
+  if (!results || !results.length) return '';
+  let ctx = '\n[오상열 CFP 재무설계 공식]\n';
+  results.forEach((c, i) => {
+    ctx += `${i + 1}. ${c.name}: ${c.raw.formula}\n`;
+    const detail = c.raw.details.length > 180 ? c.raw.details.slice(0, 180) + '…' : c.raw.details;
+    ctx += `   (${detail})\n`;
+  });
+  return ctx;
+}
+// ════════════════════════════════════════════════════════════
+
+// 데이터 로드 실행
 loadRAGData();
+loadFormulaRAG();  // NEW
 
 const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
   const name = financialContext?.name || userName || '고객';
@@ -151,15 +211,17 @@ ${name}님의 든든한 금융 친구가 되어드릴게요!`;
 
 app.get('/', (req, res) => {
   res.json({
-    status: 'AI머니야 서버 실행 중!', version: '4.2',
+    status: 'AI머니야 서버 실행 중!', version: '4.3',  // 4.2 → 4.3
     rag: {
       저서3권: ragData.books.length, AFPK: ragData.afpk.length,
       반퇴시대: ragData.bantoe.length, 명언: ragData.quotes.length,
       문제은행: ragData.questions.length, 워크북: ragData.workbook.length,
       상담사례: ragData.consultation.length, 전문강의: ragData.lecture.length,
       CFHA: ragData.cfha.length, 고객Q: ragData.custQ.length, 잔소리: ragData.nagging.length,
+      공식지식베이스: formulaChunks.length,  // NEW
       total: ragData.books.length + ragData.afpk.length + ragData.bantoe.length +
-             ragData.workbook.length + ragData.consultation.length + ragData.lecture.length,
+             ragData.workbook.length + ragData.consultation.length + ragData.lecture.length +
+             formulaChunks.length,  // NEW
     }
   });
 });
@@ -179,10 +241,18 @@ app.post('/api/rag-search', (req, res) => {
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, userName, financialContext, budgetInfo } = req.body;
+
+    // 기존 RAG 검색
     const ragResults = searchRAG(message, 3);
     const ragContext = ragResults.length > 0
       ? ragResults.map(r => `[${r.source}] ${r.topic}: ${r.content}`).join('\n\n') : '';
-    const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext);
+
+    // NEW ▶ 공식 RAG 검색 — 기존 ragContext 뒤에 추가
+    const formulaResults = searchFormulaRAG(message, 2);
+    const formulaContext = buildFormulaContext(formulaResults);
+    const fullRagContext = ragContext + formulaContext;
+
+    const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, fullRagContext);
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: message }],
