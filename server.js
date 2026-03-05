@@ -525,7 +525,7 @@ wss.on('connection', (ws, req) => {
               // 1. 화면에 사용자 텍스트 표시
               ws.send(JSON.stringify({ type: 'transcript', role: 'user', text: userText }));
 
-              // 2. 뇌: Claude API 호출 (RAG + 공식 포함)
+              // 2. 뇌: Claude API 스트리밍 호출 (첫 문장 나오면 바로 TTS 시작)
               try {
                 const ragResults = searchRAG(userText, 3);
                 const formulaResults = searchFormulaRAG(userText, 2);
@@ -538,17 +538,53 @@ wss.on('connection', (ws, req) => {
                   { role: 'user', content: userText }
                 ];
 
-                const claudeRes = await anthropic.messages.create({
+                // 스트리밍으로 Claude 호출 — 첫 문장이 나오면 즉시 TTS 시작
+                const stream = await anthropic.messages.stream({
                   model: 'claude-sonnet-4-20250514',
-                  max_tokens: 1024,
+                  max_tokens: 512,
                   system: systemPrompt,
                   messages: claudeMessages
                 });
 
-                const aiText = claudeRes.content[0]?.text || '다시 말씀해주세요.';
+                let fullText = '';
+                let firstSentence = '';
+                let firstTtsSent = false;
+
+                stream.on('text', (text) => {
+                  fullText += text;
+
+                  // 첫 문장 완성 감지 (마침표, 물음표, 느낌표, 줄바꿈)
+                  if (!firstTtsSent) {
+                    firstSentence += text;
+                    const sentenceEnd = firstSentence.match(/[.!?。]\s|[.!?。]$/);
+                    if (sentenceEnd && firstSentence.length > 15) {
+                      firstTtsSent = true;
+                      const ttsFirst = firstSentence.trim();
+                      console.log('[상담WS] 첫 문장 즉시 TTS:', ttsFirst.slice(0, 40) + '...');
+
+                      // 첫 문장 즉시 TTS (비동기, 기다리지 않음)
+                      openai.audio.speech.create({
+                        model: 'tts-1',
+                        voice: 'shimmer',
+                        input: ttsFirst,
+                        response_format: 'mp3',
+                        speed: 1.1
+                      }).then(async (ttsRes) => {
+                        const buf = Buffer.from(await ttsRes.arrayBuffer());
+                        if (ws.readyState === WebSocket.OPEN) {
+                          ws.send(JSON.stringify({ type: 'tts_audio', data: buf.toString('base64') }));
+                        }
+                      }).catch(e => console.error('[상담WS] 첫 문장 TTS 에러:', e.message));
+                    }
+                  }
+                });
+
+                // 스트리밍 완료 대기
+                const finalMessage = await stream.finalMessage();
+                const aiText = finalMessage.content[0]?.text || fullText || '다시 말씀해주세요.';
                 console.log('[상담WS] 머니야 답변 (Claude):', aiText.slice(0, 50) + '...');
 
-                // 3. 화면에 머니야 답변 텍스트 표시
+                // 3. 화면에 머니야 답변 전체 텍스트 표시
                 ws.send(JSON.stringify({ type: 'transcript', role: 'assistant', text: aiText }));
 
                 // 대화 이력 업데이트
@@ -556,21 +592,41 @@ wss.on('connection', (ws, req) => {
                 conversationHistory.push({ role: 'assistant', content: aiText });
                 if (conversationHistory.length > 20) conversationHistory = conversationHistory.slice(-20);
 
-                // 4. 입: OpenAI REST TTS (Realtime과 완전 분리)
-                try {
-                  const ttsText = aiText.length > 200 ? aiText.slice(0, 200) + '...' : aiText;
-                  const ttsResponse = await openai.audio.speech.create({
-                    model: 'tts-1',
-                    voice: 'shimmer',
-                    input: ttsText,
-                    response_format: 'mp3'
-                  });
-                  const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
-                  const audioBase64 = audioBuffer.toString('base64');
-                  console.log('[상담WS] TTS MP3 생성 완료:', Math.round(audioBase64.length / 1024) + 'KB');
-                  ws.send(JSON.stringify({ type: 'tts_audio', data: audioBase64 }));
-                } catch (ttsError) {
-                  console.error('[상담WS] TTS 에러:', ttsError.message);
+                // 4. 나머지 부분 TTS (첫 문장 이후 부분)
+                if (firstTtsSent && aiText.length > firstSentence.length) {
+                  const remainText = aiText.slice(firstSentence.length).trim();
+                  if (remainText.length > 5) {
+                    try {
+                      const ttsText = remainText.length > 150 ? remainText.slice(0, 150) + '...' : remainText;
+                      const ttsResponse = await openai.audio.speech.create({
+                        model: 'tts-1',
+                        voice: 'shimmer',
+                        input: ttsText,
+                        response_format: 'mp3',
+                        speed: 1.1
+                      });
+                      const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
+                      if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'tts_audio', data: audioBuffer.toString('base64') }));
+                      }
+                    } catch (e) { console.error('[상담WS] 후속 TTS 에러:', e.message); }
+                  }
+                } else if (!firstTtsSent) {
+                  // 짧은 답변이라 첫 문장 TTS가 안 갔으면 전체를 TTS
+                  try {
+                    const ttsText = aiText.length > 200 ? aiText.slice(0, 200) + '...' : aiText;
+                    const ttsResponse = await openai.audio.speech.create({
+                      model: 'tts-1',
+                      voice: 'shimmer',
+                      input: ttsText,
+                      response_format: 'mp3',
+                      speed: 1.1
+                    });
+                    const audioBuffer = Buffer.from(await ttsResponse.arrayBuffer());
+                    if (ws.readyState === WebSocket.OPEN) {
+                      ws.send(JSON.stringify({ type: 'tts_audio', data: audioBuffer.toString('base64') }));
+                    }
+                  } catch (e) { console.error('[상담WS] TTS 에러:', e.message); }
                 }
 
               } catch (claudeError) {
