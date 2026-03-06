@@ -833,6 +833,21 @@ wss.on('connection', (ws, req) => {
             }
           }));
           ws.send(JSON.stringify({ type: 'session_started' }));
+          
+          // AI 머니야가 먼저 인사 시작
+          setTimeout(() => {
+            if (openaiWs.readyState === 1) {
+              openaiWs.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: {
+                  type: 'message',
+                  role: 'user',
+                  content: [{ type: 'input_text', text: '상담을 시작해주세요. 고객님께 먼저 인사하고 성함과 나이를 확인해주세요.' }]
+                }
+              }));
+              openaiWs.send(JSON.stringify({ type: 'response.create' }));
+            }
+          }, 500);
         });
 
         openaiWs.on('message', (data) => {
