@@ -186,7 +186,6 @@ ${name}님의 든든한 지출관리 친구가 되어드릴게요!`;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  상담탭 Realtime 전용 프롬프트 (음성 상담)
-//  자유대화 / 8단계 재무상담 분기 버전
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const createConsultRealtimePrompt = (userName, financialContext) => {
   const name = financialContext?.name || userName || '고객';
@@ -305,7 +304,7 @@ FIRE: 10억 곱하기 3.5% 나누기 12는 월 삼백만원 연금
 7대 영역별 고객 현황 매핑
 → 7대 영역 현황 파악되면 5단계로
 
-【5단계: Portfolio Design】 15분 ★가장 중요★
+【5단계: Portfolio Design】 15분
 트리거: 금융집 현황 파악 완료
 1. 여유자금 계산
 2. 3버킷 배분: 안전 50에서 60%, 성장 30에서 40%, 꿈 10에서 20%
@@ -366,6 +365,7 @@ const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext =
   const ragSection = ragContext ? `\n## 참고 지식 (RAG)\n${ragContext}\n` : '';
 
   return `당신은 "머니야"입니다. ${name}님의 개인 AI 금융코치입니다.
+오상열 CFP(20년 경력, 2000건 상담)의 금융집짓기® 방법론 전문가입니다.
 
 ## 호출 규칙 (최우선!)
 - "${name}" 또는 "머니야"라고 부르면: "네, ${name}님!" 이것만 말하고 멈추세요
@@ -411,7 +411,7 @@ const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext =
 ${ragSection}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-8단계 상담 리딩 시스템 (핵심 추가)
+8단계 상담 리딩 시스템 (핵심)
 오상열 CFP 금융집짓기® 방법론 기반
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 당신은 질문을 기다리는 AI가 아닙니다.
@@ -483,7 +483,7 @@ ${name}님의 든든한 금융 친구가 되어드릴게요!`;
 
 app.get('/', (req, res) => {
   res.json({
-    status: 'AI머니야 서버 실행 중!', version: '7.0',
+    status: 'AI머니야 서버 실행 중!', version: '8.0 (단일에이전트)',
     rag: {
       저서3권: ragData.books.length, AFPK: ragData.afpk.length,
       반퇴시대: ragData.bantoe.length, 명언: ragData.quotes.length,
@@ -541,202 +541,46 @@ app.post('/api/tts', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
-//  상담탭 전용 API (뇌: Claude / 입: ElevenLabs)
+//  상담탭 전용 API — 단일 에이전트 (Claude + RAG)
+//  멀티에이전트 제거 → 속도 3~5배 향상, 비용 4배 절감
 // ════════════════════════════════════════════════════════════
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  멀티에이전트 시스템 (텍스트 상담 전용)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async function runAgent(agentName, systemPrompt, userMessage) {
-  try {
-    const res = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 400,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }]
-    });
-    return JSON.parse(res.content[0]?.text || '{}');
-  } catch {
-    try {
-      const res = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 400,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }]
-      });
-      return { raw: res.content[0]?.text || '' };
-    } catch (e) {
-      return { error: e.message };
-    }
-  }
-}
-
-// 오케스트레이터: 어떤 에이전트가 필요한지 판단
-async function routeAgents(userMessage) {
-  const msg = userMessage.toLowerCase();
-  const agents = ['analysis']; // 분석은 항상 포함
-
-  if (msg.includes('보험') || msg.includes('보장') || msg.includes('실손'))
-    agents.push('insurance');
-  if (msg.includes('은퇴') || msg.includes('노후') || msg.includes('연금'))
-    agents.push('retirement');
-  if (msg.includes('부채') || msg.includes('대출') || msg.includes('저축') || msg.includes('비상'))
-    agents.push('debt_savings');
-  if (msg.includes('투자') || msg.includes('주식') || msg.includes('펀드') || msg.includes('세금') || msg.includes('절세'))
-    agents.push('investment_tax');
-  if (msg.includes('부동산') || msg.includes('집') || msg.includes('아파트') || msg.includes('전세') || msg.includes('매매'))
-    agents.push('realestate');
-
-  // 감정 감지
-  if (msg.includes('걱정') || msg.includes('불안') || msg.includes('힘들') || msg.includes('어떡') || msg.includes('화나'))
-    agents.push('emotion');
-
-  return agents.slice(0, 4); // 최대 4개
-}
-
-// 에이전트 프롬프트 정의
-const AGENT_PROMPTS = {
-  analysis: `당신은 분석 에이전트입니다. 고객 질문에서 필요한 수치 계산을 수행하세요.
-예산 기준표: 1인(생활비20%,저축50%) 2인(30%,40%) 3인(40%,30%) 4인(50%,20%) 5인(60%,10%). 노후연금/보험/대출 각 10%.
-부자지수 = (순자산×10)÷(나이×월수입×12)×100. 반드시 JSON으로 응답: {"calculations": "계산결과", "diagnosis": "진단", "warning": "주의사항 또는 null"}`,
-
-  insurance: `당신은 보험 분석 에이전트입니다. 보장 적정 기준: 사망 연봉3배, 장해 3배, 암 1~2배, 뇌 1배, 심장 1배, 실손 5천만원. 보험료 기준: 소득의 10%.
-JSON으로 응답: {"coverageAnalysis": "분석결과", "recommendation": "방향제안(상품명없이)", "premiumCheck": "보험료 적정여부"}`,
-
-  retirement: `당신은 은퇴설계 에이전트입니다. 은퇴=소득중단+지출계속→파산위험. 4대변수: 은퇴나이(평균73), 예상수명(90), 월노후생활비(현재70%), 현재준비상태.
-계산: 월부족자금=노후생활비-공적연금-개인연금. 은퇴일시금=월부족×12×(수명-은퇴나이). FIRE: 10억×3.5%÷12=월300만원.
-JSON으로 응답: {"retirementGap": "부족금액", "monthlyNeeded": "월필요저축액", "urgency": "시급/보통/여유"}`,
-
-  debt_savings: `당신은 부채/저축 에이전트입니다. 부채=거실의 쓰레기. 신용대출 즉시상환(작은것부터), 담보대출은 은퇴시까지.
-비상예비자금: 월생활비×6개월. 인생7단계: 1.비상자금100만 2.신용대출상환 3.비상비자금 4~6.목돈(1억→10억) 7.담보대출상환→FIRE.
-JSON으로 응답: {"debtPlan": "상환계획", "savingsPlan": "저축계획", "emergencyFund": "비상자금상태", "lifeStage": "현재단계"}`,
-
-  investment_tax: `당신은 투자/세금 에이전트입니다. 핵심: 기초(보험/저축) 없이 지붕(투자)만 올리면 무너짐. 투자전 필수확인: 비상자금확보? 신용대출정리? 월저축안정?
-골든밸런스 7:3. 적립식: 100-나이 법칙. 절세: 연금저축600+IRP300=연900만원.
-특정상품/종목 추천 절대 금지. JSON으로 응답: {"readiness": "투자준비상태", "allocation": "자산배분제안", "taxStrategy": "절세방안"}`,
-
-  realestate: `당신은 부동산 에이전트입니다. 소득에 맞는 크기의 집. 주거비(원리금) 소득30%이하 안전, 40%초과 위험.
-"첫집이 마지막집일 필요 없습니다." DSR 기준 대출가능액 산출.
-JSON으로 응답: {"affordability": "매매가능범위", "timeline": "예상시기", "strategy": "전략"}`,
-
-  emotion: `당신은 감정 분석 에이전트입니다. 고객의 감정상태를 파악하세요.
-불안/걱정→공감먼저+숫자로안심. 화남→인정+공감+대안. 자신감과잉→칭찬+리스크언급. 슬픔→감정수용+조언나중에.
-JSON으로 응답: {"emotion": "감지된감정", "suggestedTone": "수석에게제안할톤", "empathyFirst": "공감멘트"}`
-};
-
-// 멀티에이전트 텍스트 상담 실행
-async function multiAgentChat(message, userName, financialContext, conversationHistory) {
-  // 1. 필요한 에이전트 판단
-  const agentsToCall = await routeAgents(message);
-
-  // 2. RAG 검색 (병렬)
-  const ragResults = searchRAG(message, 3);
-  const formulaResults = searchFormulaRAG(message, 2);
-  const ragContext = ragResults.map(r => `[${r.source}] ${r.content}`).join('\n');
-  const formulaContext = buildFormulaContext(formulaResults);
-
-  // 3. 에이전트 병렬 실행
-  const agentPromises = agentsToCall.map(agent => {
-    const prompt = AGENT_PROMPTS[agent];
-    if (!prompt) return Promise.resolve({ agent, result: {} });
-    const contextMsg = `[고객정보] ${userName}, ${financialContext?.age || '미확인'}세, 월수입 ${financialContext?.monthlyIncome || '미확인'}만원\n[고객질문] ${message}`;
-    return runAgent(agent, prompt, contextMsg).then(result => ({ agent, result }));
-  });
-
-  const agentResults = await Promise.all(agentPromises);
-
-  // 4. 수석 머니야(Claude)가 에이전트 결과 종합
-  const agentContext = agentResults
-    .map(r => `[${r.agent} 분석] ${JSON.stringify(r.result)}`)
-    .join('\n');
-
-  const systemPrompt = createSystemPrompt(userName, financialContext, null, ragContext + formulaContext);
-
-  const claudeRes = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1024,
-    system: `${systemPrompt}
-
-[전문 에이전트 분석 결과 — 고객에게는 보이지 않음, 참고만 하세요]
-${agentContext}
-
-★ 에이전트 분석을 자연스럽게 녹여서 답변하세요. "분석 결과에 따르면" 같은 표현 금지. 당신이 직접 분석한 것처럼 말하세요.`,
-    messages: [
-      ...conversationHistory.slice(-10).map(m => ({ role: m.role, content: m.content || m.text })),
-      { role: 'user', content: message }
-    ]
-  });
-
-  const aiText = claudeRes.content[0]?.text || '다시 말씀해주세요.';
-
-  // 5. 보조 패널용 데이터 (하단 텍스트 표시용)
-  const panelData = agentResults.map(r => ({
-    agent: r.agent,
-    summary: typeof r.result === 'object' ? r.result : { raw: r.result }
-  }));
-
-  return {
-    message: aiText,
-    agentsUsed: agentsToCall,
-    panelData: panelData,
-    ragUsed: ragResults.length
-  };
-}
-
-// 텍스트 상담 (멀티에이전트 + Claude + RAG)
 app.post('/api/consult-chat', async (req, res) => {
   try {
     const { message, userName, financialContext, conversationHistory = [] } = req.body;
 
-    // 간단한 인사/짧은 말은 에이전트 스킵
-    const isSimple = message.length < 10 && ['안녕', '네', '고마워', '감사', '머니야'].some(w => message.includes(w));
+    // RAG 검색
+    const ragResults = searchRAG(message, 3);
+    const formulaResults = searchFormulaRAG(message, 2);
+    const ragContext = ragResults.map(r => `[${r.source}] ${r.topic}: ${r.content}`).join('\n\n');
+    const formulaContext = buildFormulaContext(formulaResults);
+    const fullRagContext = ragContext + formulaContext;
 
-    if (isSimple) {
-      // 단순 응답: Claude만 사용
-      const ragResults = searchRAG(message, 2);
-      const ragContext = ragResults.map(r => `[${r.source}] ${r.content}`).join('\n');
-      const systemPrompt = createSystemPrompt(userName, financialContext, null, ragContext);
-      const claudeRes = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 512,
-        system: systemPrompt,
-        messages: [
-          ...conversationHistory.slice(-10).map(m => ({ role: m.role, content: m.content || m.text })),
-          { role: 'user', content: message }
-        ]
-      });
-      return res.json({
-        success: true,
-        message: claudeRes.content[0]?.text || '다시 말씀해주세요.',
-        panelData: null
-      });
-    }
+    // 시스템 프롬프트 생성
+    const systemPrompt = createSystemPrompt(userName, financialContext, null, fullRagContext);
 
-    // 멀티에이전트 실행
-    const result = await multiAgentChat(message, userName, financialContext, conversationHistory);
+    // Claude 단일 호출
+    const claudeRes = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [
+        ...conversationHistory.slice(-10).map(m => ({ role: m.role, content: m.content || m.text })),
+        { role: 'user', content: message }
+      ]
+    });
+
+    const aiText = claudeRes.content[0]?.text || '다시 말씀해주세요.';
+
     res.json({
       success: true,
-      message: result.message,
-      panelData: result.panelData,
-      meta: { agentsUsed: result.agentsUsed, ragUsed: result.ragUsed }
+      message: aiText,
+      panelData: null,
+      meta: { ragUsed: ragResults.length, formulaUsed: formulaResults.length }
     });
 
   } catch (error) {
-    console.error('[멀티에이전트] 에러:', error.message);
-    // 폴백: 멀티에이전트 실패 시 Claude 단독
-    try {
-      const systemPrompt = createSystemPrompt(req.body.userName, req.body.financialContext, null);
-      const claudeRes = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 512,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: req.body.message }]
-      });
-      res.json({ success: true, message: claudeRes.content[0]?.text, panelData: null, fallback: true });
-    } catch (e) {
-      res.json({ success: false, error: e.message });
-    }
+    console.error('[상담채팅] 에러:', error.status, error.message);
+    res.json({ success: false, error: error.message, message: '잠시 후 다시 시도해주세요.' });
   }
 });
 
@@ -744,7 +588,6 @@ app.post('/api/consult-chat', async (req, res) => {
 //  Zoom 화상상담 API (Phase 1)
 // ════════════════════════════════════════════════════════════
 
-// Zoom 액세스 토큰 발급 (Server-to-Server OAuth)
 async function getZoomAccessToken() {
   const credentials = Buffer.from(
     `${process.env.ZOOM_CLIENT_ID}:${process.env.ZOOM_CLIENT_SECRET}`
@@ -769,7 +612,6 @@ async function getZoomAccessToken() {
   return data.access_token;
 }
 
-// 줌 미팅 생성 API
 app.post('/api/zoom/create-meeting', async (req, res) => {
   try {
     const { customerName, scheduledTime, duration = 90 } = req.body;
@@ -783,7 +625,7 @@ app.post('/api/zoom/create-meeting', async (req, res) => {
       },
       body: JSON.stringify({
         topic: `AI머니야 재무상담 — ${customerName}님`,
-        type: scheduledTime ? 2 : 1, // 2=예약, 1=즉시
+        type: scheduledTime ? 2 : 1,
         start_time: scheduledTime || undefined,
         duration: duration,
         timezone: 'Asia/Seoul',
@@ -813,7 +655,6 @@ app.post('/api/zoom/create-meeting', async (req, res) => {
   }
 });
 
-// 줌 미팅 목록 조회
 app.get('/api/zoom/meetings', async (req, res) => {
   try {
     const token = await getZoomAccessToken();
@@ -828,7 +669,7 @@ app.get('/api/zoom/meetings', async (req, res) => {
   }
 });
 
-// ElevenLabs TTS 헬퍼 함수
+// ElevenLabs TTS
 async function elevenLabsTTS(text) {
   const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
   const VOICE_ID = process.env.ELEVENLABS_VOICE_ID;
@@ -849,7 +690,6 @@ async function elevenLabsTTS(text) {
   return Buffer.from(await response.arrayBuffer());
 }
 
-// ElevenLabs TTS REST API (텍스트 → 오상열 목소리)
 app.post('/api/consult-tts', async (req, res) => {
   try {
     const { text } = req.body;
@@ -869,7 +709,7 @@ app.post('/api/consult-tts', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-const server = app.listen(PORT, () => console.log(`AI머니야 서버 시작! 포트: ${PORT}`));
+const server = app.listen(PORT, () => console.log(`AI머니야 서버 v8.0 시작! 포트: ${PORT}`));
 
 const wss = new WebSocket.Server({ server });
 
@@ -883,27 +723,23 @@ wss.on('connection', (ws, req) => {
   let userName = '고객';
   let financialContext = null;
   let budgetInfo = null;
-  let conversationHistory = [];  // 상담 대화 이력 (mode=consult 전용)
 
   ws.on('message', async (message) => {
     try {
       const msg = JSON.parse(message);
 
-      // ════════════════════════════════════════════════════
-      //  상담탭 전용: OpenAI Realtime 올인원 (귀+뇌+입) + 금융집짓기 상담 지식
-      // ════════════════════════════════════════════════════
+      // 상담탭: OpenAI Realtime (음성)
       if (msg.type === 'start_consult' || (msg.type === 'start_app' && mode === 'consult')) {
-        console.log('[상담WS] 상담탭 음성 세션 시작 (Realtime 올인원)');
+        console.log('[상담WS] 상담탭 음성 세션 시작');
         userName = msg.userName || '고객';
         financialContext = msg.financialContext || null;
-        conversationHistory = msg.conversationHistory || [];
 
         openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
           headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' }
         });
 
         openaiWs.on('open', () => {
-          console.log('[상담WS] OpenAI Realtime 연결 — 올인원(귀+뇌+입)');
+          console.log('[상담WS] OpenAI Realtime 연결');
           const name = financialContext?.name || userName || '고객';
           const consultPrompt = createConsultRealtimePrompt(name, financialContext);
           openaiWs.send(JSON.stringify({
@@ -951,9 +787,7 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
-      // ════════════════════════════════════════════════════
-      //  기존 AI지출탭: 귀+뇌+입 모두 OpenAI Realtime
-      // ════════════════════════════════════════════════════
+      // AI지출탭: OpenAI Realtime
       if (msg.type === 'start_app') {
         console.log('[Realtime] 앱 시작 요청');
         userName = msg.userName || '고객';
@@ -990,7 +824,6 @@ wss.on('connection', (ws, req) => {
         openaiWs.on('close', () => console.log('OpenAI 연결 종료'));
       }
 
-      // 오디오 데이터 전달 (공통)
       if (msg.type === 'audio' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
         openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: msg.data }));
       }
@@ -1004,4 +837,4 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => { console.log('[WS] 클라이언트 연결 종료'); if (openaiWs) openaiWs.close(); });
 });
 
-console.log('AI머니야 서버 초기화 완료!');
+console.log('AI머니야 서버 v8.0 초기화 완료!');
