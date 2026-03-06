@@ -483,7 +483,7 @@ ${name}님의 든든한 금융 친구가 되어드릴게요!`;
 
 app.get('/', (req, res) => {
   res.json({
-    status: 'AI머니야 서버 실행 중!', version: '9.0 (Function Calling + WebRTC)',
+    status: 'AI머니야 서버 실행 중!', version: '9.1 (Smart Note Phase3)',
     rag: {
       저서3권: ragData.books.length, AFPK: ragData.afpk.length,
       반퇴시대: ragData.bantoe.length, 명언: ragData.quotes.length,
@@ -644,7 +644,7 @@ app.post('/api/consult-tts', async (req, res) => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  WebRTC 화상상담 방 관리
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const consultRooms = new Map(); // roomId → { host: ws, guest: ws, createdAt }
+const consultRooms = new Map();
 
 app.post('/admin/video-consult/create', async (req, res) => {
   try {
@@ -664,7 +664,7 @@ app.get('/video-consult/status/:roomId', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-const server = app.listen(PORT, () => console.log(`AI머니야 서버 v9.0 시작! 포트: ${PORT}`));
+const server = app.listen(PORT, () => console.log(`AI머니야 서버 v9.1 시작! 포트: ${PORT}`));
 
 const wss = new WebSocket.Server({ server });
 
@@ -678,7 +678,7 @@ wss.on('connection', (ws, req) => {
   let userName = '고객';
   let financialContext = null;
   let budgetInfo = null;
-  let currentRoomId = null; // WebRTC 방 ID
+  let currentRoomId = null;
 
   ws.on('message', async (message) => {
     try {
@@ -687,8 +687,6 @@ wss.on('connection', (ws, req) => {
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       //  WebRTC 시그널링
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-      // 방 생성 (AI 머니야 호스트 측)
       if (msg.type === 'video_create_room') {
         const roomId = `room_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         consultRooms.set(roomId, { host: ws, guest: null, createdAt: new Date() });
@@ -698,13 +696,11 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
-      // 방 입장 (고객 측)
       if (msg.type === 'video_join_room') {
         const room = consultRooms.get(msg.roomId);
         if (!room) { ws.send(JSON.stringify({ type: 'error', error: '방을 찾을 수 없습니다' })); return; }
         room.guest = ws;
         currentRoomId = msg.roomId;
-        // 호스트에게 게스트 입장 알림 → offer 생성 트리거
         if (room.host && room.host.readyState === WebSocket.OPEN) {
           room.host.send(JSON.stringify({ type: 'video_guest_joined' }));
         }
@@ -713,11 +709,9 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
-      // WebRTC 시그널 중계 (offer / answer / ice-candidate)
       if (msg.type === 'video_signal') {
         const room = consultRooms.get(currentRoomId);
         if (!room) return;
-        // 호스트 → 게스트, 게스트 → 호스트 양방향 중계
         const target = (ws === room.host) ? room.guest : room.host;
         if (target && target.readyState === WebSocket.OPEN) {
           target.send(JSON.stringify({ type: 'video_signal', signal: msg.signal }));
@@ -725,7 +719,6 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
-      // 화상 종료
       if (msg.type === 'video_end') {
         const room = consultRooms.get(currentRoomId);
         if (room) {
@@ -740,7 +733,7 @@ wss.on('connection', (ws, req) => {
       }
 
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      //  상담탭: OpenAI Realtime (음성) + Function Calling
+      //  상담탭: OpenAI Realtime + Function Calling
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       if (msg.type === 'start_consult' || (msg.type === 'start_app' && mode === 'consult')) {
         console.log('[상담WS] 상담탭 음성 세션 시작');
@@ -756,7 +749,6 @@ wss.on('connection', (ws, req) => {
           const name = financialContext?.name || userName || '고객';
           const consultPrompt = createConsultRealtimePrompt(name, financialContext);
 
-          // ── session.update — Function Calling tools 포함 ──────────
           openaiWs.send(JSON.stringify({
             type: 'session.update',
             session: {
@@ -775,7 +767,7 @@ wss.on('connection', (ws, req) => {
                   parameters: {
                     type: 'object',
                     properties: {
-                      query: { type: 'string', description: '검색할 핵심 키워드 (예: "4인가구 생활비 기준", "실손보험 자기부담금")' },
+                      query: { type: 'string', description: '검색할 핵심 키워드' },
                       category: { type: 'string', enum: ['insurance', 'retirement', 'debt_savings', 'investment_tax', 'realestate', 'budget', 'general'], description: '질문 카테고리' }
                     },
                     required: ['query', 'category']
@@ -794,20 +786,48 @@ wss.on('connection', (ws, req) => {
                     required: ['calculation_type', 'inputs']
                   }
                 },
+                // ══ Phase 3: 스마트노트 Function Calling (신규 추가) ══
                 {
                   type: 'function',
                   name: 'update_smart_note',
-                  description: '화상상담 중 스마트 노트 화면을 업데이트합니다. 금융집짓기 그림, 차트, 계산 결과, 영상, 웹자료를 노트에 표시할 때 호출하세요.',
+                  description: '화상상담 중 스마트 노트에 콘텐츠를 표시합니다. 금융집짓기 구조를 설명할 때, 수치를 계산했을 때, 차트가 필요할 때, 관련 영상이나 웹자료를 보여줄 때 호출하세요. 단순 대화에서는 호출하지 마세요.',
                   parameters: {
                     type: 'object',
                     properties: {
-                      note_type: { type: 'string', enum: ['house', 'chart', 'calc', 'video', 'web'], description: '노트 탭 종류' },
-                      highlight: { type: 'string', description: '강조할 항목 (예: "retirement", "insurance", "budget")' },
-                      content: { type: 'object', description: '노트에 표시할 데이터' }
+                      note_type: {
+                        type: 'string',
+                        enum: ['house_svg', 'chart', 'calculation', 'video', 'web', 'image', 'checklist'],
+                        description: '노트 콘텐츠 타입. house_svg=금융집짓기 SVG, chart=차트, calculation=계산결과, video=동영상, web=웹자료, image=이미지, checklist=체크리스트'
+                      },
+                      title: {
+                        type: 'string',
+                        description: '노트 상단에 표시할 제목 (예: "은퇴자금 시뮬레이션", "금융집짓기 현황")'
+                      },
+                      content: {
+                        type: 'string',
+                        description: 'JSON 문자열로 된 콘텐츠 데이터'
+                      },
+                      highlight_floor: {
+                        type: 'string',
+                        enum: ['basement', 'pillar_debt', 'pillar_savings', 'pillar_retirement', 'eaves', 'roof_investment', 'roof_tax', 'chimney', 'none'],
+                        description: 'house_svg 타입일 때 강조할 금융집 영역'
+                      }
                     },
-                    required: ['note_type']
+                    required: ['note_type', 'title', 'content']
+                  }
+                },
+                {
+                  type: 'function',
+                  name: 'clear_smart_note',
+                  description: '스마트 노트를 초기 상태로 되돌립니다. 주제가 바뀌거나 새로운 분석을 시작할 때 호출하세요.',
+                  parameters: {
+                    type: 'object',
+                    properties: {
+                      message: { type: 'string', description: '초기화 시 표시할 메시지' }
+                    }
                   }
                 }
+                // ══ Phase 3 끝 ══
               ],
               tool_choice: 'auto'
             }
@@ -819,21 +839,17 @@ wss.on('connection', (ws, req) => {
           try {
             const event = JSON.parse(data.toString());
 
-            // 오디오 스트리밍
             if (event.type === 'response.audio.delta' && event.delta)
               ws.send(JSON.stringify({ type: 'audio', data: event.delta }));
 
-            // 음성 감지 → 인터럽트
             if (event.type === 'input_audio_buffer.speech_started')
               ws.send(JSON.stringify({ type: 'interrupt' }));
 
-            // AI 발화 텍스트 (STT 자막용)
             if (event.type === 'response.audio_transcript.done') {
               console.log('[상담WS] 머니야:', event.transcript?.slice(0, 50));
               ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
             }
 
-            // 고객 발화 텍스트 (STT 자막용)
             if (event.type === 'conversation.item.input_audio_transcription.completed') {
               console.log('[상담WS] 사용자:', event.transcript);
               ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'user' }));
@@ -855,21 +871,20 @@ wss.on('connection', (ws, req) => {
                 const formulaResults = searchFormulaRAG(args.query, 3);
                 const ragText        = ragResults.map(r => `[${r.source}] ${r.content}`).join('\n');
                 const formulaText    = buildFormulaContext(formulaResults);
-
                 const expertMap = {
-                  insurance:     '보장기준: 사망 연봉3배, 장해3배, 암 연봉1~2배, 뇌1배, 심장1배, 실손5천만원. 보험료 소득의 10%. 실손4세대(2021.7이후) 급여20%/비급여30%. 종신보험은 자녀있고 한쪽 소득일 때 필요. 정기보험이 경제적으로 유리.',
-                  retirement:    '은퇴4대변수: 은퇴나이(평균73), 수명(90), 월노후생활비(현재70%), 현재준비. 계산: 월부족=노후생활비-공적연금-개인연금. 은퇴일시금=월부족×12×(수명-은퇴나이). 10억×3.5%÷12=월300만원. 국민연금 평균수령 52만원.',
-                  debt_savings:  '부채=거실 쓰레기. 신용대출 즉시상환(금액작은것부터). 담보대출은 은퇴시까지. 비상예비자금=월생활비×6개월. 인생7단계: 1.비상자금100만 2.신용대출상환 3.비상예비자금 4~6.목돈(1억→10억) 7.담보대출상환→FIRE.',
-                  investment_tax:'기초없이 지붕(투자)만 올리면 무너짐. 투자전 필수: 비상자금확보, 신용대출정리, 월저축안정. 골든밸런스7:3. 적립식: 100-나이법칙. 절세: 연금저축600+IRP300=연900만원. 특정상품추천 절대금지.',
-                  realestate:    '소득에 맞는 크기의 집. 주거비(원리금) 소득30%이하 안전, 40%초과 위험. 첫집이 마지막집일 필요 없습니다. 불완전한 시작이 완벽한 계획보다 낫습니다.',
-                  budget:        '가구원수별 기준: 생활비(1인20%,2인30%,3인40%,4인50%,5인60%), 저축투자(1인50%,2인40%,3인30%,4인20%,5인10%), 노후연금10%, 보장성보험10%, 대출원리금10%.',
-                  general:       '금융집짓기® 8단계: 지하(보험+비상금)→기둥(부채/저축/은퇴)→처마(생로병사)→지붕(투자/세금)→굴뚝(부동산). 연료=수입지출분석. 안방(은퇴)이 가장 중요.'
+                  insurance:     '보장기준: 사망 연봉3배, 장해3배, 암 연봉1~2배, 뇌1배, 심장1배, 실손5천만원. 보험료 소득의 10%.',
+                  retirement:    '은퇴4대변수: 은퇴나이(평균73), 수명(90), 월노후생활비(현재70%), 현재준비. 10억×3.5%÷12=월300만원.',
+                  debt_savings:  '부채=거실 쓰레기. 신용대출 즉시상환. 비상예비자금=월생활비×6개월.',
+                  investment_tax:'기초없이 지붕(투자)만 올리면 무너짐. 골든밸런스7:3. 절세: 연금저축600+IRP300=연900만원.',
+                  realestate:    '소득에 맞는 크기의 집. 주거비(원리금) 소득30%이하 안전, 40%초과 위험.',
+                  budget:        '가구원수별: 생활비(1인20%,2인30%,3인40%,4인50%,5인60%), 저축투자(1인50%,2인40%,3인30%,4인20%,5인10%).',
+                  general:       '금융집짓기® 8단계: 지하(보험+비상금)→기둥(부채/저축/은퇴)→처마(생로병사)→지붕(투자/세금)→굴뚝(부동산).'
                 };
                 const expertKnowledge = expertMap[args.category] || expertMap.general;
                 result = `[RAG검색결과]\n${ragText}\n[공식/수식]\n${formulaText}\n[전문지식]\n${expertKnowledge}`;
                 console.log(`[상담FC] RAG ${ragResults.length}건 검색 완료`);
 
-                // 스마트 노트 자동 전환 신호
+                // 스마트 노트 자동 전환 신호 (기존 호환용)
                 const noteTypeMap = { insurance:'house', retirement:'chart', debt_savings:'calc', investment_tax:'chart', realestate:'web', budget:'calc', general:'house' };
                 ws.send(JSON.stringify({ type: 'note_update', note_type: noteTypeMap[args.category] || 'house', highlight: args.category, query: args.query }));
               }
@@ -902,7 +917,7 @@ wss.on('connection', (ws, req) => {
                   const lifeExp     = Number(inp.lifeExpectancy)  || 90;
                   const gap         = monthlyExp - pubPension - privPension;
                   const lumpSum     = gap * 12 * (lifeExp - retireAge);
-                  result = `월 부족자금: ${gap}만원. 은퇴일시금: ${lumpSum}만원(${(lumpSum/10000).toFixed(1)}억원) 필요. 은퇴기간 ${lifeExp - retireAge}년 기준.`;
+                  result = `월 부족자금: ${gap}만원. 은퇴일시금: ${lumpSum}만원(${(lumpSum/10000).toFixed(1)}억원) 필요.`;
                   ws.send(JSON.stringify({ type: 'note_update', note_type: 'chart', data: { gap, lumpSum, retireAge, lifeExp } }));
                 }
                 else if (args.calculation_type === 'budget_check') {
@@ -916,7 +931,7 @@ wss.on('connection', (ws, req) => {
                   const diff    = living - stdAmt;
                   result = diff > 0
                     ? `⚠️ 생활비 초과! ${family}인 기준 ${stdPct}%(${stdAmt}만원)인데 현재 ${actual}%(${living}만원). ${diff}만원 초과.`
-                    : `✅ 생활비 양호. ${family}인 기준 ${stdPct}%(${stdAmt}만원) 이내. 현재 ${actual}%(${living}만원).`;
+                    : `✅ 생활비 양호. ${family}인 기준 ${stdPct}%(${stdAmt}만원) 이내.`;
                   ws.send(JSON.stringify({ type: 'note_update', note_type: 'calc', data: { income, living, stdAmt, diff, family } }));
                 }
                 else if (args.calculation_type === 'dsr') {
@@ -929,19 +944,43 @@ wss.on('connection', (ws, req) => {
                 else if (args.calculation_type === 'insurance_gap') {
                   const income = Number(inp.monthlyIncome) || 300;
                   const annual = income * 12;
-                  result = `보장 적정 기준 — 사망: ${annual*3}만원(연봉3배), 암: ${annual}~${annual*2}만원, 뇌/심장: 각 ${annual}만원, 실손: 5,000만원.`;
+                  result = `보장 기준 — 사망: ${annual*3}만원(연봉3배), 암: ${annual}~${annual*2}만원, 뇌/심장: 각 ${annual}만원, 실손: 5,000만원.`;
                   ws.send(JSON.stringify({ type: 'note_update', note_type: 'house', highlight: 'insurance', data: { annual } }));
                 }
                 else { result = '해당 계산 유형을 처리할 수 없습니다.'; }
                 console.log(`[상담FC] 계산 완료 (${args.calculation_type}):`, result);
               }
 
-              // 3. 스마트 노트 직접 제어
+              // ══ Phase 3: 스마트노트 직접 제어 (신규) ══
               if (fnName === 'update_smart_note') {
-                result = `노트 업데이트 완료: ${args.note_type} 탭`;
-                ws.send(JSON.stringify({ type: 'note_update', note_type: args.note_type, highlight: args.highlight, content: args.content }));
-                console.log(`[상담FC] 스마트 노트 업데이트: ${args.note_type}`);
+                const noteType       = args.note_type || 'house_svg';
+                const title          = args.title || '';
+                const highlightFloor = args.highlight_floor || 'none';
+                let content = {};
+                try { content = JSON.parse(args.content || '{}'); } catch { content = { text: args.content || '' }; }
+
+                // 프론트엔드로 smart_note_update 전송
+                ws.send(JSON.stringify({
+                  type: 'smart_note_update',
+                  noteType,
+                  title,
+                  content,
+                  highlightFloor
+                }));
+
+                result = `스마트 노트에 "${title}" (${noteType}) 표시 완료. 고객이 화면에서 보고 있습니다. 이 내용을 가리키며 설명해주세요.`;
+                console.log(`[상담FC] 스마트노트 업데이트: ${noteType} / "${title}" / highlight: ${highlightFloor}`);
               }
+
+              if (fnName === 'clear_smart_note') {
+                ws.send(JSON.stringify({
+                  type: 'smart_note_clear',
+                  message: args.message || ''
+                }));
+                result = '스마트 노트가 초기화되었습니다.';
+                console.log('[상담FC] 스마트노트 초기화');
+              }
+              // ══ Phase 3 끝 ══
 
               // Realtime에 결과 반환 → 음성 답변 생성
               openaiWs.send(JSON.stringify({
@@ -1020,7 +1059,6 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => {
     console.log('[WS] 클라이언트 연결 종료');
     if (openaiWs) openaiWs.close();
-    // 화상방에서 제거
     if (currentRoomId && consultRooms.has(currentRoomId)) {
       const room = consultRooms.get(currentRoomId);
       const other = (ws === room.host) ? room.guest : room.host;
@@ -1032,4 +1070,4 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-console.log('AI머니야 서버 v9.0 초기화 완료!');
+console.log('AI머니야 서버 v9.1 초기화 완료!');
