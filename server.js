@@ -750,16 +750,21 @@ async function getZoomAccessToken() {
     `${process.env.ZOOM_CLIENT_ID}:${process.env.ZOOM_CLIENT_SECRET}`
   ).toString('base64');
 
+  const params = new URLSearchParams();
+  params.append('grant_type', 'account_credentials');
+  params.append('account_id', process.env.ZOOM_ACCOUNT_ID);
+
   const response = await fetch('https://zoom.us/oauth/token', {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${credentials}`,
       'Content-Type': 'application/x-www-form-urlencoded'
     },
-    body: `grant_type=account_credentials&account_id=${process.env.ZOOM_ACCOUNT_ID}`
+    body: params.toString()
   });
 
   const data = await response.json();
+  console.log('[Zoom] 토큰 응답:', JSON.stringify(data));
   if (!data.access_token) throw new Error(`Zoom 토큰 발급 실패: ${JSON.stringify(data)}`);
   return data.access_token;
 }
