@@ -544,25 +544,282 @@ app.post('/api/tts', async (req, res) => {
 //  상담탭 전용 API (뇌: Claude / 입: ElevenLabs)
 // ════════════════════════════════════════════════════════════
 
-// 텍스트 상담 (뇌: Claude) - 텍스트 답변만
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  멀티에이전트 시스템 (텍스트 상담 전용)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async function runAgent(agentName, systemPrompt, userMessage) {
+  try {
+    const res = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 400,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }]
+    });
+    return JSON.parse(res.content[0]?.text || '{}');
+  } catch {
+    try {
+      const res = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 400,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }]
+      });
+      return { raw: res.content[0]?.text || '' };
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+}
+
+// 오케스트레이터: 어떤 에이전트가 필요한지 판단
+async function routeAgents(userMessage) {
+  const msg = userMessage.toLowerCase();
+  const agents = ['analysis']; // 분석은 항상 포함
+
+  if (msg.includes('보험') || msg.includes('보장') || msg.includes('실손'))
+    agents.push('insurance');
+  if (msg.includes('은퇴') || msg.includes('노후') || msg.includes('연금'))
+    agents.push('retirement');
+  if (msg.includes('부채') || msg.includes('대출') || msg.includes('저축') || msg.includes('비상'))
+    agents.push('debt_savings');
+  if (msg.includes('투자') || msg.includes('주식') || msg.includes('펀드') || msg.includes('세금') || msg.includes('절세'))
+    agents.push('investment_tax');
+  if (msg.includes('부동산') || msg.includes('집') || msg.includes('아파트') || msg.includes('전세') || msg.includes('매매'))
+    agents.push('realestate');
+
+  // 감정 감지
+  if (msg.includes('걱정') || msg.includes('불안') || msg.includes('힘들') || msg.includes('어떡') || msg.includes('화나'))
+    agents.push('emotion');
+
+  return agents.slice(0, 4); // 최대 4개
+}
+
+// 에이전트 프롬프트 정의
+const AGENT_PROMPTS = {
+  analysis: `당신은 분석 에이전트입니다. 고객 질문에서 필요한 수치 계산을 수행하세요.
+예산 기준표: 1인(생활비20%,저축50%) 2인(30%,40%) 3인(40%,30%) 4인(50%,20%) 5인(60%,10%). 노후연금/보험/대출 각 10%.
+부자지수 = (순자산×10)÷(나이×월수입×12)×100. 반드시 JSON으로 응답: {"calculations": "계산결과", "diagnosis": "진단", "warning": "주의사항 또는 null"}`,
+
+  insurance: `당신은 보험 분석 에이전트입니다. 보장 적정 기준: 사망 연봉3배, 장해 3배, 암 1~2배, 뇌 1배, 심장 1배, 실손 5천만원. 보험료 기준: 소득의 10%.
+JSON으로 응답: {"coverageAnalysis": "분석결과", "recommendation": "방향제안(상품명없이)", "premiumCheck": "보험료 적정여부"}`,
+
+  retirement: `당신은 은퇴설계 에이전트입니다. 은퇴=소득중단+지출계속→파산위험. 4대변수: 은퇴나이(평균73), 예상수명(90), 월노후생활비(현재70%), 현재준비상태.
+계산: 월부족자금=노후생활비-공적연금-개인연금. 은퇴일시금=월부족×12×(수명-은퇴나이). FIRE: 10억×3.5%÷12=월300만원.
+JSON으로 응답: {"retirementGap": "부족금액", "monthlyNeeded": "월필요저축액", "urgency": "시급/보통/여유"}`,
+
+  debt_savings: `당신은 부채/저축 에이전트입니다. 부채=거실의 쓰레기. 신용대출 즉시상환(작은것부터), 담보대출은 은퇴시까지.
+비상예비자금: 월생활비×6개월. 인생7단계: 1.비상자금100만 2.신용대출상환 3.비상비자금 4~6.목돈(1억→10억) 7.담보대출상환→FIRE.
+JSON으로 응답: {"debtPlan": "상환계획", "savingsPlan": "저축계획", "emergencyFund": "비상자금상태", "lifeStage": "현재단계"}`,
+
+  investment_tax: `당신은 투자/세금 에이전트입니다. 핵심: 기초(보험/저축) 없이 지붕(투자)만 올리면 무너짐. 투자전 필수확인: 비상자금확보? 신용대출정리? 월저축안정?
+골든밸런스 7:3. 적립식: 100-나이 법칙. 절세: 연금저축600+IRP300=연900만원.
+특정상품/종목 추천 절대 금지. JSON으로 응답: {"readiness": "투자준비상태", "allocation": "자산배분제안", "taxStrategy": "절세방안"}`,
+
+  realestate: `당신은 부동산 에이전트입니다. 소득에 맞는 크기의 집. 주거비(원리금) 소득30%이하 안전, 40%초과 위험.
+"첫집이 마지막집일 필요 없습니다." DSR 기준 대출가능액 산출.
+JSON으로 응답: {"affordability": "매매가능범위", "timeline": "예상시기", "strategy": "전략"}`,
+
+  emotion: `당신은 감정 분석 에이전트입니다. 고객의 감정상태를 파악하세요.
+불안/걱정→공감먼저+숫자로안심. 화남→인정+공감+대안. 자신감과잉→칭찬+리스크언급. 슬픔→감정수용+조언나중에.
+JSON으로 응답: {"emotion": "감지된감정", "suggestedTone": "수석에게제안할톤", "empathyFirst": "공감멘트"}`
+};
+
+// 멀티에이전트 텍스트 상담 실행
+async function multiAgentChat(message, userName, financialContext, conversationHistory) {
+  // 1. 필요한 에이전트 판단
+  const agentsToCall = await routeAgents(message);
+
+  // 2. RAG 검색 (병렬)
+  const ragResults = searchRAG(message, 3);
+  const formulaResults = searchFormulaRAG(message, 2);
+  const ragContext = ragResults.map(r => `[${r.source}] ${r.content}`).join('\n');
+  const formulaContext = buildFormulaContext(formulaResults);
+
+  // 3. 에이전트 병렬 실행
+  const agentPromises = agentsToCall.map(agent => {
+    const prompt = AGENT_PROMPTS[agent];
+    if (!prompt) return Promise.resolve({ agent, result: {} });
+    const contextMsg = `[고객정보] ${userName}, ${financialContext?.age || '미확인'}세, 월수입 ${financialContext?.monthlyIncome || '미확인'}만원\n[고객질문] ${message}`;
+    return runAgent(agent, prompt, contextMsg).then(result => ({ agent, result }));
+  });
+
+  const agentResults = await Promise.all(agentPromises);
+
+  // 4. 수석 머니야(Claude)가 에이전트 결과 종합
+  const agentContext = agentResults
+    .map(r => `[${r.agent} 분석] ${JSON.stringify(r.result)}`)
+    .join('\n');
+
+  const systemPrompt = createSystemPrompt(userName, financialContext, null, ragContext + formulaContext);
+
+  const claudeRes = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1024,
+    system: `${systemPrompt}
+
+[전문 에이전트 분석 결과 — 고객에게는 보이지 않음, 참고만 하세요]
+${agentContext}
+
+★ 에이전트 분석을 자연스럽게 녹여서 답변하세요. "분석 결과에 따르면" 같은 표현 금지. 당신이 직접 분석한 것처럼 말하세요.`,
+    messages: [
+      ...conversationHistory.slice(-10).map(m => ({ role: m.role, content: m.content || m.text })),
+      { role: 'user', content: message }
+    ]
+  });
+
+  const aiText = claudeRes.content[0]?.text || '다시 말씀해주세요.';
+
+  // 5. 보조 패널용 데이터 (하단 텍스트 표시용)
+  const panelData = agentResults.map(r => ({
+    agent: r.agent,
+    summary: typeof r.result === 'object' ? r.result : { raw: r.result }
+  }));
+
+  return {
+    message: aiText,
+    agentsUsed: agentsToCall,
+    panelData: panelData,
+    ragUsed: ragResults.length
+  };
+}
+
+// 텍스트 상담 (멀티에이전트 + Claude + RAG)
 app.post('/api/consult-chat', async (req, res) => {
   try {
     const { message, userName, financialContext, conversationHistory = [] } = req.body;
-    const systemPrompt = createSystemPrompt(userName, financialContext, null);
-    const messages = [
-      ...conversationHistory.map(m => ({ role: m.role, content: m.content })),
-      { role: 'user', content: message },
-    ];
-    const response = await openai.chat.completions.create({
-      model: 'ft:gpt-4o-mini-2024-07-18:personal::DG29N8pS',
-      max_tokens: 1024,
-      messages: [{ role: 'system', content: systemPrompt }, ...messages],
+
+    // 간단한 인사/짧은 말은 에이전트 스킵
+    const isSimple = message.length < 10 && ['안녕', '네', '고마워', '감사', '머니야'].some(w => message.includes(w));
+
+    if (isSimple) {
+      // 단순 응답: Claude만 사용
+      const ragResults = searchRAG(message, 2);
+      const ragContext = ragResults.map(r => `[${r.source}] ${r.content}`).join('\n');
+      const systemPrompt = createSystemPrompt(userName, financialContext, null, ragContext);
+      const claudeRes = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 512,
+        system: systemPrompt,
+        messages: [
+          ...conversationHistory.slice(-10).map(m => ({ role: m.role, content: m.content || m.text })),
+          { role: 'user', content: message }
+        ]
+      });
+      return res.json({
+        success: true,
+        message: claudeRes.content[0]?.text || '다시 말씀해주세요.',
+        panelData: null
+      });
+    }
+
+    // 멀티에이전트 실행
+    const result = await multiAgentChat(message, userName, financialContext, conversationHistory);
+    res.json({
+      success: true,
+      message: result.message,
+      panelData: result.panelData,
+      meta: { agentsUsed: result.agentsUsed, ragUsed: result.ragUsed }
     });
-    const aiText = response.choices[0]?.message?.content || '다시 말씀해주세요!';
-    res.json({ success: true, message: aiText });
+
   } catch (error) {
-    console.error('[상담채팅] Claude API 에러:', error);
-    res.json({ success: false, message: '잠시 후 다시 시도해주세요.' });
+    console.error('[멀티에이전트] 에러:', error.message);
+    // 폴백: 멀티에이전트 실패 시 Claude 단독
+    try {
+      const systemPrompt = createSystemPrompt(req.body.userName, req.body.financialContext, null);
+      const claudeRes = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 512,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: req.body.message }]
+      });
+      res.json({ success: true, message: claudeRes.content[0]?.text, panelData: null, fallback: true });
+    } catch (e) {
+      res.json({ success: false, error: e.message });
+    }
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  Zoom 화상상담 API (Phase 1)
+// ════════════════════════════════════════════════════════════
+
+// Zoom 액세스 토큰 발급 (Server-to-Server OAuth)
+async function getZoomAccessToken() {
+  const credentials = Buffer.from(
+    `${process.env.ZOOM_CLIENT_ID}:${process.env.ZOOM_CLIENT_SECRET}`
+  ).toString('base64');
+
+  const response = await fetch('https://zoom.us/oauth/token', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${credentials}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: `grant_type=account_credentials&account_id=${process.env.ZOOM_ACCOUNT_ID}`
+  });
+
+  const data = await response.json();
+  if (!data.access_token) throw new Error(`Zoom 토큰 발급 실패: ${JSON.stringify(data)}`);
+  return data.access_token;
+}
+
+// 줌 미팅 생성 API
+app.post('/api/zoom/create-meeting', async (req, res) => {
+  try {
+    const { customerName, scheduledTime, duration = 90 } = req.body;
+    const token = await getZoomAccessToken();
+
+    const meetingRes = await fetch('https://api.zoom.us/v2/users/me/meetings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        topic: `AI머니야 재무상담 — ${customerName}님`,
+        type: scheduledTime ? 2 : 1, // 2=예약, 1=즉시
+        start_time: scheduledTime || undefined,
+        duration: duration,
+        timezone: 'Asia/Seoul',
+        settings: {
+          join_before_host: true,
+          mute_upon_entry: false,
+          audio: 'both',
+          auto_recording: 'cloud',
+          waiting_room: false
+        }
+      })
+    });
+
+    const meeting = await meetingRes.json();
+    console.log('[Zoom] 미팅 생성:', meeting.id);
+
+    res.json({
+      success: true,
+      meetingId: meeting.id,
+      joinUrl: meeting.join_url,
+      startUrl: meeting.start_url,
+      password: meeting.password
+    });
+  } catch (error) {
+    console.error('[Zoom] 미팅 생성 에러:', error.message);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// 줌 미팅 목록 조회
+app.get('/api/zoom/meetings', async (req, res) => {
+  try {
+    const token = await getZoomAccessToken();
+    const response = await fetch('https://api.zoom.us/v2/users/me/meetings', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await response.json();
+    res.json({ success: true, meetings: data.meetings || [] });
+  } catch (error) {
+    console.error('[Zoom] 미팅 목록 에러:', error.message);
+    res.json({ success: false, error: error.message });
   }
 });
 
@@ -644,10 +901,6 @@ wss.on('connection', (ws, req) => {
           console.log('[상담WS] OpenAI Realtime 연결 — 올인원(귀+뇌+입)');
           const name = financialContext?.name || userName || '고객';
           const consultPrompt = createConsultRealtimePrompt(name, financialContext);
-
-          // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          // [수정 1/2] session.update — Function Calling tools 추가
-          // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
           openaiWs.send(JSON.stringify({
             type: 'session.update',
             session: {
@@ -657,50 +910,7 @@ wss.on('connection', (ws, req) => {
               input_audio_format: 'pcm16',
               output_audio_format: 'pcm16',
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
-              turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 1500 },
-              tools: [
-                {
-                  type: 'function',
-                  name: 'search_financial_knowledge',
-                  description: '금융 지식을 검색합니다. 고객이 보험, 은퇴, 저축, 투자, 세금, 부동산, 부채, 금융집짓기, 예산, 연금 등 구체적인 재무 질문을 할 때 호출하세요. 단순 인사나 잡담에는 호출하지 마세요.',
-                  parameters: {
-                    type: 'object',
-                    properties: {
-                      query: {
-                        type: 'string',
-                        description: '검색할 핵심 키워드 (예: "4인가구 생활비 기준", "실손보험 자기부담금", "은퇴자금 계산")'
-                      },
-                      category: {
-                        type: 'string',
-                        enum: ['insurance', 'retirement', 'debt_savings', 'investment_tax', 'realestate', 'budget', 'general'],
-                        description: '질문 카테고리'
-                      }
-                    },
-                    required: ['query', 'category']
-                  }
-                },
-                {
-                  type: 'function',
-                  name: 'calculate_financial',
-                  description: '재무 수치를 정확하게 계산합니다. 부자지수, 저축률, 은퇴자금, DSR, 예산 진단 등 숫자 계산이 필요할 때 호출하세요.',
-                  parameters: {
-                    type: 'object',
-                    properties: {
-                      calculation_type: {
-                        type: 'string',
-                        enum: ['wealth_index', 'savings_rate', 'retirement_fund', 'dsr', 'budget_check', 'insurance_gap'],
-                        description: '계산 종류'
-                      },
-                      inputs: {
-                        type: 'object',
-                        description: '계산에 필요한 입력값 (예: {age: 40, monthlyIncome: 500, netAssets: 10000})'
-                      }
-                    },
-                    required: ['calculation_type', 'inputs']
-                  }
-                }
-              ],
-              tool_choice: 'auto'
+              turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 1500 }
             }
           }));
           ws.send(JSON.stringify({ type: 'session_started' }));
@@ -725,122 +935,6 @@ wss.on('connection', (ws, req) => {
               console.error('[상담WS] OpenAI 에러:', event.error);
               ws.send(JSON.stringify({ type: 'error', error: event.error?.message }));
             }
-
-            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            // [수정 2/2] Function Calling 처리 — RAG + 계산
-            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            if (event.type === 'response.function_call_arguments.done') {
-              const fnName = event.name;
-              const callId = event.call_id;
-              let args = {};
-              try { args = JSON.parse(event.arguments || '{}'); } catch {}
-
-              console.log('[상담WS] Function Call:', fnName, args);
-
-              let result = '';
-
-              if (fnName === 'search_financial_knowledge') {
-                const ragResults = searchRAG(args.query, 5);
-                const formulaResults = searchFormulaRAG(args.query, 3);
-                const ragText = ragResults.map(r => `[${r.source}] ${r.content}`).join('\n');
-                const formulaText = buildFormulaContext(formulaResults);
-
-                let expertKnowledge = '';
-                if (args.category === 'insurance') {
-                  expertKnowledge = '보장기준: 사망 연봉3배, 장해 3배, 암 연봉1~2배, 뇌 1배, 심장 1배, 실손 5천만원. 보험료 소득의 10%. 실손4세대(2021.7이후) 급여20%/비급여30%. 종신보험은 자녀있고 한쪽 소득일 때 필요.';
-                } else if (args.category === 'retirement') {
-                  expertKnowledge = '은퇴4대변수: 은퇴나이(평균73), 수명(90), 월노후생활비(현재70%), 현재준비. 계산: 월부족=노후생활비-공적연금-개인연금. 은퇴일시금=월부족×12×(수명-은퇴나이). 10억×3.5%÷12=월300만원. 국민연금 평균수령 52만원.';
-                } else if (args.category === 'debt_savings') {
-                  expertKnowledge = '부채=거실 쓰레기. 신용대출 즉시상환(금액작은것부터). 담보대출은 은퇴시까지. 비상예비자금=월생활비×6개월. 인생7단계: 1.비상자금100만 2.신용대출상환 3.비상비자금 4~6.목돈(1억→10억) 7.담보대출상환→FIRE.';
-                } else if (args.category === 'investment_tax') {
-                  expertKnowledge = '기초없이 지붕(투자)만 올리면 무너짐. 투자전 필수: 비상자금확보, 신용대출정리, 월저축안정. 골든밸런스7:3. 적립식: 100-나이법칙. 절세: 연금저축600+IRP300=연900만원. 특정상품추천 절대금지.';
-                } else if (args.category === 'realestate') {
-                  expertKnowledge = '소득에 맞는 크기의 집. 주거비(원리금) 소득30%이하 안전, 40%초과 위험. 첫집이 마지막집일 필요 없습니다. 불완전한 시작이 완벽한 계획보다 낫습니다.';
-                } else if (args.category === 'budget') {
-                  expertKnowledge = '가구원수별 기준: 생활비(1인20%,2인30%,3인40%,4인50%,5인60%), 저축투자(1인50%,2인40%,3인30%,4인20%,5인10%), 노후연금10%, 보장성보험10%, 대출원리금10%.';
-                }
-
-                result = `[검색결과]\n${ragText}\n${formulaText}\n[전문지식]\n${expertKnowledge}`;
-                console.log('[상담WS] RAG 결과:', ragResults.length, '건');
-              }
-
-              if (fnName === 'calculate_financial') {
-                const inp = args.inputs || {};
-                if (args.calculation_type === 'wealth_index') {
-                  const netAssets = inp.netAssets || 0;
-                  const age = inp.age || 30;
-                  const monthlyIncome = inp.monthlyIncome || 300;
-                  const index = Math.round((netAssets * 10) / (age * monthlyIncome * 12) * 100);
-                  let grade = '';
-                  if (index >= 200) grade = '궁전(우등생)';
-                  else if (index >= 100) grade = '아파트(평균)';
-                  else if (index >= 50) grade = '빌라(노력필요)';
-                  else if (index >= 25) grade = '오두막(위험)';
-                  else grade = '텐트(긴급)';
-                  result = `부자지수: ${index}점 (${grade}). 100점이 평균, 200점이상이 우등생입니다.`;
-                }
-                else if (args.calculation_type === 'savings_rate') {
-                  const savings = inp.savings || 0;
-                  const pension = inp.pension || 0;
-                  const income = inp.monthlyIncome || 300;
-                  const rate = Math.round((savings + pension) / income * 100);
-                  result = `저축률: ${rate}%. 최소 20% 이상이 권장됩니다.`;
-                }
-                else if (args.calculation_type === 'retirement_fund') {
-                  const monthlyExpense = inp.monthlyExpense || 250;
-                  const publicPension = inp.publicPension || 50;
-                  const privatePension = inp.privatePension || 0;
-                  const retireAge = inp.retireAge || 65;
-                  const lifeExpectancy = inp.lifeExpectancy || 90;
-                  const gap = monthlyExpense - publicPension - privatePension;
-                  const lumpSum = gap * 12 * (lifeExpectancy - retireAge);
-                  result = `월 부족자금: ${gap}만원. 은퇴일시금: ${lumpSum}만원(${Math.round(lumpSum/10000)}억원) 필요. 은퇴기간 ${lifeExpectancy - retireAge}년 기준.`;
-                }
-                else if (args.calculation_type === 'budget_check') {
-                  const income = inp.monthlyIncome || 500;
-                  const living = inp.livingExpense || 0;
-                  const family = inp.familySize || 1;
-                  const standards = { 1: 20, 2: 30, 3: 40, 4: 50, 5: 60 };
-                  const stdPercent = standards[Math.min(family, 5)] || 50;
-                  const stdAmount = Math.round(income * stdPercent / 100);
-                  const actual = Math.round(living / income * 100);
-                  const diff = living - stdAmount;
-                  if (diff > 0) {
-                    result = `⚠️ 생활비 초과! ${family}인가구 기준 ${stdPercent}%(${stdAmount}만원)인데 현재 ${actual}%(${living}만원). ${diff}만원 초과입니다.`;
-                  } else {
-                    result = `✅ 생활비 양호. ${family}인가구 기준 ${stdPercent}%(${stdAmount}만원) 이내. 현재 ${actual}%(${living}만원).`;
-                  }
-                }
-                else if (args.calculation_type === 'dsr') {
-                  const annualRepayment = (inp.monthlyRepayment || 0) * 12;
-                  const annualIncome = (inp.monthlyIncome || 300) * 12;
-                  const dsr = Math.round(annualRepayment / annualIncome * 100);
-                  result = `DSR: ${dsr}%. 40% 이하가 안전, 40~60% 주의, 60% 초과 위험입니다.`;
-                }
-                else if (args.calculation_type === 'insurance_gap') {
-                  const annualIncome = (inp.monthlyIncome || 300) * 12;
-                  result = `보장 적정 기준 — 사망: ${annualIncome * 3}만원(연봉3배), 암: ${annualIncome}~${annualIncome * 2}만원, 뇌/심장: 각 ${annualIncome}만원, 실손: 5000만원.`;
-                }
-                else {
-                  result = '해당 계산 유형을 처리할 수 없습니다.';
-                }
-                console.log('[상담WS] 계산 결과:', result);
-              }
-
-              // 함수 결과를 Realtime에 반환 → Realtime이 이 결과를 포함하여 음성 답변 생성
-              openaiWs.send(JSON.stringify({
-                type: 'conversation.item.create',
-                item: {
-                  type: 'function_call_output',
-                  call_id: callId,
-                  output: result
-                }
-              }));
-
-              // 결과를 받았으니 답변 생성 요청
-              openaiWs.send(JSON.stringify({ type: 'response.create' }));
-            }
-
           } catch (e) { console.error('[상담WS] 메시지 파싱 에러:', e); }
         });
 
