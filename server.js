@@ -135,6 +135,101 @@ function buildFormulaContext(results) {
 loadRAGData();
 loadFormulaRAG();
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  Phase 3: analyzeTranscript — 대화 분석 → 분석패널 실시간 연동
+//  음성 스트림(Realtime API)과 완전 분리된 보조 파이프라인
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const STEP_KEYWORDS = [
+  { index: 0, label: '수입지출 분석',  words: ['수입','지출','월급','생활비','소득','급여','연봉','가계'] },
+  { index: 1, label: '보험 적정성',    words: ['보험','보장','사망','실손','암','뇌','심장','종신','CI'] },
+  { index: 2, label: '저축 설계',      words: ['저축','적금','예금','저금','CMA','파킹'] },
+  { index: 3, label: '부채 관리',      words: ['부채','대출','빚','DSR','원리금','이자','담보','신용대출'] },
+  { index: 4, label: '은퇴 설계',      words: ['은퇴','노후','연금','퇴직','국민연금','IRP','DC','DB'] },
+  { index: 5, label: '투자 설계',      words: ['투자','주식','펀드','ETF','채권','수익','포트폴리오'] },
+  { index: 6, label: '세금 설계',      words: ['세금','절세','연말정산','IRP','ISA','소득공제','세액공제'] },
+  { index: 7, label: '부동산 설계',    words: ['부동산','집','아파트','전세','주택','분양','매매'] },
+];
+
+function detectStepFromText(text) {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  let best = null, bestScore = 0;
+  for (const step of STEP_KEYWORDS) {
+    let score = 0;
+    for (const w of step.words) if (lower.includes(w)) score++;
+    if (score > bestScore) { bestScore = score; best = step; }
+  }
+  return bestScore > 0 ? best : null;
+}
+
+function extractKeywords(text) {
+  if (!text) return [];
+  const keywords = [];
+  const allWords = STEP_KEYWORDS.flatMap(s => s.words);
+  const lower = text.toLowerCase();
+  for (const w of allWords) {
+    if (lower.includes(w) && !keywords.includes(w)) keywords.push(w);
+    if (keywords.length >= 5) break;
+  }
+  return keywords;
+}
+
+async function analyzeTranscript(text, ws, currentStepIndex) {
+  if (!text || text.trim().length < 5) return;
+
+  // 1단계: 키워드 기반 빠른 단계 감지 (즉시 전송)
+  const detectedStep = detectStepFromText(text);
+  const stepIndex = detectedStep ? detectedStep.index : currentStepIndex;
+  const stepLabel = detectedStep ? detectedStep.label : STEP_KEYWORDS[currentStepIndex]?.label || '';
+  const keywords  = extractKeywords(text);
+
+  // 2단계: RAG 검색 신호 전송
+  if (keywords.length > 0 && ws.readyState === 1) {
+    ws.send(JSON.stringify({ type: 'rag_searching' }));
+  }
+
+  // 3단계: RAG 검색 실행
+  const ragQuery   = keywords.slice(0, 3).join(' ') || text.slice(0, 30);
+  const ragResults = searchRAG(ragQuery, 3);
+  const ragCount   = ragResults.length;
+
+  // 4단계: 인사이트 생성 (간단한 규칙 기반 — Claude API 호출 없이 빠르게)
+  let insight = '';
+  if (detectedStep) {
+    const insightMap = {
+      0: '수입/지출 현황을 파악 중입니다',
+      1: '보험 보장 적정성을 분석 중입니다',
+      2: '저축 설계를 검토 중입니다',
+      3: '부채 구조를 분석 중입니다',
+      4: '은퇴 준비 현황을 확인 중입니다',
+      5: '투자 포트폴리오를 검토 중입니다',
+      6: '절세 전략을 분석 중입니다',
+      7: '부동산 자산을 검토 중입니다',
+    };
+    insight = insightMap[stepIndex] || '';
+
+    // RAG 결과가 있으면 첫 번째 출처 추가
+    if (ragResults.length > 0 && ragResults[0].source !== '명언') {
+      insight += ` (${ragResults[0].source} 참조)`;
+    }
+  }
+
+  // 5단계: RAG 완료 신호 + 분석 결과 전송
+  if (ws.readyState === 1) {
+    ws.send(JSON.stringify({ type: 'rag_done' }));
+    ws.send(JSON.stringify({
+      type:       'analysis_update',
+      stepIndex,
+      stepLabel,
+      keywords,
+      insight,
+      ragCount,
+    }));
+  }
+
+  console.log(`[Phase3-분석] step:${stepIndex}(${stepLabel}) kw:[${keywords.join(',')}] rag:${ragCount}건`);
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  AI지출탭 전용 프롬프트 (지출관리만)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -483,7 +578,7 @@ ${name}님의 든든한 금융 친구가 되어드릴게요!`;
 
 app.get('/', (req, res) => {
   res.json({
-    status: 'AI머니야 서버 실행 중!', version: '9.1 (Smart Note Phase3)',
+    status: 'AI머니야 서버 실행 중!', version: '9.2 (Phase3-분석패널)',
     rag: {
       저서3권: ragData.books.length, AFPK: ragData.afpk.length,
       반퇴시대: ragData.bantoe.length, 명언: ragData.quotes.length,
@@ -664,7 +759,7 @@ app.get('/video-consult/status/:roomId', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-const server = app.listen(PORT, () => console.log(`AI머니야 서버 v9.1 시작! 포트: ${PORT}`));
+const server = app.listen(PORT, () => console.log(`AI머니야 서버 v9.2 시작! 포트: ${PORT}`));
 
 const wss = new WebSocket.Server({ server });
 
@@ -679,6 +774,7 @@ wss.on('connection', (ws, req) => {
   let financialContext = null;
   let budgetInfo = null;
   let currentRoomId = null;
+  let consultStepIndex = 0;   // Phase 3: 현재 8단계 추적
 
   ws.on('message', async (message) => {
     try {
@@ -728,6 +824,48 @@ wss.on('connection', (ws, req) => {
           }
           consultRooms.delete(currentRoomId);
           console.log(`[WebRTC] 방 종료: ${currentRoomId}`);
+        }
+        return;
+      }
+
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      //  Phase 3: renew_session 처리
+      //  프론트가 25분마다 전송 → OpenAI 세션 재생성
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      if (msg.type === 'renew_session') {
+        console.log('[세션갱신] renew_session 수신 — OpenAI 세션 재생성');
+        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+          const name = financialContext?.name || msg.userName || userName || '고객';
+          const consultPrompt = createConsultRealtimePrompt(name, financialContext);
+          openaiWs.send(JSON.stringify({
+            type: 'session.update',
+            session: {
+              modalities: ['text', 'audio'],
+              instructions: consultPrompt,
+              voice: 'shimmer',
+              input_audio_format: 'pcm16',
+              output_audio_format: 'pcm16',
+              input_audio_transcription: { model: 'whisper-1', language: 'ko' },
+              turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 1500 },
+              tool_choice: 'auto'
+            }
+          }));
+          ws.send(JSON.stringify({ type: 'renew_session_ok' }));
+          console.log('[세션갱신] ✅ 완료');
+
+          // 다음 25분 후 자동 재갱신 예약
+          setTimeout(() => {
+            if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+              openaiWs.send(JSON.stringify({
+                type: 'session.update',
+                session: { modalities: ['text', 'audio'], voice: 'shimmer' }
+              }));
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'renew_session_ok' }));
+              }
+              console.log('[세션갱신] ✅ 서버측 자동 갱신 완료');
+            }
+          }, 25 * 60 * 1000);
         }
         return;
       }
@@ -786,7 +924,6 @@ wss.on('connection', (ws, req) => {
                     required: ['calculation_type', 'inputs']
                   }
                 },
-                // ══ Phase 3: 스마트노트 Function Calling (신규 추가) ══
                 {
                   type: 'function',
                   name: 'update_smart_note',
@@ -797,16 +934,10 @@ wss.on('connection', (ws, req) => {
                       note_type: {
                         type: 'string',
                         enum: ['house_svg', 'chart', 'calculation', 'video', 'web', 'image', 'checklist'],
-                        description: '노트 콘텐츠 타입. house_svg=금융집짓기 SVG, chart=차트, calculation=계산결과, video=동영상, web=웹자료, image=이미지, checklist=체크리스트'
+                        description: '노트 콘텐츠 타입'
                       },
-                      title: {
-                        type: 'string',
-                        description: '노트 상단에 표시할 제목 (예: "은퇴자금 시뮬레이션", "금융집짓기 현황")'
-                      },
-                      content: {
-                        type: 'string',
-                        description: 'JSON 문자열로 된 콘텐츠 데이터'
-                      },
+                      title: { type: 'string', description: '노트 상단에 표시할 제목' },
+                      content: { type: 'string', description: 'JSON 문자열로 된 콘텐츠 데이터' },
                       highlight_floor: {
                         type: 'string',
                         enum: ['basement', 'pillar_debt', 'pillar_savings', 'pillar_retirement', 'eaves', 'roof_investment', 'roof_tax', 'chimney', 'none'],
@@ -827,13 +958,12 @@ wss.on('connection', (ws, req) => {
                     }
                   }
                 }
-                // ══ Phase 3 끝 ══
               ],
               tool_choice: 'auto'
             }
           }));
           ws.send(JSON.stringify({ type: 'session_started' }));
-          
+
           // AI 머니야가 먼저 인사 시작
           setTimeout(() => {
             if (openaiWs.readyState === 1) {
@@ -861,13 +991,27 @@ wss.on('connection', (ws, req) => {
               ws.send(JSON.stringify({ type: 'interrupt' }));
 
             if (event.type === 'response.audio_transcript.done') {
-              console.log('[상담WS] 머니야:', event.transcript?.slice(0, 50));
-              ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
+              const transcript = event.transcript || '';
+              console.log('[상담WS] 머니야:', transcript.slice(0, 50));
+              ws.send(JSON.stringify({ type: 'transcript', text: transcript, role: 'assistant' }));
+              // Phase 3: AI 응답도 분석 파이프라인에 투입 (비동기)
+              analyzeTranscript(transcript, ws, consultStepIndex).catch(e =>
+                console.error('[Phase3] analyzeTranscript 에러:', e.message)
+              );
             }
 
             if (event.type === 'conversation.item.input_audio_transcription.completed') {
-              console.log('[상담WS] 사용자:', event.transcript);
-              ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'user' }));
+              const transcript = event.transcript || '';
+              console.log('[상담WS] 사용자:', transcript);
+              ws.send(JSON.stringify({ type: 'transcript', text: transcript, role: 'user' }));
+              // Phase 3: 사용자 발화 분석 파이프라인에 투입 (비동기)
+              analyzeTranscript(transcript, ws, consultStepIndex).then(result => {
+                // 단계 감지 결과로 서버측 consultStepIndex 업데이트
+                const detected = detectStepFromText(transcript);
+                if (detected) consultStepIndex = detected.index;
+              }).catch(e =>
+                console.error('[Phase3] analyzeTranscript 에러:', e.message)
+              );
             }
 
             // ── Function Calling 처리 ──────────────────────────────
@@ -882,6 +1026,9 @@ wss.on('connection', (ws, req) => {
 
               // 1. RAG 지식 검색
               if (fnName === 'search_financial_knowledge') {
+                // Phase 3: RAG 검색 시작 신호
+                ws.send(JSON.stringify({ type: 'rag_searching' }));
+
                 const ragResults     = searchRAG(args.query, 5);
                 const formulaResults = searchFormulaRAG(args.query, 3);
                 const ragText        = ragResults.map(r => `[${r.source}] ${r.content}`).join('\n');
@@ -899,7 +1046,22 @@ wss.on('connection', (ws, req) => {
                 result = `[RAG검색결과]\n${ragText}\n[공식/수식]\n${formulaText}\n[전문지식]\n${expertKnowledge}`;
                 console.log(`[상담FC] RAG ${ragResults.length}건 검색 완료`);
 
-                // 스마트 노트 자동 전환 신호 (기존 호환용)
+                // Phase 3: RAG 완료 신호 + 분석 업데이트
+                ws.send(JSON.stringify({ type: 'rag_done' }));
+
+                const catStepMap = { insurance:1, retirement:4, debt_savings:3, investment_tax:5, realestate:7, budget:0, general:0 };
+                const stepIdx = catStepMap[args.category] ?? consultStepIndex;
+                consultStepIndex = stepIdx;
+                ws.send(JSON.stringify({
+                  type: 'analysis_update',
+                  stepIndex: stepIdx,
+                  stepLabel: STEP_KEYWORDS[stepIdx]?.label || '',
+                  keywords:  [args.query, args.category].filter(Boolean),
+                  insight:   `${STEP_KEYWORDS[stepIdx]?.label || ''} 관련 지식 ${ragResults.length}건 검색 완료`,
+                  ragCount:  ragResults.length,
+                }));
+
+                // 기존 호환: note_update
                 const noteTypeMap = { insurance:'house', retirement:'chart', debt_savings:'calc', investment_tax:'chart', realestate:'web', budget:'calc', general:'house' };
                 ws.send(JSON.stringify({ type: 'note_update', note_type: noteTypeMap[args.category] || 'house', highlight: args.category, query: args.query }));
               }
@@ -966,7 +1128,7 @@ wss.on('connection', (ws, req) => {
                 console.log(`[상담FC] 계산 완료 (${args.calculation_type}):`, result);
               }
 
-              // ══ Phase 3: 스마트노트 직접 제어 (신규) ══
+              // 3. 스마트노트 업데이트
               if (fnName === 'update_smart_note') {
                 const noteType       = args.note_type || 'house_svg';
                 const title          = args.title || '';
@@ -974,7 +1136,6 @@ wss.on('connection', (ws, req) => {
                 let content = {};
                 try { content = JSON.parse(args.content || '{}'); } catch { content = { text: args.content || '' }; }
 
-                // 프론트엔드로 smart_note_update 전송
                 ws.send(JSON.stringify({
                   type: 'smart_note_update',
                   noteType,
@@ -987,6 +1148,7 @@ wss.on('connection', (ws, req) => {
                 console.log(`[상담FC] 스마트노트 업데이트: ${noteType} / "${title}" / highlight: ${highlightFloor}`);
               }
 
+              // 4. 스마트노트 초기화
               if (fnName === 'clear_smart_note') {
                 ws.send(JSON.stringify({
                   type: 'smart_note_clear',
@@ -995,7 +1157,6 @@ wss.on('connection', (ws, req) => {
                 result = '스마트 노트가 초기화되었습니다.';
                 console.log('[상담FC] 스마트노트 초기화');
               }
-              // ══ Phase 3 끝 ══
 
               // Realtime에 결과 반환 → 음성 답변 생성
               openaiWs.send(JSON.stringify({
@@ -1004,7 +1165,6 @@ wss.on('connection', (ws, req) => {
               }));
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
             }
-            // ── Function Calling 블록 끝 ──────────────────────────
 
             if (event.type === 'error') {
               console.error('[상담WS] OpenAI 에러:', event.error);
@@ -1085,4 +1245,4 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-console.log('AI머니야 서버 v9.1 초기화 완료!');
+console.log('AI머니야 서버 v9.2 초기화 완료!');
