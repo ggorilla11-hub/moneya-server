@@ -908,9 +908,10 @@ function now(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':
 let _locked=false;
 function aiSay(text,btns=[],mobCard=null){
   if(_locked)return;_locked=true;
+  _currentBtns=btns; // 음성 매핑용으로 미리 저장
   clearBtns();
   showTyping();
-  const delay=300; // 고정 300ms — 빠른 전환
+  const delay=300;
   setTimeout(()=>{
     _locked=false;
     removeTyping();
@@ -919,7 +920,7 @@ function aiSay(text,btns=[],mobCard=null){
     addSTT('ai',text);
     addMob('ai',text,mobCard);
     renderAll();
-    speak(text); // TTS 음성 재생
+    speak(text);
     if(btns.length)showBtns(btns);
   },delay);
 }
