@@ -1021,7 +1021,7 @@ function showBtns(btns){
   });
 }
 function clearBtns(){
-  _currentBtns=[];
+  // 화면 버튼만 지우고 _currentBtns는 유지 (음성 매핑에 계속 사용)
   ['pc-qa','qmob'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});
 }
 
@@ -1030,37 +1030,38 @@ function voiceToBtn(text){
   if(!_currentBtns||_currentBtns.length===0)return false;
   const t=text.trim().toLowerCase();
 
-  // 긍정 키워드
-  const YES=['있습니다','있어요','있어','네','예','맞아요','맞습니다','하고있습니다','하고있어요','이상입니다','됩니다','됩니다','완료','통과','준비','했습니다'];
-  // 부정 키워드
-  const NO=['없습니다','없어요','없어','아니요','아니','못하고','못해요','안됩니다','안돼요','아직','모르겠어요','어렵습니다'];
-  // 숫자/금액 키워드 (소득 입력 등)
+  // 숫자/금액이 포함된 경우 handleFree로 처리
   const hasNumber=/\d/.test(text)||/만원|백만|천만|억/.test(text);
+  if(hasNumber&&(ST.step==='S_INCOME_WAIT'||ST.step==='D_WAIT')) return false;
+
+  // 결혼/미혼 키워드 (버튼 2개: 결혼/미혼)
+  if(t.includes('결혼')||t.includes('기혼')||t.includes('아내')||t.includes('남편')||t.includes('배우자')){ clickBtnByNext('S_MARRIED'); return true; }
+  if(t.includes('미혼')||t.includes('독신')||t.includes('싱글')){ clickBtnByNext('S_SINGLE'); return true; }
+
+  // 자녀 수 키워드 (버튼 4개)
+  if((t.includes('없')&&(t.includes('자녀')||t.includes('애')||t.includes('아이')))){ clickBtnByNext('S_C0'); return true; }
+  if((t.includes('1명')||t.includes('한 명')||t.includes('한명')||t.includes('하나'))&&(t.includes('자녀')||t.includes('애')||t.includes('아이'))){ clickBtnByNext('S_C1'); return true; }
+  if((t.includes('2명')||t.includes('두 명')||t.includes('두명')||t.includes('둘'))&&(t.includes('자녀')||t.includes('애')||t.includes('아이'))){ clickBtnByNext('S_C2'); return true; }
+  if((t.includes('3명')||t.includes('세 명')||t.includes('세명')||t.includes('셋')||t.includes('이상'))&&(t.includes('자녀')||t.includes('애')||t.includes('아이'))){ clickBtnByNext('S_C3'); return true; }
+
+  // 긍정 키워드
+  const YES=['있습니다','있어요','있어','네','예','맞아요','맞습니다','하고 있습니다','하고있습니다','하고있어요','이상입니다','됩니다','완료','통과','준비','했습니다','동의','시작'];
+  // 부정 키워드
+  const NO=['없습니다','없어요','없어','아니요','아니','못하고','못해요','안됩니다','안돼요','아직','모르겠어요','어렵습니다','안 하고','못 하고'];
 
   const isYes=YES.some(k=>t.includes(k));
   const isNo=NO.some(k=>t.includes(k));
 
-  // 버튼이 2개일 때: 첫번째=긍정, 두번째=부정
+  // 버튼 1개: 무슨 말이든 진행
+  if(_currentBtns.length===1){ clickBtn(0); return true; }
+
+  // 버튼 2개: 긍정→첫번째, 부정→두번째
   if(_currentBtns.length===2){
+    if(isYes&&!isNo){ clickBtn(0); return true; }
+    if(isNo&&!isYes){ clickBtn(1); return true; }
+    // 둘 다 감지되면 더 강한 쪽으로
     if(isYes){ clickBtn(0); return true; }
     if(isNo){ clickBtn(1); return true; }
-  }
-  // 버튼이 1개일 때: 어떤 말이든 진행
-  if(_currentBtns.length===1){
-    clickBtn(0); return true;
-  }
-  // 결혼/미혼
-  if(t.includes('결혼')||t.includes('기혼')||t.includes('아내')||t.includes('남편')||t.includes('배우자')){ clickBtnByNext('S_MARRIED'); return true; }
-  if(t.includes('미혼')||t.includes('독신')||t.includes('싱글')){ clickBtnByNext('S_SINGLE'); return true; }
-  // 자녀 수
-  if(t.includes('없')&&(t.includes('자녀')||t.includes('애'))){ clickBtnByNext('S_C0'); return true; }
-  if((t.includes('1명')||t.includes('한명')||t.includes('첫째만'))&&(t.includes('자녀')||t.includes('애'))){ clickBtnByNext('S_C1'); return true; }
-  if((t.includes('2명')||t.includes('두명')||t.includes('둘'))&&(t.includes('자녀')||t.includes('애'))){ clickBtnByNext('S_C2'); return true; }
-  if((t.includes('3명')||t.includes('세명')||t.includes('셋'))&&(t.includes('자녀')||t.includes('애'))){ clickBtnByNext('S_C3'); return true; }
-
-  // 소득 입력이 필요한 단계에서 숫자가 들어오면 텍스트 처리로 넘김
-  if(hasNumber&&(ST.step==='S_INCOME_WAIT'||ST.step==='D_WAIT')){
-    return false; // handleFree로 처리
   }
 
   return false;
