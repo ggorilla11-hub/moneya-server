@@ -647,7 +647,7 @@ app.post('/api/tts', async (req, res) => {
       model: 'tts-1',
       voice: voice,          // 기존 앱: shimmer / moneya_v6: nova
       input: trimmed,
-      speed: voice === 'nova' ? 0.88 : 1.0,  // nova(음성재무진단)는 0.88, 기존은 1.0
+      speed: 1.0,  // 전체 1.0 (자연스러운 페이스)
       response_format: 'mp3',
     });
 
