@@ -663,54 +663,34 @@ function setMicStatus(txt){
 
 /* ── 마이크 + 클라이언트 VAD ── */
 let _silenceTimer=null, _speaking=false;
-let micAudioCtx=null; // 마이크 전용 AudioContext (브라우저 기본 샘플레이트)
+let micAudioCtx=null;
 
 async function startMic(){
   try{
     const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true}});
     micStream=stream;
-
-    // 마이크용은 브라우저 기본 샘플레이트 사용
     micAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
     await micAudioCtx.resume();
-    const nativeSR=micAudioCtx.sampleRate; // 보통 44100 또는 48000
-
+    const nativeSR=micAudioCtx.sampleRate;
     const src=micAudioCtx.createMediaStreamSource(stream);
     micProcessor=micAudioCtx.createScriptProcessor(4096,1,1);
-
     micProcessor.onaudioprocess=(e)=>{
       if(!wsReady||!ws||ws.readyState!==1)return;
       const f32=e.inputBuffer.getChannelData(0);
-
       // 24000Hz로 다운샘플링
       const ratio=nativeSR/24000;
       const outLen=Math.floor(f32.length/ratio);
       const out=new Float32Array(outLen);
       for(let i=0;i<outLen;i++) out[i]=f32[Math.floor(i*ratio)];
-
       const i16=new Int16Array(outLen);
       for(let i=0;i<outLen;i++) i16[i]=Math.max(-32768,Math.min(32767,out[i]*32768));
       const b64=btoa(String.fromCharCode(...new Uint8Array(i16.buffer)));
       ws.send(JSON.stringify({type:'input_audio_buffer.append',audio:b64}));
-
-      // 음량 감지 (클라이언트 VAD)
-      let sum=0;
-      for(let i=0;i<f32.length;i++) sum+=f32[i]*f32[i];
+      // 음량 표시
+      let sum=0; for(let i=0;i<f32.length;i++) sum+=f32[i]*f32[i];
       const rms=Math.sqrt(sum/f32.length);
-      if(rms>0.01){
-        _speaking=true;
-        if(_silenceTimer){clearTimeout(_silenceTimer);_silenceTimer=null;}
-        setMicStatus('🎤 말씀 중...');
-      } else if(_speaking&&!_silenceTimer){
-        _silenceTimer=setTimeout(()=>{
-          _speaking=false;_silenceTimer=null;
-          setMicStatus('🎤 음성 ON');
-          if(ws&&ws.readyState===1){
-            ws.send(JSON.stringify({type:'input_audio_buffer.commit'}));
-            ws.send(JSON.stringify({type:'response.create'}));
-          }
-        },1200);
-      }
+      if(rms>0.01) setMicStatus('🎤 말씀 중...');
+      else setMicStatus('🎤 음성 ON');
     };
     src.connect(micProcessor);
     micProcessor.connect(micAudioCtx.destination);
