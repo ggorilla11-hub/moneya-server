@@ -614,19 +614,21 @@ function initAudioCtx(){
 }
 
 /* ── WebSocket 연결 (시작 시 1회) ── */
-let _wsRetry=0;
+let _wsConnected=false;
 function connectWS(){
+  if(_wsConnected) return; // 절대 중복 연결 방지
   if(ws&&(ws.readyState===0||ws.readyState===1))return;
+  _wsConnected=true;
   setMicStatus('🔄 연결 중...');
   ws=new WebSocket(WS_URL);
   ws.onopen=()=>{ ws.send(JSON.stringify({type:'start_desire'})); };
   ws.onmessage=(e)=>{
     const msg=JSON.parse(e.data);
     if(msg.type==='session_started'){
+      if(wsReady) return;
       wsReady=true;
-      _wsRetry=0;
-      setMicStatus('🎤 음성 ON');
-      startMic();
+      setMicStatus('🎤 대기 중...');
+      // STT는 첫 TTS 재생 완료 후 자동 시작됨
     }
     if(msg.type==='response.audio.delta'&&msg.delta){
       const raw=atob(msg.delta);
@@ -643,14 +645,9 @@ function connectWS(){
         if(!voiceToBtn(txt)) handleFree(txt);
       }
     }
-    if(msg.type==='response.audio_transcript.done'){}
   };
   ws.onerror=()=>{ wsReady=false; setMicStatus('❌ 연결 오류'); };
-  ws.onclose=()=>{
-    wsReady=false; stopMic();
-    setMicStatus('❌ 연결 끊김');
-    if(_wsRetry<3){ _wsRetry++; setTimeout(connectWS,3000); }
-  };
+  ws.onclose=()=>{ wsReady=false; stopMic(); setMicStatus('❌ 연결 끊김'); };
 }
 
 function setMicStatus(txt){
@@ -664,42 +661,67 @@ function setMicStatus(txt){
 /* ── 마이크 + 클라이언트 VAD ── */
 let _silenceTimer=null, _speaking=false;
 let micAudioCtx=null;
+let _stt=null; // Web Speech API
 
-async function startMic(){
-  try{
-    const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true}});
-    micStream=stream;
-    micAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
-    await micAudioCtx.resume();
-    const nativeSR=micAudioCtx.sampleRate;
-    const src=micAudioCtx.createMediaStreamSource(stream);
-    micProcessor=micAudioCtx.createScriptProcessor(4096,1,1);
-    micProcessor.onaudioprocess=(e)=>{
-      if(!wsReady||!ws||ws.readyState!==1)return;
-      const f32=e.inputBuffer.getChannelData(0);
-      // 24000Hz로 다운샘플링
-      const ratio=nativeSR/24000;
-      const outLen=Math.floor(f32.length/ratio);
-      const out=new Float32Array(outLen);
-      for(let i=0;i<outLen;i++) out[i]=f32[Math.floor(i*ratio)];
-      const i16=new Int16Array(outLen);
-      for(let i=0;i<outLen;i++) i16[i]=Math.max(-32768,Math.min(32767,out[i]*32768));
-      const b64=btoa(String.fromCharCode(...new Uint8Array(i16.buffer)));
-      ws.send(JSON.stringify({type:'input_audio_buffer.append',audio:b64}));
-      // 음량 표시
-      let sum=0; for(let i=0;i<f32.length;i++) sum+=f32[i]*f32[i];
-      const rms=Math.sqrt(sum/f32.length);
-      if(rms>0.01) setMicStatus('🎤 말씀 중...');
-      else setMicStatus('🎤 음성 ON');
-    };
-    src.connect(micProcessor);
-    micProcessor.connect(micAudioCtx.destination);
-  }catch(err){
-    console.warn('[MIC]',err.message);
-    setMicStatus('❌ 마이크 오류');
+/* ── Web Speech API STT (브라우저 내장) ── */
+function startSTT(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){
+    setMicStatus('❌ 음성인식 미지원(크롬사용)');
+    addSTT('ai','⚠️ 이 브라우저는 음성인식을 지원하지 않습니다. 크롬을 사용해주세요.');
+    return;
+  }
+  _stt=new SR();
+  _stt.lang='ko-KR';
+  _stt.continuous=true;
+  _stt.interimResults=true;
+
+  _stt.onstart=()=>{
+    setMicStatus('🎤 음성 ON');
+    addSTT('ai','🎤 음성인식 시작됨 — 말씀해 주세요');
+  };
+
+  _stt.onresult=(e)=>{
+    let interim='', final='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal) final+=e.results[i][0].transcript;
+      else interim+=e.results[i][0].transcript;
+    }
+    if(interim) setMicStatus('🎤 '+interim);
+    if(final){
+      final=final.trim();
+      setMicStatus('🎤 음성 ON');
+      addSTT('u',final); addMob('u',final);
+      if(!voiceToBtn(final)) handleFree(final);
+    }
+  };
+
+  _stt.onerror=(e)=>{
+    if(e.error==='no-speech') return;
+    setMicStatus('❌ STT오류:'+e.error);
+    addSTT('ai','⚠️ 음성오류: '+e.error);
+  };
+
+  _stt.onend=()=>{
+    if(wsReady) setTimeout(()=>{ try{_stt.start();}catch(e){} },300);
+  };
+
+  try{ _stt.start(); }catch(e){
+    setMicStatus('❌ STT시작실패');
+    addSTT('ai','⚠️ 음성인식 시작 실패: '+e.message);
   }
 }
+
+function stopSTT(){
+  if(_stt){ try{_stt.stop();}catch(e){} _stt=null; }
+}
+
+async function startMic(){
+  // Web Speech API만 사용 - getUserMedia 충돌 방지
+  startSTT();
+}
 function stopMic(){
+  stopSTT();
   if(micProcessor){micProcessor.disconnect();micProcessor=null;}
   if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}
 }
@@ -759,12 +781,25 @@ async function processTTSQueue(){
       const decoded=await audioCtx.decodeAudioData(bytes.buffer);
       const src=audioCtx.createBufferSource();
       src.buffer=decoded;src.connect(audioCtx.destination);
-      src.onended=()=>processTTSQueue();src.start(0);
+      src.onended=()=>{
+        processTTSQueue();
+        // TTS 큐가 비면 STT 시작 (AudioContext 충돌 방지)
+        if(ttsQueue.length===0&&wsReady&&!_stt){
+          setTimeout(startSTT,400);
+        }
+      };
+      src.start(0);
     } else {
       const blob=new Blob([bytes],{type:'audio/mpeg'});
       const url=URL.createObjectURL(blob);
       const audio=new Audio(url);
-      audio.onended=()=>{URL.revokeObjectURL(url);processTTSQueue();};
+      audio.onended=()=>{
+        URL.revokeObjectURL(url);
+        processTTSQueue();
+        if(ttsQueue.length===0&&wsReady&&!_stt){
+          setTimeout(startSTT,400);
+        }
+      };
       audio.onerror=()=>processTTSQueue();
       await audio.play();
     }
@@ -772,7 +807,12 @@ async function processTTSQueue(){
     if('speechSynthesis' in window){
       const utt=new SpeechSynthesisUtterance(txt);
       utt.lang='ko-KR';utt.rate=0.88;utt.pitch=1.05;
-      utt.onend=()=>processTTSQueue();
+      utt.onend=()=>{
+        processTTSQueue();
+        if(ttsQueue.length===0&&wsReady&&!_stt){
+          setTimeout(startSTT,400);
+        }
+      };
       speechSynthesis.speak(utt);
     } else { processTTSQueue(); }
   }
