@@ -708,7 +708,9 @@ function startSTT(){
   };
 
   _stt.onend=()=>{
-    if(wsReady) setTimeout(()=>{ try{_stt.start();}catch(e){} },300);
+    if(!wsReady||ttsPlaying){ _stt=null; return; }
+    _stt=null;
+    setTimeout(startSTT, 300);
   };
 
   try{ _stt.start(); }catch(e){
@@ -719,6 +721,17 @@ function startSTT(){
 
 function stopSTT(){
   if(_stt){ try{_stt.stop();}catch(e){} _stt=null; }
+}
+function pauseSTT(){
+  if(_stt){
+    try{_stt.onend=null; _stt.abort();}catch(e){}
+    _stt=null;
+  }
+}
+function resumeSTT(){
+  if(!wsReady) return;
+  if(_stt) return; // 이미 실행 중
+  startSTT();
 }
 
 async function startMic(){
@@ -770,8 +783,15 @@ async function speak(text){
   if(!ttsPlaying)processTTSQueue();
 }
 async function processTTSQueue(){
-  if(ttsQueue.length===0){ttsPlaying=false;return;}
+  if(ttsQueue.length===0){
+    ttsPlaying=false;
+    // TTS 큐 완전히 비었을 때 STT 재개
+    if(wsReady){ setTimeout(resumeSTT,400); }
+    return;
+  }
   ttsPlaying=true;
+  // TTS 재생 시작 - STT 일시정지 (머니야 목소리 인식 방지)
+  pauseSTT();
   const txt=ttsQueue.shift();
   try{
     const res=await fetch(TTS_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt,voice:'nova'})});
@@ -786,25 +806,13 @@ async function processTTSQueue(){
       const decoded=await audioCtx.decodeAudioData(bytes.buffer);
       const src=audioCtx.createBufferSource();
       src.buffer=decoded;src.connect(audioCtx.destination);
-      src.onended=()=>{
-        processTTSQueue();
-        // TTS 큐가 비면 STT 시작 (AudioContext 충돌 방지)
-        if(ttsQueue.length===0&&wsReady&&!_stt){
-          setTimeout(startSTT,400);
-        }
-      };
+      src.onended=()=>{ processTTSQueue(); };
       src.start(0);
     } else {
       const blob=new Blob([bytes],{type:'audio/mpeg'});
       const url=URL.createObjectURL(blob);
       const audio=new Audio(url);
-      audio.onended=()=>{
-        URL.revokeObjectURL(url);
-        processTTSQueue();
-        if(ttsQueue.length===0&&wsReady&&!_stt){
-          setTimeout(startSTT,400);
-        }
-      };
+      audio.onended=()=>{ URL.revokeObjectURL(url); processTTSQueue(); };
       audio.onerror=()=>processTTSQueue();
       await audio.play();
     }
@@ -812,12 +820,7 @@ async function processTTSQueue(){
     if('speechSynthesis' in window){
       const utt=new SpeechSynthesisUtterance(txt);
       utt.lang='ko-KR';utt.rate=0.88;utt.pitch=1.05;
-      utt.onend=()=>{
-        processTTSQueue();
-        if(ttsQueue.length===0&&wsReady&&!_stt){
-          setTimeout(startSTT,400);
-        }
-      };
+      utt.onend=()=>{ processTTSQueue(); };
       speechSynthesis.speak(utt);
     } else { processTTSQueue(); }
   }
