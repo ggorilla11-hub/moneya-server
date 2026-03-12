@@ -1203,12 +1203,16 @@ function voiceToBtn(text){
 function clickBtn(index){
   if(!_currentBtns[index])return;
   const b=_currentBtns[index];
+  _currentBtns=[]; // 즉시 초기화 — 중복 음성 인식 방지
+  pauseSTT();
   userSay(b.label);
   setTimeout(()=>step(b.next),280);
 }
 function clickBtnByNext(next){
   const b=_currentBtns.find(btn=>btn.next===next);
   if(!b)return;
+  _currentBtns=[]; // 즉시 초기화 — 중복 음성 인식 방지
+  pauseSTT();
   userSay(b.label);
   setTimeout(()=>step(b.next),280);
 }
@@ -1256,11 +1260,38 @@ function handleFree(text){
     ST.step='D_DONE';
   }
   if(ST.step==='S_INCOME_WAIT'){
-    // 소득 파싱 — "600만원", "600", "6백만" 등 대응
-    const im=text.match(/(\d[\d,]*)/);
-    let inc=im?parseInt(im[1].replace(/,/g,'')):0;
-    // 숫자가 너무 작으면(억 단위 입력 방지) 만원 단위로 처리
-    if(inc>10000) inc=Math.round(inc/10000); // 원 단위로 입력한 경우
+    // 소득 파싱 — "천만원", "600만원", "600", "6백만", "1억" 등 대응
+    let inc=0;
+    const t2=text.replace(/,/g,'');
+    // 억 단위
+    const eokmatch=t2.match(/(\d+)\s*억/);
+    if(eokmatch) inc=parseInt(eokmatch[1])*10000;
+    // 천만 단위: "천만", "1천만", "2천만"
+    const cheonman=t2.match(/(\d*)\s*천\s*만/);
+    if(cheonman) inc=(parseInt(cheonman[1])||1)*1000;
+    // 천 단위: "천만원" 제외한 순수 "천": "5천", "오천"
+    else {
+      const cheon=t2.match(/(\d+)\s*천(?!\s*만)/);
+      if(cheon) inc=parseInt(cheon[1])*1000;
+    }
+    // 백만 단위: "5백만", "500만"
+    if(!inc){
+      const baekman=t2.match(/(\d+)\s*백\s*만/);
+      if(baekman) inc=parseInt(baekman[1])*100;
+    }
+    // 만 단위: "600만", "300만"
+    if(!inc){
+      const manmatch=t2.match(/(\d+)\s*만/);
+      if(manmatch) inc=parseInt(manmatch[1]);
+    }
+    // 순수 숫자만 (만원 단위로 간주)
+    if(!inc){
+      const numonly=t2.match(/(\d+)/);
+      if(numonly){
+        inc=parseInt(numonly[1]);
+        if(inc>100000) inc=Math.round(inc/10000); // 원 단위 입력 방지
+      }
+    }
     p.income=inc;
     const fam=p.family||2;
     const svR=_sBudget(fam,'sv');   // 저축투자 비율
