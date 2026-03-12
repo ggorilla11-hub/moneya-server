@@ -589,7 +589,14 @@ wss.on('connection', (ws, req) => {
               input_audio_format: 'pcm16',
               output_audio_format: 'pcm16',
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
-              turn_detection: null
+              turn_detection: {
+                type: 'server_vad',
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 1200,
+                create_response: false,
+                interrupt_response: false
+              }
             }
           }));
 
@@ -627,7 +634,12 @@ wss.on('connection', (ws, req) => {
               ws.send(JSON.stringify({ type: 'response.created' }));
             }
             if (event.type === 'input_audio_buffer.speech_started') {
+              console.log('[DESIRE] 고객 말 시작');
               ws.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }));
+            }
+            if (event.type === 'input_audio_buffer.speech_stopped') {
+              console.log('[DESIRE] 고객 말 멈춤 → transcription 시작');
+              ws.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
             }
             if (event.type === 'error') {
               console.error('[DESIRE] OpenAI error:', event.error);
