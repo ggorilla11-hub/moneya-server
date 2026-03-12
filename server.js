@@ -620,6 +620,9 @@ wss.on('connection', (ws, req) => {
             if (event.type === 'conversation.item.input_audio_transcription.completed') {
               ws.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: event.transcript }));
             }
+            if (event.type === 'response.done') {
+              ws.send(JSON.stringify({ type: 'response.done' }));
+            }
             if (event.type === 'response.created') {
               ws.send(JSON.stringify({ type: 'response.created' }));
             }
