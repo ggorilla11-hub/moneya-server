@@ -614,13 +614,20 @@ function initAudioCtx(){
 }
 
 /* ── WebSocket 연결 (시작 시 1회) ── */
+let _wsRetry=0;
 function connectWS(){
   if(ws&&(ws.readyState===0||ws.readyState===1))return;
+  setMicStatus('🔄 연결 중...');
   ws=new WebSocket(WS_URL);
   ws.onopen=()=>{ ws.send(JSON.stringify({type:'start_desire'})); };
   ws.onmessage=(e)=>{
     const msg=JSON.parse(e.data);
-    if(msg.type==='session_started'){ wsReady=true; startMic(); }
+    if(msg.type==='session_started'){
+      wsReady=true;
+      _wsRetry=0;
+      setMicStatus('🎤 음성 ON');
+      startMic();
+    }
     if(msg.type==='response.audio.delta'&&msg.delta){
       const raw=atob(msg.delta);
       const buf=new Int16Array(raw.length/2);
@@ -631,37 +638,86 @@ function connectWS(){
     if(msg.type==='conversation.item.input_audio_transcription.completed'){
       const txt=(msg.transcript||'').trim();
       if(txt){
+        setMicStatus('🎤 음성 ON');
         addSTT('u',txt); addMob('u',txt);
         if(!voiceToBtn(txt)) handleFree(txt);
       }
     }
-    if(msg.type==='response.audio_transcript.done'){
-      // AI 응답 완료 후 — 아무것도 안함 (고객 텍스트 아님)
-    }
+    if(msg.type==='response.audio_transcript.done'){}
   };
-  ws.onerror=()=>{ wsReady=false; };
-  ws.onclose=()=>{ wsReady=false; stopMic(); };
+  ws.onerror=()=>{ wsReady=false; setMicStatus('❌ 연결 오류'); };
+  ws.onclose=()=>{
+    wsReady=false; stopMic();
+    setMicStatus('❌ 연결 끊김');
+    if(_wsRetry<3){ _wsRetry++; setTimeout(connectWS,3000); }
+  };
 }
 
-/* ── 마이크 ── */
+function setMicStatus(txt){
+  const el=document.getElementById('tts-toggle');
+  if(el) el.textContent=txt;
+  // 모바일용
+  const el2=document.getElementById('mob-mic-status');
+  if(el2) el2.textContent=txt;
+}
+
+/* ── 마이크 + 클라이언트 VAD ── */
+let _silenceTimer=null, _speaking=false;
+let micAudioCtx=null; // 마이크 전용 AudioContext (브라우저 기본 샘플레이트)
+
 async function startMic(){
   try{
-    const stream=await navigator.mediaDevices.getUserMedia({audio:{sampleRate:24000,channelCount:1,echoCancellation:true,noiseSuppression:true}});
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true}});
     micStream=stream;
-    initAudioCtx();
-    const src=audioCtx.createMediaStreamSource(stream);
-    micProcessor=audioCtx.createScriptProcessor(4096,1,1);
+
+    // 마이크용은 브라우저 기본 샘플레이트 사용
+    micAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    await micAudioCtx.resume();
+    const nativeSR=micAudioCtx.sampleRate; // 보통 44100 또는 48000
+
+    const src=micAudioCtx.createMediaStreamSource(stream);
+    micProcessor=micAudioCtx.createScriptProcessor(4096,1,1);
+
     micProcessor.onaudioprocess=(e)=>{
       if(!wsReady||!ws||ws.readyState!==1)return;
       const f32=e.inputBuffer.getChannelData(0);
-      const i16=new Int16Array(f32.length);
-      for(let i=0;i<f32.length;i++) i16[i]=Math.max(-32768,Math.min(32767,f32[i]*32768));
+
+      // 24000Hz로 다운샘플링
+      const ratio=nativeSR/24000;
+      const outLen=Math.floor(f32.length/ratio);
+      const out=new Float32Array(outLen);
+      for(let i=0;i<outLen;i++) out[i]=f32[Math.floor(i*ratio)];
+
+      const i16=new Int16Array(outLen);
+      for(let i=0;i<outLen;i++) i16[i]=Math.max(-32768,Math.min(32767,out[i]*32768));
       const b64=btoa(String.fromCharCode(...new Uint8Array(i16.buffer)));
       ws.send(JSON.stringify({type:'input_audio_buffer.append',audio:b64}));
+
+      // 음량 감지 (클라이언트 VAD)
+      let sum=0;
+      for(let i=0;i<f32.length;i++) sum+=f32[i]*f32[i];
+      const rms=Math.sqrt(sum/f32.length);
+      if(rms>0.01){
+        _speaking=true;
+        if(_silenceTimer){clearTimeout(_silenceTimer);_silenceTimer=null;}
+        setMicStatus('🎤 말씀 중...');
+      } else if(_speaking&&!_silenceTimer){
+        _silenceTimer=setTimeout(()=>{
+          _speaking=false;_silenceTimer=null;
+          setMicStatus('🎤 음성 ON');
+          if(ws&&ws.readyState===1){
+            ws.send(JSON.stringify({type:'input_audio_buffer.commit'}));
+            ws.send(JSON.stringify({type:'response.create'}));
+          }
+        },1200);
+      }
     };
     src.connect(micProcessor);
-    micProcessor.connect(audioCtx.destination);
-  }catch(err){ console.warn('[MIC]',err.message); }
+    micProcessor.connect(micAudioCtx.destination);
+  }catch(err){
+    console.warn('[MIC]',err.message);
+    setMicStatus('❌ 마이크 오류');
+  }
 }
 function stopMic(){
   if(micProcessor){micProcessor.disconnect();micProcessor=null;}
