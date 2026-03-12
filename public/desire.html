@@ -630,7 +630,11 @@ function connectWS(){
     if(msg.type==='input_audio_buffer.speech_started'){ stopWsAudio(); }
     if(msg.type==='conversation.item.input_audio_transcription.completed'){
       const txt=(msg.transcript||'').trim();
-      if(txt){ addSTT('u',txt); addMob('u',txt); handleFree(txt); }
+      if(txt){
+        addSTT('u',txt); addMob('u',txt);
+        // 버튼 매핑 먼저 시도 → 안되면 handleFree로
+        if(!voiceToBtn(txt)) handleFree(txt);
+      }
     }
   };
   ws.onerror=()=>{ wsReady=false; };
@@ -999,7 +1003,10 @@ function removeTyping(){
 }
 
 /* ══ 버튼 ══ */
+let _currentBtns=[]; // 현재 화면에 표시된 버튼 목록 저장
+
 function showBtns(btns){
+  _currentBtns=btns; // 항상 최신 버튼 목록 저장
   ['pc-qa','qmob'].forEach(id=>{
     const el=document.getElementById(id);if(!el)return;
     el.innerHTML='';
@@ -1013,7 +1020,64 @@ function showBtns(btns){
     });
   });
 }
-function clearBtns(){['pc-qa','qmob'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});}
+function clearBtns(){
+  _currentBtns=[];
+  ['pc-qa','qmob'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});
+}
+
+/* ══ 음성 → 버튼 자동 매핑 ══ */
+function voiceToBtn(text){
+  if(!_currentBtns||_currentBtns.length===0)return false;
+  const t=text.trim().toLowerCase();
+
+  // 긍정 키워드
+  const YES=['있습니다','있어요','있어','네','예','맞아요','맞습니다','하고있습니다','하고있어요','이상입니다','됩니다','됩니다','완료','통과','준비','했습니다'];
+  // 부정 키워드
+  const NO=['없습니다','없어요','없어','아니요','아니','못하고','못해요','안됩니다','안돼요','아직','모르겠어요','어렵습니다'];
+  // 숫자/금액 키워드 (소득 입력 등)
+  const hasNumber=/\d/.test(text)||/만원|백만|천만|억/.test(text);
+
+  const isYes=YES.some(k=>t.includes(k));
+  const isNo=NO.some(k=>t.includes(k));
+
+  // 버튼이 2개일 때: 첫번째=긍정, 두번째=부정
+  if(_currentBtns.length===2){
+    if(isYes){ clickBtn(0); return true; }
+    if(isNo){ clickBtn(1); return true; }
+  }
+  // 버튼이 1개일 때: 어떤 말이든 진행
+  if(_currentBtns.length===1){
+    clickBtn(0); return true;
+  }
+  // 결혼/미혼
+  if(t.includes('결혼')||t.includes('기혼')||t.includes('아내')||t.includes('남편')||t.includes('배우자')){ clickBtnByNext('S_MARRIED'); return true; }
+  if(t.includes('미혼')||t.includes('독신')||t.includes('싱글')){ clickBtnByNext('S_SINGLE'); return true; }
+  // 자녀 수
+  if(t.includes('없')&&(t.includes('자녀')||t.includes('애'))){ clickBtnByNext('S_C0'); return true; }
+  if((t.includes('1명')||t.includes('한명')||t.includes('첫째만'))&&(t.includes('자녀')||t.includes('애'))){ clickBtnByNext('S_C1'); return true; }
+  if((t.includes('2명')||t.includes('두명')||t.includes('둘'))&&(t.includes('자녀')||t.includes('애'))){ clickBtnByNext('S_C2'); return true; }
+  if((t.includes('3명')||t.includes('세명')||t.includes('셋'))&&(t.includes('자녀')||t.includes('애'))){ clickBtnByNext('S_C3'); return true; }
+
+  // 소득 입력이 필요한 단계에서 숫자가 들어오면 텍스트 처리로 넘김
+  if(hasNumber&&(ST.step==='S_INCOME_WAIT'||ST.step==='D_WAIT')){
+    return false; // handleFree로 처리
+  }
+
+  return false;
+}
+
+function clickBtn(index){
+  if(!_currentBtns[index])return;
+  const b=_currentBtns[index];
+  userSay(b.label);
+  setTimeout(()=>step(b.next),280);
+}
+function clickBtnByNext(next){
+  const b=_currentBtns.find(btn=>btn.next===next);
+  if(!b)return;
+  userSay(b.label);
+  setTimeout(()=>step(b.next),280);
+}
 
 /* ══ 수지분석표 기준 (비정기지출 포함) ══
    가족수: 1인/2인/3인/4인/5인
