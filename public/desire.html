@@ -340,11 +340,17 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
     <div class="lo-pain">😔 노후준비는 나중에… 계속 미룬다</div>
     <div class="lo-pain">😟 전문가 상담료가 너무 부담스럽다</div>
   </div>
-  <button class="lo-cta" onclick="go()">🎙️ AI 음성재무진단 시작하기 →</button>
+  <button id="go-btn" class="lo-cta" onclick="go()">🎙️ AI 음성재무진단 시작하기 →</button>
   <div id="kakao-open-btn" style="display:none; margin-top:10px;">
-    <button onclick="openInChrome()" style="width:100%;padding:14px;background:#FAE100;border:none;border-radius:12px;font-size:15px;font-weight:700;color:#3C1E1E;cursor:pointer;">
-      🌐 크롬으로 열기 (음성 사용 시)
+    <button id="chrome-android-btn" onclick="openInChrome()" style="display:none;width:100%;padding:14px;background:#FAE100;border:none;border-radius:12px;font-size:15px;font-weight:700;color:#3C1E1E;cursor:pointer;">
+      🌐 크롬으로 열기
     </button>
+    <div id="chrome-ios-btn" style="display:none;">
+      <button onclick="copyLink()" style="width:100%;padding:14px;background:#FAE100;border:none;border-radius:12px;font-size:15px;font-weight:700;color:#3C1E1E;cursor:pointer;">
+        📋 링크 복사 후 크롬에서 열기
+      </button>
+      <p style="font-size:11px;color:rgba(255,255,255,0.5);text-align:center;margin:8px 0 0;">복사 후 크롬 주소창에 붙여넣기 해주세요</p>
+    </div>
     <p style="font-size:11px;color:rgba(255,255,255,0.5);text-align:center;margin:8px 0 0;">음성 기능은 크롬 브라우저에서만 지원됩니다</p>
   </div>
   <div class="lo-note">회원가입 불필요 · 카드정보 없음 · 완전 무료</div>
@@ -610,26 +616,39 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
   const ua=(navigator.userAgent||'').toLowerCase();
   const isKakao=ua.includes('kakaotalk');
   const isInapp=isKakao||ua.includes('naver')||ua.includes('instagram')||ua.includes('fb_iab')||ua.includes('fban')||ua.includes('fbav');
-  // 디버그: URL에 ?debug=ua 붙이면 UA 화면 표시
-  if(new URLSearchParams(location.search).get('debug')==='ua'){
-    const d=document.createElement('div');
-    d.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:rgba(0,0,0,.9);color:#FAE100;font-size:11px;padding:10px;word-break:break-all;line-height:1.5;';
-    d.textContent='UA: '+navigator.userAgent+'\n\nisKakao: '+isKakao+' / isInapp: '+isInapp;
-    document.body.appendChild(d);
-  }
+  const isIOS=/iphone|ipad|ipod/.test(ua);
+
   if(isInapp){
-    const btn=document.getElementById('kakao-open-btn');
-    if(btn) btn.style.display='block';
+    const goBtn=document.getElementById('go-btn');
+    if(goBtn) goBtn.style.display='none';
+    const kakaoBtn=document.getElementById('kakao-open-btn');
+    if(kakaoBtn) kakaoBtn.style.display='block';
+    if(isIOS){
+      const iosBtn=document.getElementById('chrome-ios-btn');
+      if(iosBtn) iosBtn.style.display='block';
+    } else {
+      const androidBtn=document.getElementById('chrome-android-btn');
+      if(androidBtn) androidBtn.style.display='block';
+    }
   }
 })();
 
 function openInChrome(){
   const url=location.href;
-  // 안드로이드 크롬으로 강제 오픈
   const chromeIntent='intent://'+url.replace(/^https?:\/\//,'')+'#Intent;scheme=https;package=com.android.chrome;end';
   location.href=chromeIntent;
-  // iOS는 intent가 안 되므로 1초 후 그냥 현재 페이지에서 go() 실행
-  setTimeout(()=>{ go(); }, 1200);
+}
+
+function copyLink(){
+  const url=location.href;
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(url).then(()=>{ alert('링크가 복사됐습니다.\n크롬 주소창에 붙여넣기 해주세요.'); });
+  } else {
+    const t=document.createElement('textarea');
+    t.value=url; document.body.appendChild(t); t.select();
+    document.execCommand('copy'); document.body.removeChild(t);
+    alert('링크가 복사됐습니다.\n크롬 주소창에 붙여넣기 해주세요.');
+  }
 }
 
 /* ══ WebSocket 음성 (OpenAI Realtime mini) ══ */
