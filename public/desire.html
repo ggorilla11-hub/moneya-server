@@ -698,8 +698,13 @@ function startSTT(){
 
   _stt.onerror=(e)=>{
     if(e.error==='no-speech') return;
-    setMicStatus('❌ STT오류:'+e.error);
-    addSTT('ai','⚠️ 음성오류: '+e.error);
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){
+      // 권한 거부 - 재시도 완전 중단
+      wsReady=false; // onend에서 재시도 막기
+      setMicStatus('🎤 클릭/텍스트 이용');
+      return;
+    }
+    setMicStatus('🎤 음성 ON'); // 다른 오류는 조용히 무시
   };
 
   _stt.onend=()=>{
