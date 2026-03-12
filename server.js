@@ -9,7 +9,13 @@ const sharp = require('sharp');    // 🆕 v3.11: 이미지 리사이징용 추�
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  credentials: false
+}));
+app.options('*', cors()); // preflight 요청 명시적 허용
 app.use(express.json());
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
