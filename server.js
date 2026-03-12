@@ -589,22 +589,21 @@ wss.on('connection', (ws, req) => {
               input_audio_format: 'pcm16',
               output_audio_format: 'pcm16',
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
-              turn_detection: {
-                type: 'server_vad',
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 1500
-              }
+              turn_detection: null
             }
           }));
 
-          ws.send(JSON.stringify({ type: 'session_started' }));
+          // session_started는 OpenAI가 session.updated 보낸 후 전송
         });
 
         openaiWs.on('message', (data) => {
           try {
             const event = JSON.parse(data.toString());
 
+            if (event.type === 'session.updated') {
+              console.log('[DESIRE] session.updated 수신 → session_started 전송');
+              ws.send(JSON.stringify({ type: 'session_started' }));
+            }
             if (event.type === 'response.audio.delta' && event.delta) {
               ws.send(JSON.stringify({ type: 'response.audio.delta', delta: event.delta }));
             }
@@ -618,6 +617,7 @@ wss.on('connection', (ws, req) => {
               ws.send(JSON.stringify({ type: 'response.audio_transcript.done', transcript: event.transcript }));
             }
             if (event.type === 'conversation.item.input_audio_transcription.completed') {
+              console.log('[DESIRE] 고객 음성 인식:', event.transcript);
               ws.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: event.transcript }));
             }
             if (event.type === 'response.done') {
@@ -630,6 +630,7 @@ wss.on('connection', (ws, req) => {
               ws.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }));
             }
             if (event.type === 'error') {
+              console.error('[DESIRE] OpenAI error:', event.error);
               ws.send(JSON.stringify({ type: 'error', error: event.error }));
             }
           } catch (e) {
@@ -652,6 +653,14 @@ wss.on('connection', (ws, req) => {
           type: 'input_audio_buffer.append',
           audio: msg.audio
         }));
+      }
+
+      if (msg.type === 'input_audio_buffer.commit' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+        openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+      }
+
+      if (msg.type === 'response.create' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+        openaiWs.send(JSON.stringify({ type: 'response.create' }));
       }
 
       if (msg.type === 'audio' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
