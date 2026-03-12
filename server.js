@@ -591,10 +591,6 @@ wss.on('connection', (ws, req) => {
             }
           }));
 
-          setTimeout(() => {
-            openaiWs.send(JSON.stringify({ type: 'response.create' }));
-          }, 500);
-
           ws.send(JSON.stringify({ type: 'session_started' }));
         });
 
