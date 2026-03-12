@@ -632,9 +632,11 @@ function connectWS(){
       const txt=(msg.transcript||'').trim();
       if(txt){
         addSTT('u',txt); addMob('u',txt);
-        // 버튼 매핑 먼저 시도 → 안되면 handleFree로
         if(!voiceToBtn(txt)) handleFree(txt);
       }
+    }
+    if(msg.type==='response.audio_transcript.done'){
+      // AI 응답 완료 후 — 아무것도 안함 (고객 텍스트 아님)
     }
   };
   ws.onerror=()=>{ wsReady=false; };
@@ -1028,6 +1030,11 @@ function clearBtns(){
 
 /* ══ 음성 → 버튼 자동 매핑 ══ */
 function voiceToBtn(text){
+  // 음성 인식 확인용 — 화면 상단에 잠깐 표시
+  const dbg=document.getElementById('ai-tag');
+  if(dbg) dbg.textContent='🎤 인식: '+text.substring(0,15);
+  setTimeout(()=>{ if(dbg) dbg.textContent='💬 상담 중'; },2000);
+
   if(!_currentBtns||_currentBtns.length===0)return false;
   const t=text.trim().toLowerCase();
 
