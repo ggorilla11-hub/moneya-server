@@ -756,10 +756,15 @@ function connectWS(){
       reconnectCount++;
       document.getElementById('reconnect-txt').textContent='🔄 재연결 중... ('+reconnectCount+'/5)';
       document.getElementById('reconnect-banner').classList.add('show');
+      /* 재연결 시 채팅에도 안내 */
+      if(reconnectCount===1&&document.getElementById('chat-area').style.display!=='none'){
+        addSys('⚡ 연결이 일시 끊겼습니다. 자동 재연결 중...');
+      }
       setTimeout(connectWS,2000);
     }else{
       document.getElementById('reconnect-banner').classList.remove('show');
-      showToast('⚠️ 연결이 끊겼습니다. 새로고침 해주세요');
+      addSys('❌ 재연결에 실패했습니다. 화면을 새로고침(F5) 해주세요.');
+      showToast('⚠️ 화면을 새로고침 해주세요');
     }
   };
   ws.onerror=function(err){console.error('[DESIRE-001] WS Error',err);};
@@ -802,11 +807,15 @@ function resetIdleTimer(){
   if(idleTimer)clearTimeout(idleTimer);
   idleTimer=setTimeout(function(){
     if(document.getElementById('result').classList.contains('show'))return;
-    idleCount++;
-    if(idleCount===1)addSys('말씀하시거나 아래 버튼을 눌러주세요.');
     var qb=document.getElementById('quick-btns');
-    if(!qb.innerHTML.trim()){var btns=STAGE_BUTTONS[curStageKey]||STAGE_BUTTONS.OPENING;setQB(btns);}
-  },30000);
+    /* 버튼이 이미 있으면 메시지 표시 안 함 */
+    if(!qb.innerHTML.trim()){
+      idleCount++;
+      if(idleCount===1)addSys('💬 버튼을 누르거나 말씀해 주세요.');
+      var btns=STAGE_BUTTONS[curStageKey]||STAGE_BUTTONS.OPENING;
+      setQB(btns);
+    }
+  },60000); /* 30초→60초로 늘림 */
 }
 
 /* #8 텍스트 입력 — 엔터키 전 구간 정상 */
