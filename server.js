@@ -1119,8 +1119,15 @@ wss.on('connection', (ws, req) => {
           } catch (e) { console.error('[DESIRE-WS] 메시지 파싱 에러:', e); }
         });
 
-        openaiWs.on('error', (err) => { console.error('[DESIRE-WS] OpenAI 에러:', err.message); ws.send(JSON.stringify({ type: 'error', error: err.message })); });
-        openaiWs.on('close', () => console.log('[DESIRE-WS] OpenAI 연결 종료'));
+        openaiWs.on('error', (err) => {
+          console.error('[DESIRE-WS] OpenAI 에러:', err.message);
+          ws.send(JSON.stringify({ type: 'openai_error', error: err.message }));
+        });
+        openaiWs.on('close', (code, reason) => {
+          console.log('[DESIRE-WS] OpenAI 연결 종료 — code:', code, 'reason:', reason?.toString()?.slice(0,100));
+          // 클라이언트에 재연결 신호 전송
+          try { ws.send(JSON.stringify({ type: 'openai_disconnected', code: code })); } catch(e) {}
+        });
         return;
       }
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
