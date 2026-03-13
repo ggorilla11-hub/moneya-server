@@ -745,7 +745,18 @@ function connectWS(){
     }
 
     if(msg.type==='transcript'&&msg.text){
-      if(msg.role==='assistant')addAI(msg.text);
+      if(msg.role==='assistant'){
+        addAI(msg.text);
+        /* ★ 클로징 멘트 감지 → 즉시 결과화면 표시 (서버 연결 끊기기 전에 처리) */
+        if(msg.text.indexOf('안녕히 계세요')>-1||msg.text.indexOf('진단이 완료')>-1){
+          sessionActive=false;
+          setTimeout(function(){
+            if(!document.getElementById('result').classList.contains('show')){
+              showResult();
+            }
+          },500);
+        }
+      }
       if(msg.role==='user'&&msg.source!=='text'){
         addUser(msg.text);
         /* ★ 중단 신호 감지 — 시각적 표시 */
