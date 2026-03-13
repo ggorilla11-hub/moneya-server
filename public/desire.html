@@ -752,9 +752,9 @@ function startSTT(){
   };
 
   _stt.onend=()=>{
-    if(!wsReady||ttsPlaying){ _stt=null; return; }
+    if(ttsPlaying){ _stt=null; return; } // TTS 재생 중이면 대기
     _stt=null;
-    setTimeout(startSTT, 300);
+    setTimeout(startSTT, 300); // wsReady 무관하게 재시작
   };
 
   try{ _stt.start(); }catch(e){ _stt=null; } // 실패해도 조용히
@@ -770,7 +770,6 @@ function pauseSTT(){
   }
 }
 function resumeSTT(){
-  if(!wsReady) return;
   if(_stt) return; // 이미 실행 중
   startSTT();
 }
@@ -826,8 +825,8 @@ async function speak(text){
 async function processTTSQueue(){
   if(ttsQueue.length===0){
     ttsPlaying=false;
-    // TTS 큐 완전히 비었을 때 STT 재개
-    if(wsReady){ setTimeout(resumeSTT,400); }
+    // TTS 큐 완전히 비었을 때 STT 무조건 재개
+    setTimeout(resumeSTT,400);
     return;
   }
   ttsPlaying=true;
@@ -1653,19 +1652,27 @@ function showResult(){
 /* ══ 시작 ══ */
 function go(){
   initAudioCtx();
-  connectWS(); // 시작과 동시에 WebSocket 연결 — 음성 상시 열림
   const lo=document.getElementById('landing');
   lo.classList.add('gone');setTimeout(()=>lo.style.display='none',480);
   startTimer();renderAll();
-  setTimeout(()=>{
+  // wsReady 이미 완료됐으면 즉시, 아니면 최대 5초 대기 후 실행
+  _startGreeting();
+}
+
+function _startGreeting(){
+  if(wsReady){
     aiSay(
-      `안녕하세요! 😊<br><br>저는 <strong>AI 머니야</strong>입니다. 오상열 CFP 20년의 재무설계 노하우를 담아 만들어진 AI 재무코치예요.<br><br>오늘 딱 5분, <strong>DESIRE 로드맵</strong>으로 고객님의 재무 현재 위치를 정확히 진단해 드릴게요.<br><br>⚠️ 상담 내용은 저장되지 않으며, 금융상품 판매에 사용되지 않습니다.<br><br>개인 재무정보 입력에 동의하시겠어요?`,
+      `안녕하세요! 😊 저는 <strong>AI 머니야</strong>입니다.<br><br>지금 바로 <strong>DESIRE 로드맵</strong>으로 재무 현재 위치를 진단해 드릴게요.<br><br>개인 재무정보 입력에 동의하시겠어요?`,
       [{label:'✅ 동의하고 시작합니다',next:'AGREE'}]
     );
-  },50);
+  } else {
+    setTimeout(_startGreeting, 200); // 200ms마다 재확인
+  }
 }
 
 renderAll();
+// 페이지 로드 즉시 WS 미리 연결 — 버튼 클릭 전에 준비 완료
+setTimeout(()=>{ connectWS(); },500);
 </script>
 </body>
 </html>
