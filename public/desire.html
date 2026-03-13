@@ -831,13 +831,12 @@ async function speak(text){
 async function processTTSQueue(){
   if(ttsQueue.length===0){
     ttsPlaying=false;
-    // TTS 큐 완전히 비었을 때만 STT 재개
-    if(ttsQueue.length===0){ setTimeout(resumeSTT,400); }
+    // TTS 큐 완전히 비었을 때만 STT 재개 — 1초 딜레이로 잔향 방지
+    if(ttsQueue.length===0){ setTimeout(resumeSTT,1000); }
     return;
   }
-  ttsPlaying=true;
-  // TTS 재생 시작 - STT 일시정지 (머니야 목소리 인식 방지)
-  pauseSTT();
+  ttsPlaying=true; // pauseSTT 전에 먼저 true — onend에서 STT 재시작 차단
+  pauseSTT(); // STT 완전 중지 (머니야 목소리 인식 방지)
   const txt=ttsQueue.shift();
   try{
     const res=await fetch(TTS_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt,voice:'nova'})});
