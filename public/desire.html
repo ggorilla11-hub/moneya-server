@@ -78,7 +78,8 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 }
 /* 모바일 */
 @media(max-width:767px){
-  #app{grid-template-columns:1fr;grid-template-rows:50px 1fr auto 58px;grid-template-areas:"top" "mob" "qmob" "imob";}
+  #app{grid-template-columns:1fr;grid-template-rows:50px 1fr auto;grid-template-areas:"top" "mob" "qmob";padding-bottom:58px;}
+  #imob{position:fixed;bottom:0;left:0;right:0;z-index:100;}
   #lft,#ctr,#rgt,#stt{display:none!important;}
   #mob-shell{display:flex!important;flex-direction:column;overflow:hidden;}
 }
@@ -668,6 +669,7 @@ function initAudioCtx(){
 
 /* ── WebSocket 연결 (시작 시 1회) ── */
 let _wsConnected=false;
+let _gameStarted=false; // go() 버튼 클릭 전까지 음성 인식 처리 차단
 function connectWS(){
   if(_wsConnected) return; // 절대 중복 연결 방지
   if(ws&&(ws.readyState===0||ws.readyState===1))return;
@@ -691,6 +693,7 @@ function connectWS(){
     }
     if(msg.type==='input_audio_buffer.speech_started'){ stopWsAudio(); }
     if(msg.type==='conversation.item.input_audio_transcription.completed'){
+      if(!_gameStarted) return; // 게임 시작 전 무시
       const txt=(msg.transcript||'').trim();
       if(txt){
         setMicStatus('🎤 음성 ON');
@@ -728,6 +731,7 @@ function startSTT(){
   _stt.onstart=()=>{ setMicStatus('🎤 음성 ON'); };
 
   _stt.onresult=(e)=>{
+    if(!_gameStarted) return;
     let interim='', final='';
     for(let i=e.resultIndex;i<e.results.length;i++){
       if(e.results[i].isFinal) final+=e.results[i][0].transcript;
@@ -750,13 +754,13 @@ function startSTT(){
     }
     // no-speech, aborted, network 등 나머지는 무시하고 재시작
     _stt=null;
-    if(!ttsPlaying) setTimeout(startSTT, 500);
+    if(_gameStarted&&!ttsPlaying) setTimeout(startSTT, 500);
   };
 
   _stt.onend=()=>{
-    if(ttsPlaying){ _stt=null; return; } // TTS 재생 중이면 대기
+    if(!_gameStarted||ttsPlaying){ _stt=null; return; } // 게임 시작 전 또는 TTS 중이면 재시작 금지
     _stt=null;
-    setTimeout(startSTT, 300); // wsReady 무관하게 재시작
+    setTimeout(()=>{ if(_gameStarted&&!ttsPlaying) startSTT(); }, 300);
   };
 
   try{ _stt.start(); }catch(e){ _stt=null; } // 실패해도 조용히
@@ -772,7 +776,7 @@ function pauseSTT(){
   }
 }
 function resumeSTT(){
-  // 기존 STT 완전히 정리 후 새로 시작
+  if(!_gameStarted) return; // 게임 시작 전 절대 STT 켜지 않음
   if(_stt){
     try{_stt.onend=null;_stt.onresult=null;_stt.abort();}catch(e){}
     _stt=null;
@@ -820,6 +824,18 @@ function stopWsAudio(){
 /* ══ TTS(nova) — 클릭/텍스트 답변 시 AI 응답 음성 ══ */
 const TTS_ENDPOINT='https://moneya-server.onrender.com/api/tts';
 let ttsQueue=[],ttsPlaying=false;
+let _greetingAudioCache=null; // 첫 인사말 TTS 미리 캐시
+
+// 페이지 로드 시 첫 인사말 TTS 미리 fetch
+async function prefetchGreeting(){
+  try{
+    const res=await fetch(TTS_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:'안녕하세요! 저는 AI 머니야입니다. 오상열 CFP 20년의 재무설계 노하우를 담아 만들어진 AI 재무코치예요. 오늘 딱 5분, DESIRE 로드맵으로 고객님의 재무 현재 위치를 정확히 진단해 드릴게요. 상담 내용은 저장되지 않으며, 금융상품 판매에 사용되지 않습니다. 개인 재무정보 입력에 동의하시겠어요?',voice:'nova'})});
+    if(!res.ok)return;
+    const data=await res.json();
+    if(data.success&&data.audio) _greetingAudioCache=data.audio;
+  }catch(e){}
+}
 
 async function speak(text){
   if(!ttsOn)return;
@@ -831,18 +847,26 @@ async function speak(text){
 async function processTTSQueue(){
   if(ttsQueue.length===0){
     ttsPlaying=false;
-    // TTS 큐 완전히 비었을 때만 STT 재개 — 1초 딜레이로 잔향 방지
-    if(ttsQueue.length===0){ setTimeout(resumeSTT,1000); }
+    // TTS 큐 완전히 비었을 때만 STT 재개 — 1.5초 딜레이로 잔향 완전 제거
+    if(ttsQueue.length===0){ setTimeout(()=>{ if(_gameStarted) resumeSTT(); },1500); }
     return;
   }
   ttsPlaying=true; // pauseSTT 전에 먼저 true — onend에서 STT 재시작 차단
   pauseSTT(); // STT 완전 중지 (머니야 목소리 인식 방지)
   const txt=ttsQueue.shift();
   try{
-    const res=await fetch(TTS_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt,voice:'nova'})});
-    if(!res.ok)throw new Error('TTS fail');
-    const data=await res.json();
-    if(!data.success||!data.audio)throw new Error('no audio');
+    // 첫 인사말 캐시 사용 시 즉시 재생
+    let audioData=null;
+    if(_greetingAudioCache && txt.startsWith('안녕하세요! 저는 AI 머니야')){
+      audioData=_greetingAudioCache; _greetingAudioCache=null;
+    } else {
+      const res=await fetch(TTS_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt,voice:'nova'})});
+      if(!res.ok)throw new Error('TTS fail');
+      const data=await res.json();
+      if(!data.success||!data.audio)throw new Error('no audio');
+      audioData=data.audio;
+    }
+    const data={audio:audioData};
     const binary=atob(data.audio);
     const bytes=new Uint8Array(binary.length);
     for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
@@ -1667,6 +1691,7 @@ function showResult(){
 
 /* ══ 시작 ══ */
 function go(){
+  _gameStarted=true; // 이 시점부터 음성 인식 처리 시작
   initAudioCtx();
   const lo=document.getElementById('landing');
   lo.classList.add('gone');setTimeout(()=>lo.style.display='none',480);
@@ -1687,8 +1712,9 @@ function _startGreeting(){
 }
 
 renderAll();
-// 페이지 로드 즉시 WS 미리 연결
+// 페이지 로드 즉시 WS 연결 + 첫 인사말 TTS 미리 준비 — 버튼 클릭 즉시 음성 출력
 connectWS();
+prefetchGreeting();
 </script>
 </body>
 </html>
