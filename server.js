@@ -481,6 +481,14 @@ DSR(%)      = 월원리금 / 월소득 × 100
 ${name}님의 든든한 금융 친구가 되어드릴게요!`;
 };
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// DESIRE-002 | desire.html 서빙 라우트 | 2026-03-13
+// 목적: moneya-server.onrender.com/desire.html 접근 허용
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+app.get('/desire.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'desire.html'));
+});
+
 app.get('/', (req, res) => {
   res.json({
     status: 'AI머니야 서버 실행 중!', version: '9.1 (Smart Note Phase3)',
@@ -786,32 +794,17 @@ wss.on('connection', (ws, req) => {
                     required: ['calculation_type', 'inputs']
                   }
                 },
-                // ══ Phase 3: 스마트노트 Function Calling (신규 추가) ══
                 {
                   type: 'function',
                   name: 'update_smart_note',
-                  description: '화상상담 중 스마트 노트에 콘텐츠를 표시합니다. 금융집짓기 구조를 설명할 때, 수치를 계산했을 때, 차트가 필요할 때, 관련 영상이나 웹자료를 보여줄 때 호출하세요. 단순 대화에서는 호출하지 마세요.',
+                  description: '화상상담 중 스마트 노트에 콘텐츠를 표시합니다.',
                   parameters: {
                     type: 'object',
                     properties: {
-                      note_type: {
-                        type: 'string',
-                        enum: ['house_svg', 'chart', 'calculation', 'video', 'web', 'image', 'checklist'],
-                        description: '노트 콘텐츠 타입. house_svg=금융집짓기 SVG, chart=차트, calculation=계산결과, video=동영상, web=웹자료, image=이미지, checklist=체크리스트'
-                      },
-                      title: {
-                        type: 'string',
-                        description: '노트 상단에 표시할 제목 (예: "은퇴자금 시뮬레이션", "금융집짓기 현황")'
-                      },
-                      content: {
-                        type: 'string',
-                        description: 'JSON 문자열로 된 콘텐츠 데이터'
-                      },
-                      highlight_floor: {
-                        type: 'string',
-                        enum: ['basement', 'pillar_debt', 'pillar_savings', 'pillar_retirement', 'eaves', 'roof_investment', 'roof_tax', 'chimney', 'none'],
-                        description: 'house_svg 타입일 때 강조할 금융집 영역'
-                      }
+                      note_type: { type: 'string', enum: ['house_svg', 'chart', 'calculation', 'video', 'web', 'image', 'checklist'] },
+                      title: { type: 'string' },
+                      content: { type: 'string' },
+                      highlight_floor: { type: 'string', enum: ['basement', 'pillar_debt', 'pillar_savings', 'pillar_retirement', 'eaves', 'roof_investment', 'roof_tax', 'chimney', 'none'] }
                     },
                     required: ['note_type', 'title', 'content']
                   }
@@ -819,31 +812,20 @@ wss.on('connection', (ws, req) => {
                 {
                   type: 'function',
                   name: 'clear_smart_note',
-                  description: '스마트 노트를 초기 상태로 되돌립니다. 주제가 바뀌거나 새로운 분석을 시작할 때 호출하세요.',
-                  parameters: {
-                    type: 'object',
-                    properties: {
-                      message: { type: 'string', description: '초기화 시 표시할 메시지' }
-                    }
-                  }
+                  description: '스마트 노트를 초기 상태로 되돌립니다.',
+                  parameters: { type: 'object', properties: { message: { type: 'string' } } }
                 }
-                // ══ Phase 3 끝 ══
               ],
               tool_choice: 'auto'
             }
           }));
           ws.send(JSON.stringify({ type: 'session_started' }));
-          
-          // AI 머니야가 먼저 인사 시작
+
           setTimeout(() => {
             if (openaiWs.readyState === 1) {
               openaiWs.send(JSON.stringify({
                 type: 'conversation.item.create',
-                item: {
-                  type: 'message',
-                  role: 'user',
-                  content: [{ type: 'input_text', text: '상담을 시작해주세요. 고객님께 먼저 인사하고 성함과 나이를 확인해주세요.' }]
-                }
+                item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '상담을 시작해주세요. 고객님께 먼저 인사하고 성함과 나이를 확인해주세요.' }] }
               }));
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
             }
@@ -853,173 +835,205 @@ wss.on('connection', (ws, req) => {
         openaiWs.on('message', (data) => {
           try {
             const event = JSON.parse(data.toString());
+            if (event.type === 'response.audio.delta' && event.delta) ws.send(JSON.stringify({ type: 'audio', data: event.delta }));
+            if (event.type === 'input_audio_buffer.speech_started') ws.send(JSON.stringify({ type: 'interrupt' }));
+            if (event.type === 'response.audio_transcript.done') { console.log('[상담WS] 머니야:', event.transcript?.slice(0, 50)); ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' })); }
+            if (event.type === 'conversation.item.input_audio_transcription.completed') { console.log('[상담WS] 사용자:', event.transcript); ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'user' })); }
 
-            if (event.type === 'response.audio.delta' && event.delta)
-              ws.send(JSON.stringify({ type: 'audio', data: event.delta }));
-
-            if (event.type === 'input_audio_buffer.speech_started')
-              ws.send(JSON.stringify({ type: 'interrupt' }));
-
-            if (event.type === 'response.audio_transcript.done') {
-              console.log('[상담WS] 머니야:', event.transcript?.slice(0, 50));
-              ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
-            }
-
-            if (event.type === 'conversation.item.input_audio_transcription.completed') {
-              console.log('[상담WS] 사용자:', event.transcript);
-              ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'user' }));
-            }
-
-            // ── Function Calling 처리 ──────────────────────────────
             if (event.type === 'response.function_call_arguments.done') {
               const fnName = event.name;
               const callId = event.call_id;
               let args = {};
               try { args = JSON.parse(event.arguments || '{}'); } catch(e) {}
-
               console.log(`[상담FC] ${fnName} 호출:`, JSON.stringify(args));
               let result = '';
 
-              // 1. RAG 지식 검색
               if (fnName === 'search_financial_knowledge') {
-                const ragResults     = searchRAG(args.query, 5);
+                const ragResults = searchRAG(args.query, 5);
                 const formulaResults = searchFormulaRAG(args.query, 3);
-                const ragText        = ragResults.map(r => `[${r.source}] ${r.content}`).join('\n');
-                const formulaText    = buildFormulaContext(formulaResults);
-                const expertMap = {
-                  insurance:     '보장기준: 사망 연봉3배, 장해3배, 암 연봉1~2배, 뇌1배, 심장1배, 실손5천만원. 보험료 소득의 10%.',
-                  retirement:    '은퇴4대변수: 은퇴나이(평균73), 수명(90), 월노후생활비(현재70%), 현재준비. 10억×3.5%÷12=월300만원.',
-                  debt_savings:  '부채=거실 쓰레기. 신용대출 즉시상환. 비상예비자금=월생활비×6개월.',
-                  investment_tax:'기초없이 지붕(투자)만 올리면 무너짐. 골든밸런스7:3. 절세: 연금저축600+IRP300=연900만원.',
-                  realestate:    '소득에 맞는 크기의 집. 주거비(원리금) 소득30%이하 안전, 40%초과 위험.',
-                  budget:        '가구원수별: 생활비(1인20%,2인30%,3인40%,4인50%,5인60%), 저축투자(1인50%,2인40%,3인30%,4인20%,5인10%).',
-                  general:       '금융집짓기® 8단계: 지하(보험+비상금)→기둥(부채/저축/은퇴)→처마(생로병사)→지붕(투자/세금)→굴뚝(부동산).'
-                };
-                const expertKnowledge = expertMap[args.category] || expertMap.general;
-                result = `[RAG검색결과]\n${ragText}\n[공식/수식]\n${formulaText}\n[전문지식]\n${expertKnowledge}`;
-                console.log(`[상담FC] RAG ${ragResults.length}건 검색 완료`);
-
-                // 스마트 노트 자동 전환 신호 (기존 호환용)
-                const noteTypeMap = { insurance:'house', retirement:'chart', debt_savings:'calc', investment_tax:'chart', realestate:'web', budget:'calc', general:'house' };
-                ws.send(JSON.stringify({ type: 'note_update', note_type: noteTypeMap[args.category] || 'house', highlight: args.category, query: args.query }));
+                const ragText = ragResults.map(r => `[${r.source}] ${r.content}`).join('\n');
+                const formulaText = buildFormulaContext(formulaResults);
+                const expertMap = { insurance: '보장기준: 사망 연봉3배, 장해3배, 암 연봉1~2배, 뇌1배, 심장1배, 실손5천만원.', retirement: '은퇴4대변수: 은퇴나이(평균73), 수명(90), 월노후생활비(현재70%), 현재준비.', debt_savings: '부채=거실 쓰레기. 신용대출 즉시상환. 비상예비자금=월생활비×6개월.', investment_tax: '기초없이 지붕(투자)만 올리면 무너짐. 골든밸런스7:3.', realestate: '소득에 맞는 크기의 집. 주거비(원리금) 소득30%이하 안전.', budget: '가구원수별: 생활비(1인20%,2인30%,3인40%,4인50%,5인60%), 저축투자 역순.', general: '금융집짓기® 8단계: 지하(보험+비상금)→기둥(부채/저축/은퇴)→지붕(투자/세금)→굴뚝(부동산).' };
+                result = `[RAG검색결과]\n${ragText}\n[공식]\n${formulaText}\n[전문지식]\n${expertMap[args.category] || expertMap.general}`;
+                ws.send(JSON.stringify({ type: 'note_update', note_type: 'house', highlight: args.category, query: args.query }));
               }
-
-              // 2. 재무 계산
               if (fnName === 'calculate_financial') {
                 const inp = args.inputs || {};
-                if (args.calculation_type === 'wealth_index') {
-                  const netAssets  = Number(inp.netAssets)    || 0;
-                  const age        = Number(inp.age)          || 30;
-                  const monthlyInc = Number(inp.monthlyIncome)|| 300;
-                  const index      = Math.round((netAssets * 10) / (age * monthlyInc * 12) * 100);
-                  const gradeMap   = [[200,'궁전(우등생)'],[100,'아파트(평균)'],[50,'빌라(노력필요)'],[25,'오두막(위험)'],[0,'텐트(긴급)']];
-                  const grade      = gradeMap.find(([min]) => index >= min)?.[1] || '텐트(긴급)';
-                  result = `부자지수: ${index}점 (${grade}). 100점이 평균, 200점 이상이 우등생입니다.`;
-                  ws.send(JSON.stringify({ type: 'note_update', note_type: 'calc', data: { wealth_index: index, grade } }));
-                }
-                else if (args.calculation_type === 'savings_rate') {
-                  const savings  = Number(inp.savings)      || 0;
-                  const pension  = Number(inp.pension)      || 0;
-                  const income   = Number(inp.monthlyIncome)|| 300;
-                  const rate     = Math.round((savings + pension) / income * 100);
-                  result = `저축률: ${rate}%. 최소 20% 이상 권장. 현재 ${rate >= 20 ? '✅ 양호' : '⚠️ 부족'}.`;
-                }
-                else if (args.calculation_type === 'retirement_fund') {
-                  const monthlyExp  = Number(inp.monthlyExpense)  || 250;
-                  const pubPension  = Number(inp.publicPension)   || 50;
-                  const privPension = Number(inp.privatePension)  || 0;
-                  const retireAge   = Number(inp.retireAge)       || 65;
-                  const lifeExp     = Number(inp.lifeExpectancy)  || 90;
-                  const gap         = monthlyExp - pubPension - privPension;
-                  const lumpSum     = gap * 12 * (lifeExp - retireAge);
-                  result = `월 부족자금: ${gap}만원. 은퇴일시금: ${lumpSum}만원(${(lumpSum/10000).toFixed(1)}억원) 필요.`;
-                  ws.send(JSON.stringify({ type: 'note_update', note_type: 'chart', data: { gap, lumpSum, retireAge, lifeExp } }));
-                }
-                else if (args.calculation_type === 'budget_check') {
-                  const income  = Number(inp.monthlyIncome) || 500;
-                  const living  = Number(inp.livingExpense) || 0;
-                  const family  = Number(inp.familySize)    || 1;
-                  const stdMap  = {1:20, 2:30, 3:40, 4:50, 5:60};
-                  const stdPct  = stdMap[Math.min(family,5)] || 50;
-                  const stdAmt  = Math.round(income * stdPct / 100);
-                  const actual  = Math.round(living / income * 100);
-                  const diff    = living - stdAmt;
-                  result = diff > 0
-                    ? `⚠️ 생활비 초과! ${family}인 기준 ${stdPct}%(${stdAmt}만원)인데 현재 ${actual}%(${living}만원). ${diff}만원 초과.`
-                    : `✅ 생활비 양호. ${family}인 기준 ${stdPct}%(${stdAmt}만원) 이내.`;
-                  ws.send(JSON.stringify({ type: 'note_update', note_type: 'calc', data: { income, living, stdAmt, diff, family } }));
-                }
-                else if (args.calculation_type === 'dsr') {
-                  const monthlyRep = Number(inp.monthlyRepayment) || 0;
-                  const income     = Number(inp.monthlyIncome)    || 300;
-                  const dsr        = Math.round((monthlyRep * 12) / (income * 12) * 100);
-                  const level      = dsr <= 40 ? '✅ 안전' : dsr <= 60 ? '⚠️ 주의' : '🚨 위험';
-                  result = `DSR: ${dsr}%. ${level}. (40% 이하 안전, 60% 초과 위험)`;
-                }
-                else if (args.calculation_type === 'insurance_gap') {
-                  const income = Number(inp.monthlyIncome) || 300;
-                  const annual = income * 12;
-                  result = `보장 기준 — 사망: ${annual*3}만원(연봉3배), 암: ${annual}~${annual*2}만원, 뇌/심장: 각 ${annual}만원, 실손: 5,000만원.`;
-                  ws.send(JSON.stringify({ type: 'note_update', note_type: 'house', highlight: 'insurance', data: { annual } }));
-                }
-                else { result = '해당 계산 유형을 처리할 수 없습니다.'; }
-                console.log(`[상담FC] 계산 완료 (${args.calculation_type}):`, result);
+                if (args.calculation_type === 'wealth_index') { const index = Math.round((Number(inp.netAssets||0)*10)/(Number(inp.age||30)*Number(inp.monthlyIncome||300)*12)*100); const grade = [[200,'궁전'],[100,'아파트'],[50,'빌라'],[25,'오두막'],[0,'텐트']].find(([m])=>index>=m)?.[1]||'텐트'; result = `부자지수: ${index}점 (${grade}).`; ws.send(JSON.stringify({ type: 'note_update', note_type: 'calc', data: { wealth_index: index, grade } })); }
+                else if (args.calculation_type === 'retirement_fund') { const gap = Number(inp.monthlyExpense||250)-Number(inp.publicPension||50)-Number(inp.privatePension||0); const lumpSum = gap*12*(Number(inp.lifeExpectancy||90)-Number(inp.retireAge||65)); result = `월 부족자금: ${gap}만원. 은퇴일시금: ${lumpSum}만원 필요.`; }
+                else if (args.calculation_type === 'budget_check') { const income=Number(inp.monthlyIncome||500); const living=Number(inp.livingExpense||0); const family=Number(inp.familySize||1); const stdPct={1:20,2:30,3:40,4:50,5:60}[Math.min(family,5)]||50; const stdAmt=Math.round(income*stdPct/100); const diff=living-stdAmt; result = diff>0?`⚠️ 생활비 ${diff}만원 초과.`:`✅ 생활비 양호.`; }
+                else if (args.calculation_type === 'dsr') { const dsr=Math.round((Number(inp.monthlyRepayment||0)*12)/(Number(inp.monthlyIncome||300)*12)*100); result = `DSR: ${dsr}%. ${dsr<=40?'✅ 안전':dsr<=60?'⚠️ 주의':'🚨 위험'}.`; }
+                else if (args.calculation_type === 'insurance_gap') { const annual=Number(inp.monthlyIncome||300)*12; result = `사망: ${annual*3}만원, 암: ${annual}~${annual*2}만원, 실손: 5,000만원.`; }
+                else { result = '계산 완료.'; }
               }
-
-              // ══ Phase 3: 스마트노트 직접 제어 (신규) ══
               if (fnName === 'update_smart_note') {
-                const noteType       = args.note_type || 'house_svg';
-                const title          = args.title || '';
-                const highlightFloor = args.highlight_floor || 'none';
-                let content = {};
-                try { content = JSON.parse(args.content || '{}'); } catch { content = { text: args.content || '' }; }
-
-                // 프론트엔드로 smart_note_update 전송
-                ws.send(JSON.stringify({
-                  type: 'smart_note_update',
-                  noteType,
-                  title,
-                  content,
-                  highlightFloor
-                }));
-
-                result = `스마트 노트에 "${title}" (${noteType}) 표시 완료. 고객이 화면에서 보고 있습니다. 이 내용을 가리키며 설명해주세요.`;
-                console.log(`[상담FC] 스마트노트 업데이트: ${noteType} / "${title}" / highlight: ${highlightFloor}`);
+                let content = {}; try { content = JSON.parse(args.content||'{}'); } catch { content = { text: args.content||'' }; }
+                ws.send(JSON.stringify({ type: 'smart_note_update', noteType: args.note_type, title: args.title, content, highlightFloor: args.highlight_floor||'none' }));
+                result = `스마트 노트에 "${args.title}" 표시 완료.`;
               }
-
               if (fnName === 'clear_smart_note') {
-                ws.send(JSON.stringify({
-                  type: 'smart_note_clear',
-                  message: args.message || ''
-                }));
-                result = '스마트 노트가 초기화되었습니다.';
-                console.log('[상담FC] 스마트노트 초기화');
+                ws.send(JSON.stringify({ type: 'smart_note_clear', message: args.message||'' }));
+                result = '스마트 노트 초기화 완료.';
               }
-              // ══ Phase 3 끝 ══
 
-              // Realtime에 결과 반환 → 음성 답변 생성
-              openaiWs.send(JSON.stringify({
-                type: 'conversation.item.create',
-                item: { type: 'function_call_output', call_id: callId, output: result || '처리 완료' }
-              }));
+              openaiWs.send(JSON.stringify({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: result || '처리 완료' } }));
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
             }
-            // ── Function Calling 블록 끝 ──────────────────────────
 
-            if (event.type === 'error') {
-              console.error('[상담WS] OpenAI 에러:', event.error);
-              ws.send(JSON.stringify({ type: 'error', error: event.error?.message }));
-            }
+            if (event.type === 'error') { console.error('[상담WS] OpenAI 에러:', event.error); ws.send(JSON.stringify({ type: 'error', error: event.error?.message })); }
           } catch (e) { console.error('[상담WS] 메시지 파싱 에러:', e); }
         });
 
-        openaiWs.on('error', (err) => {
-          console.error('[상담WS] OpenAI 에러:', err.message);
-          ws.send(JSON.stringify({ type: 'error', error: err.message }));
-        });
+        openaiWs.on('error', (err) => { console.error('[상담WS] OpenAI 에러:', err.message); ws.send(JSON.stringify({ type: 'error', error: err.message })); });
         openaiWs.on('close', () => console.log('[상담WS] OpenAI 연결 종료'));
         return;
       }
+
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // DESIRE-003 | start_desire WebSocket 핸들러 | 2026-03-13
+      // 목적: DESIRE 6단계 AI 음성 무료 재무진단 전용 Realtime 세션
+      // 모델: gpt-4o-mini-realtime-preview-2024-12-17
+      // 음성: shimmer / VAD: server_vad / tool_choice: none
+      // 트리거: ws?mode=desire → { type: 'start_desire' }
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      if (msg.type === 'start_desire') {
+        console.log('[DESIRE-WS] DESIRE 무료 재무진단 세션 시작');
+
+        const desirePrompt = `당신은 AI 금융집사 "머니야"입니다.
+오상열 CFP(20년 경력, 2,000건 상담)의 금융집짓기® 방법론 중 DESIRE 로드맵으로 고객의 재무 현황을 진단합니다.
+
+국내 최초 음성리딩 AI 금융집사로서 고객의 재무 현황을 DESIRE 6단계로 5~10분 안에 진단합니다.
+
+═══════════════════════════════════════
+【핵심 원칙】
+═══════════════════════════════════════
+• 질문을 기다리지 마세요. 먼저 질문하고 D→E→S→I→R→E 순서로 리딩하세요.
+• 모든 답변 마지막에는 반드시 다음 단계 안내 또는 다음 질문이 있어야 합니다.
+• 숫자로 놀라게 하고, 비유로 쉽게 설명하고, 따뜻하지만 직설적으로 말하세요.
+• 음성 대화이므로 짧고 명확하게 말하세요 (2~3문장).
+• 반드시 존댓말. 한국어로만 대화.
+• 이모지 사용 금지. 아라비아 숫자 금지 — 금액은 한글로 (삼백만원, 오천만원).
+• 금칙어: 특정 금융상품 추천, 수익 보장, 탈세·불법, 매수·매도 타이밍 판단.
+
+═══════════════════════════════════════
+【DESIRE 6단계 진단 흐름】
+═══════════════════════════════════════
+현재 진행 단계를 항상 추적하고, 트리거 조건이 충족되면 자동으로 다음 단계로 이동하세요.
+
+【오프닝】
+트리거: 세션 시작
+멘트: "안녕하세요! 저는 AI 금융집사 머니야입니다. 오상열 CFP 20년 경력과 2천 건 상담 경험이 담긴 금융집짓기® 방법론으로, 고객님의 재무 현황을 DESIRE 로드맵 6단계로 진단해드리겠습니다. 진단은 5분이면 완료되며 결과는 저장되지 않고 금융상품 판매에 사용되지 않습니다. 먼저 성함을 알려주시겠어요?"
+다음 트리거: 이름 확인 → D단계 시작
+
+【D단계: Debt Free — 신용대출 상환】
+트리거: 오프닝 완료
+멘트: "재무 건강의 첫 번째 점검입니다. 현재 신용대출 — 카드론, 마이너스통장, 개인신용대출 포함 — 이 있으십니까?"
+YES(없음): "잘 하고 계십니다! D단계 통과입니다. 바로 E단계로 이동할게요."
+NO(있음): "신용대출이 있는 상태에서는 다른 재무 계획보다 부채 상환이 최우선입니다. 가장 효과적인 방법은 스노우볼 전략입니다 — 금액이 작은 대출부터 먼저 갚으면 성취감이 높아지고 이자 부담도 빠르게 줄어듭니다. 정확한 상환 순서와 월별 실행 계획은 본상담에서 함께 설계해드릴 수 있습니다. E단계로 넘어가겠습니다."
+다음 트리거: 답변 완료 → E단계 (YES/NO 상관없이 반드시 E단계로 이동)
+
+【E단계: Emergency Fund — 비상예비자금】
+트리거: D단계 완료
+멘트: "두 번째 단계입니다. 비상예비자금은 갑작스러운 실직이나 병원비에 대비하는 생활안전망입니다. 맞벌이는 월 생활비의 3개월치, 외벌이는 6개월치를 별도 계좌에 분리 보관해야 합니다. 현재 이 금액이 준비되어 있으십니까?"
+YES: "훌륭합니다! E단계 통과입니다."
+NO: "비상예비자금이 없으면 갑작스러운 지출이 생길 때 신용대출을 쓰게 됩니다. 두 가지 방법이 있습니다. 첫째, 매월 일정 금액을 생활비 계좌와 완전히 분리된 계좌로 자동이체하는 방법. 둘째, 상여금이나 성과급 등 비정기수입이 생길 때마다 우선적으로 쌓는 방법. 어떤 방법이 더 현실적으로 느껴지세요? 본상담에서 구체적인 목표 금액을 함께 계산해드릴게요."
+다음 트리거: 답변 완료 → S단계
+
+【S단계: Save & Invest — 적립식 저축투자】
+트리거: E단계 완료
+사전 수집: "세 번째 단계입니다. 먼저 몇 가지 여쭤볼게요. 결혼은 하셨나요? 자녀분은 계신가요? 그리고 부부 합산 월 소득이 세후로 얼마나 되세요?"
+계산: 월 소득 × 40% = 저축투자 30% + 노후연금 10%
+멘트: "[소득]만원 기준으로, 저축투자 30%와 노후연금 10%를 합쳐 매달 최소 [소득×40%]만원은 적립해야 합니다. 현재 저축, 투자, 연금 합산으로 이 금액을 적립하고 계십니까?"
+YES: "잘 하고 계십니다! S단계 통과입니다."
+NO: "지금은 [현재 저축액]만원이시네요. 앞의 D단계와 E단계가 해결되면 자연스럽게 여력이 생기는 구조입니다. 본상담에서 3버킷 배분 전략으로 자동화 시스템을 만들어 드릴게요."
+다음 트리거: 답변 완료 → I단계
+
+【I단계: Investment — 거치식 자산운용】
+트리거: S단계 완료
+멘트: "네 번째 단계입니다. 거치식 자산운용은 목돈을 여러 자산에 분산 투자하여 자산 자체가 수익을 만들어내도록 하는 단계입니다. 현재 예금, 주식, 펀드, 부동산 등 금융자산 합산이 십억원 이상이십니까?"
+YES: "대단하십니다! I단계 통과입니다."
+NO: "십억이라는 숫자가 막막하게 느껴지실 수 있어요. 하지만 S단계에서 매달 꾸준히 적립하면 복리 효과로 목표에 자연스럽게 도달합니다. 본상담에서 목표 자산 구성을 구체적으로 설계해드릴게요."
+다음 트리거: 답변 완료 → R단계
+
+【R단계: Repay Mortgage — 담보대출 상환】
+트리거: I단계 완료
+멘트: "다섯 번째 단계입니다. 신용대출과 달리 주택담보대출은 금리가 낮으므로 급하게 갚을 필요는 없지만, 은퇴 전까지는 반드시 완납해야 합니다. 현재 주택담보대출이 남아 있으십니까?"
+YES(없음): "훌륭합니다! R단계 통과입니다."
+NO(있음): "담보대출은 은퇴 전에 완납하는 것을 목표로 하셔야 합니다. 은퇴 후에는 고정 수입이 줄어들기 때문에 대출 원리금이 큰 부담이 됩니다. 정확한 상환 스케줄은 본상담에서 함께 설계해드릴게요."
+다음 트리거: 답변 완료 → E2단계
+
+【E2단계: Early Retirement — 경제적 조기은퇴】
+트리거: R단계 완료
+멘트: "마지막 단계입니다! 경제적 조기은퇴는 DESIRE 로드맵의 최종 목적지입니다. 두 가지만 알려주세요. 몇 세에 은퇴하고 싶으신가요? 그리고 은퇴 후 월 얼마가 필요하신가요?"
+계산: 월 생활비 × 12개월 × 은퇴 후 생존기간(30년) = 필요 은퇴 자산
+멘트: "월 [생활비]만원으로 [은퇴나이]세에 은퇴하시려면, 약 [생활비×360]만원, 즉 [계산결과]억원이 필요합니다. 국민연금과 퇴직연금을 차감하면 순수하게 준비해야 할 금액이 나옵니다. 정확한 계산은 본상담에서 함께 해드릴게요."
+다음 트리거: 계산 완료 → 클로징
+
+【클로징】
+트리거: E2단계 완료
+멘트: "고객님의 DESIRE 로드맵 진단이 완료되었습니다! 오늘 진단은 시작입니다. 60분 본상담에서 각 단계별 월별 실행 플랜으로 완성해드릴게요. 본상담에서는 금융집짓기® 맞춤 재무설계도, 상담 전 과정 녹화 영상, 재무상담 수료증, CFP 팔로업 콜을 제공해드립니다. 지금 알게 되셨으니까 고칠 수 있어요! 오늘부터 시작하면 됩니다!"
+
+═══════════════════════════════════════
+【오상열 화법 원칙】
+═══════════════════════════════════════
+• 항상 질문으로 리딩: "~은 어떻게 되세요?"
+• 숫자로 놀라게: "월 삼백만원×30년=십억 팔천만원입니다"
+• 비유 사용: 금융집짓기, 스노우볼, 3버킷
+• 공감 먼저: "그 고민 충분히 이해합니다"
+• 희망으로 마무리: "지금 알게 되셨으니까 고칠 수 있어요!"
+• 본상담 연결: "정확한 플랜은 60분 본상담에서 함께 만들어드릴게요"`;
+
+        openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17', {
+          headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' }
+        });
+
+        openaiWs.on('open', () => {
+          console.log('[DESIRE-WS] OpenAI Realtime 연결');
+          openaiWs.send(JSON.stringify({
+            type: 'session.update',
+            session: {
+              modalities: ['text', 'audio'],
+              instructions: desirePrompt,
+              voice: 'shimmer',
+              input_audio_format: 'pcm16',
+              output_audio_format: 'pcm16',
+              input_audio_transcription: { model: 'whisper-1', language: 'ko' },
+              turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 1500 },
+              tool_choice: 'none'
+            }
+          }));
+          ws.send(JSON.stringify({ type: 'session_started' }));
+
+          // 500ms 후 AI 머니야 자동 오프닝 시작
+          setTimeout(() => {
+            if (openaiWs && openaiWs.readyState === 1) {
+              openaiWs.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '진단을 시작해주세요. 고객님께 오프닝 멘트로 인사해주세요.' }] }
+              }));
+              openaiWs.send(JSON.stringify({ type: 'response.create' }));
+            }
+          }, 500);
+        });
+
+        openaiWs.on('message', (data) => {
+          try {
+            const event = JSON.parse(data.toString());
+            if (event.type === 'response.audio.delta' && event.delta) ws.send(JSON.stringify({ type: 'audio', data: event.delta }));
+            if (event.type === 'input_audio_buffer.speech_started') ws.send(JSON.stringify({ type: 'interrupt' }));
+            if (event.type === 'response.audio_transcript.done') { console.log('[DESIRE-WS] 머니야:', event.transcript?.slice(0, 60)); ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' })); }
+            if (event.type === 'conversation.item.input_audio_transcription.completed') { console.log('[DESIRE-WS] 고객:', event.transcript); ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'user' })); }
+            if (event.type === 'error') { console.error('[DESIRE-WS] OpenAI 에러:', event.error); ws.send(JSON.stringify({ type: 'error', error: event.error?.message })); }
+          } catch (e) { console.error('[DESIRE-WS] 메시지 파싱 에러:', e); }
+        });
+
+        openaiWs.on('error', (err) => { console.error('[DESIRE-WS] OpenAI 에러:', err.message); ws.send(JSON.stringify({ type: 'error', error: err.message })); });
+        openaiWs.on('close', () => console.log('[DESIRE-WS] OpenAI 연결 종료'));
+        return;
+      }
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // DESIRE-003 끝
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       //  AI지출탭: OpenAI Realtime (기존 유지)
@@ -1063,6 +1077,30 @@ wss.on('connection', (ws, req) => {
       if (msg.type === 'audio' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
         openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: msg.data }));
       }
+
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // DESIRE-004 | text_input 핸들러 | 2026-03-13
+      // 목적: desire.html 텍스트 보조 입력 → OpenAI Realtime 전달
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      if (msg.type === 'text_input' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+        openaiWs.send(JSON.stringify({
+          type: 'conversation.item.create',
+          item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: msg.text }] }
+        }));
+        openaiWs.send(JSON.stringify({ type: 'response.create' }));
+      }
+      // DESIRE-004 끝
+
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // DESIRE-005 | end_session 핸들러 | 2026-03-13
+      // 목적: desire.html 진단 종료 시 OpenAI 세션 정리
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      if (msg.type === 'end_session') {
+        console.log('[DESIRE-WS] 세션 종료 요청');
+        if (openaiWs) { openaiWs.close(); openaiWs = null; }
+      }
+      // DESIRE-005 끝
+
       if (msg.type === 'stop') {
         console.log('[WS] 종료 요청');
         if (openaiWs) openaiWs.close();
