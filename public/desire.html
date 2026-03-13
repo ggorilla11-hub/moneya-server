@@ -77,7 +77,11 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 .lo-cta{display:block;max-width:340px;width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border:none;padding:17px 28px;border-radius:16px;font-size:16px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 6px 28px rgba(200,148,26,.44);transition:all .22s;margin:0 auto;}
 .lo-cta:hover{transform:translateY(-2px);}
 .lo-note{font-size:11px;color:rgba(255,255,255,.32);margin-top:10px;}
-.lo-warn{margin-top:14px;padding:10px 14px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;font-size:11px;color:#fc8181;line-height:1.6;max-width:340px;}
+.lo-warn{margin-top:16px;padding:16px 18px;background:rgba(254,229,0,.1);border:2px solid rgba(254,229,0,.6);border-radius:14px;font-size:13px;color:#FEE500;line-height:1.8;max-width:360px;text-align:left;}
+.lo-warn-title{font-size:15px;font-weight:900;color:#FEE500;display:block;margin-bottom:8px;}
+.lo-warn-steps{display:flex;flex-direction:column;gap:5px;margin-top:8px;}
+.lo-warn-step{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.8);}
+.lo-warn-num{background:#FEE500;color:#1a1a1a;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex-shrink:0;}
 .lo-stats{display:flex;gap:28px;justify-content:center;margin-top:28px;padding-top:24px;border-top:1px solid rgba(255,255,255,.1);}
 .ls-n{font-size:20px;font-weight:900;color:var(--gold2);display:block;}
 .ls-l{font-size:10px;color:rgba(255,255,255,.42);}
@@ -300,7 +304,15 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
   </div>
   <button class="lo-cta" onclick="startSession()">🎤 AI 음성 무료 재무진단 시작 (오분)</button>
   <div class="lo-note">⚠️ 상담 내용은 저장되지 않으며 금융상품 판매에 사용되지 않습니다</div>
-  <div class="lo-warn">🔊 음성 진단입니다. 크롬(Chrome) 브라우저에서 여시면 가장 잘 작동합니다.</div>
+  <div class="lo-warn">
+    <span class="lo-warn-title">⚠️ 카카오톡으로 여셨나요?</span>
+    반드시 <strong>크롬(Chrome)</strong>으로 열어야 음성이 작동합니다!
+    <div class="lo-warn-steps">
+      <div class="lo-warn-step"><div class="lo-warn-num">1</div>우측 하단 <strong>···</strong> 버튼 클릭</div>
+      <div class="lo-warn-step"><div class="lo-warn-num">2</div><strong>다른 브라우저로 열기</strong> 선택</div>
+      <div class="lo-warn-step"><div class="lo-warn-num">3</div><strong>Chrome</strong> 선택 후 시작</div>
+    </div>
+  </div>
   <div class="lo-stats">
     <div><span class="ls-n">2,000+</span><span class="ls-l">진단 건수</span></div>
     <div><span class="ls-n">20년</span><span class="ls-l">CFP 경력</span></div>
