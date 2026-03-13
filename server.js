@@ -523,44 +523,22 @@ const https = require('https');
 
 app.post('/api/desire-feedback', async (req, res) => {
   try {
-    const data = req.body;
-    console.log('[DESIRE-004] 피드백 수신:', JSON.stringify(data).slice(0, 200));
+    const payload = req.body;
+    console.log('[DESIRE-FB] 피드백 수신:', JSON.stringify(payload));
 
-    // 구글시트 Apps Script로 서버에서 직접 전송 (CORS 문제 없음)
     const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwQ0lVhbuSEDLf8E8ILVZbCX2HU1NQgWW-G8yqRXMc3dmRpYbaYUvkBSlCuy9vf9yGTeA/exec';
-    const postData = JSON.stringify(data);
 
-    const result = await new Promise((resolve, reject) => {
-      const urlObj = new URL(SHEET_URL);
-      const options = {
-        hostname: urlObj.hostname,
-        path: urlObj.pathname + urlObj.search,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(postData),
-        },
-        timeout: 10000,
-      };
-      const req2 = https.request(options, (res2) => {
-        let body = '';
-        res2.on('data', chunk => body += chunk);
-        res2.on('end', () => {
-          console.log('[DESIRE-004] 시트 응답:', body.slice(0, 200));
-          resolve({ status: res2.statusCode, body });
-        });
-      });
-      req2.on('error', reject);
-      req2.on('timeout', () => reject(new Error('timeout')));
-      req2.write(postData);
-      req2.end();
+    const response = await fetch(SHEET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
 
-    res.json({ success: true, sheet: result.status });
-  } catch (err) {
-    console.error('[DESIRE-004] 피드백 저장 오류:', err.message);
-    // 오류가 나도 클라이언트에는 성공 응답 (UX 보호)
-    res.json({ success: true, fallback: true });
+    console.log('[DESIRE-FB] 구글시트 응답:', response.status);
+    res.json({ success: true, message: '피드백 저장 완료' });
+  } catch (error) {
+    console.error('[DESIRE-FB] 에러:', error.message);
+    res.json({ success: false, error: error.message });
   }
 });
 
