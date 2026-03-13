@@ -1,773 +1,1018 @@
-const express = require('express');
-const WebSocket = require('ws');
-const cors = require('cors');
-const OpenAI = require('openai');
-const fs = require('fs');
-const path = require('path');
-const multer = require('multer');
-const sharp = require('sharp');
-require('dotenv').config();
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>AI 음성재무진단 — 머니야</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="AI 음성재무진단 — 머니야">
+<meta property="og:description" content="오상열 CFP 20년 노하우 · DESIRE 로드맵으로 5분 만에 재무 현재 위치를 진단합니다">
+<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a">
+<meta property="og:image:width" content="800">
+<meta property="og:image:height" content="800">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="AI 음성재무진단 — 머니야">
+<meta name="twitter:description" content="오상열 CFP 20년 노하우 · DESIRE 로드맵으로 5분 만에 재무 현재 위치를 진단합니다">
+<meta name="twitter:image" content="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0F2A5C;--navy2:#1A3A6E;
+  --gold:#C8941A;--gold2:#E8B830;
+  --bg:#1C1C1E;--panel:#252530;--panel2:#2E2E3A;
+  --border:rgba(255,255,255,0.09);
+  --green:#16A34A;--green2:#34C759;--red:#DC2626;--blue:#3B82F6;
+  --txt:rgba(255,255,255,0.87);--txt2:rgba(255,255,255,0.45);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt);overflow:hidden;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 4px rgba(232,184,48,.14),0 0 36px rgba(232,184,48,.14)}50%{box-shadow:0 0 0 8px rgba(232,184,48,.07),0 0 52px rgba(232,184,48,.26)}}
+@keyframes wave{0%,100%{height:4px;opacity:.3}50%{height:16px;opacity:1}}
+@keyframes typing{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-4px);opacity:1}}
+@keyframes fi{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@keyframes sbar{0%,100%{opacity:1}50%{opacity:.45}}
+.fi{animation:fi .38s ease both;}
+#landing{position:fixed;inset:0;z-index:400;background:linear-gradient(160deg,#091528 0%,#0F2A5C 55%,#071020 100%);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;padding:40px 20px 48px;text-align:center;transition:opacity .45s ease;}
+#landing.gone{opacity:0;pointer-events:none;}
+.lo-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(232,184,48,.14);border:1px solid rgba(232,184,48,.4);color:var(--gold2);padding:5px 15px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.8px;margin-bottom:20px;}
+.lo-logo{width:92px;height:92px;border-radius:50%;overflow:hidden;margin:0 auto 18px;animation:pulse 3s ease-in-out infinite;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:42px;}
+.lo-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.lo-title{font-size:clamp(20px,5vw,30px);font-weight:900;color:#fff;line-height:1.4;margin-bottom:11px;}
+.lo-title em{font-style:normal;color:var(--gold2);}
+.lo-sub{font-size:14px;color:rgba(255,255,255,.62);line-height:1.7;margin-bottom:24px;max-width:360px;}
+.lo-pains{display:flex;flex-direction:column;gap:8px;max-width:320px;margin:0 auto 26px;text-align:left;}
+.lo-pain{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;font-size:13px;color:rgba(255,255,255,.82);}
+.lo-cta{display:block;max-width:340px;width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border:none;padding:17px 28px;border-radius:16px;font-size:16px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 6px 28px rgba(200,148,26,.44);transition:all .22s;margin:0 auto;}
+.lo-cta:hover{transform:translateY(-2px);box-shadow:0 10px 36px rgba(200,148,26,.5);}
+.lo-note{font-size:11px;color:rgba(255,255,255,.32);margin-top:10px;}
+.lo-stats{display:flex;gap:28px;justify-content:center;margin-top:28px;padding-top:24px;border-top:1px solid rgba(255,255,255,.1);}
+.ls-n{font-size:20px;font-weight:900;color:var(--gold2);display:block;}
+.ls-l{font-size:10px;color:rgba(255,255,255,.4);margin-top:2px;}
+#app{height:100vh;display:grid;}
+@media(min-width:1024px){#app{grid-template-columns:220px 1fr 260px;grid-template-rows:46px 1fr 148px;grid-template-areas:"top top top" "lft ctr rgt" "stt stt stt";}#mob-shell{display:none!important;}}
+@media(min-width:768px) and (max-width:1023px){#app{grid-template-columns:200px 1fr;grid-template-rows:46px 1fr 144px;grid-template-areas:"top top" "lft ctr" "stt stt";}#rgt{display:none!important;}#mob-shell{display:none!important;}}
+@media(max-width:767px){
+  #app{grid-template-columns:1fr;grid-template-rows:50px 1fr auto auto;grid-template-areas:"top" "mob" "qmob" "imob";padding-bottom:0;}
+  #imob{position:static;grid-area:imob;}
+  #lft,#ctr,#rgt,#stt{display:none!important;}
+  #mob-shell{display:flex!important;flex-direction:column;overflow:hidden;}
+}
+#top{grid-area:top;background:rgba(0,0,0,.72);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 14px;z-index:100;}
+.tb-l{display:flex;align-items:center;gap:9px;}
+.tb-logo{width:30px;height:30px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:15px;}
+.tb-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.tb-brand{font-size:13px;font-weight:900;}.tb-brand span{color:var(--gold);}
+.tb-c{display:flex;align-items:center;gap:10px;}
+.live-pill{display:flex;align-items:center;gap:5px;background:rgba(52,199,89,.11);border:1px solid rgba(52,199,89,.3);padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;color:var(--green2);}
+.ldot{width:6px;height:6px;border-radius:50%;background:var(--green2);animation:blink 1.8s infinite;}
+.timer{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;}
+.tb-r{display:flex;gap:5px;}
+.tpill{background:rgba(255,255,255,.07);border:1px solid var(--border);padding:3px 9px;border-radius:14px;font-size:10px;color:var(--txt2);cursor:pointer;}
+.epill{background:rgba(255,69,58,.12);border:1px solid rgba(255,69,58,.3);padding:3px 11px;border-radius:14px;font-size:10px;color:#FF453A;cursor:pointer;font-weight:700;}
+@media(max-width:767px){.tpill{display:none;}}
+#lft{grid-area:lft;background:linear-gradient(158deg,#0A1B3E,#0F2A5C,#132B60);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+#lft::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 32%,rgba(200,148,26,.09) 0%,transparent 62%);}
+.ai-wrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:9px;}
+.ai-circle{width:84px;height:84px;border-radius:50%;overflow:hidden;animation:pulse 3s ease-in-out infinite;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:38px;}
+.ai-circle img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.ai-nm{font-size:13px;font-weight:900;}
+.ai-sub{font-size:10px;color:var(--txt2);margin-top:-5px;}
+.waves{display:flex;gap:3px;align-items:center;height:18px;margin-top:3px;}
+.wb{width:3px;border-radius:3px;background:var(--gold2);animation:wave 1s ease-in-out infinite;}
+.wb:nth-child(2){animation-delay:.15s}.wb:nth-child(3){animation-delay:.3s}.wb:nth-child(4){animation-delay:.15s}
+.ai-tag{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.48);backdrop-filter:blur(8px);border:1px solid rgba(200,148,26,.3);padding:3px 9px;border-radius:14px;font-size:9px;color:var(--gold);font-weight:700;z-index:3;}
+.pip-box{position:absolute;bottom:10px;right:10px;width:62px;height:80px;border-radius:9px;background:linear-gradient(145deg,#2a2a2a,#1a1a1a);border:1.5px solid rgba(255,255,255,.1);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
+.pip-box span:first-child{font-size:22px;}
+.pip-box span:last-child{font-size:9px;color:var(--txt2);}
+#ctr{grid-area:ctr;background:#FAFAF8;display:flex;flex-direction:column;overflow:hidden;}
+.ntb{display:flex;align-items:center;justify-content:space-between;padding:7px 13px;background:#fff;border-bottom:1px solid #E8E8E8;flex-shrink:0;}
+.ntabs{display:flex;gap:2px;}
+.ntab{padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;color:#999;cursor:pointer;transition:all .2s;}
+.ntab.on{background:#FFF3CC;color:var(--gold);}
+.nscroll{flex:1;overflow-y:auto;padding:15px 17px;}
+.nscroll::-webkit-scrollbar{width:3px;}
+.nscroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);}
+.dhc{background:linear-gradient(135deg,var(--navy),var(--navy2));border-radius:11px;padding:13px;text-align:center;margin-bottom:12px;}
+.dhc-t{font-size:14px;font-weight:900;color:var(--gold2);}
+.dhc-s{font-size:11px;color:rgba(255,255,255,.58);margin-top:3px;}
+.pb-wrap{margin-bottom:11px;}
+.pb-lbl{font-size:9px;color:#999;font-weight:700;letter-spacing:.4px;margin-bottom:5px;}
+.pb-tr{display:flex;gap:3px;}
+.pb-s{flex:1;height:5px;border-radius:3px;background:#E8E8E8;transition:all .5s;}
+.pb-s.done{background:var(--green);}
+.pb-s.cur{background:var(--gold2);animation:sbar 1.4s infinite;}
+.dsn-list{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
+.dsn{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;border:1px solid #E8E8E8;background:#fff;transition:all .3s;}
+.dsn.cur{background:#FFF8E7;border-color:rgba(200,148,26,.38);}
+.dsn.pass{background:#F0FDF4;border-color:rgba(22,163,74,.28);}
+.dsn.lock{opacity:.55;}
+.dsn-b{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex-shrink:0;background:#E8E8E8;color:#888;}
+.dsn.cur .dsn-b{background:var(--red);color:#fff;}
+.dsn.pass .dsn-b{background:var(--green);color:#fff;}
+.dsn-i{flex:1;}
+.dsn-lt{font-size:9px;font-weight:900;color:#aaa;}
+.dsn.cur .dsn-lt{color:var(--red);}
+.dsn.pass .dsn-lt{color:var(--green);}
+.dsn-nm{font-size:12px;color:#1A1A2E;font-weight:600;}
+.dsn-ic{font-size:14px;}
+.dc{background:#fff;border-radius:9px;border:1px solid #E8E8E8;overflow:hidden;margin-top:9px;}
+.dc-h{background:var(--navy);padding:7px 11px;display:flex;align-items:center;gap:6px;}
+.dc-ht{font-size:11px;font-weight:700;color:#fff;}
+.dc-hb{margin-left:auto;font-size:9px;background:rgba(232,184,48,.2);color:var(--gold2);padding:1px 6px;border-radius:5px;font-weight:700;}
+.dc-b{padding:8px 11px;display:flex;flex-direction:column;gap:4px;}
+.dc-r{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:12px;}
+.dc-r:last-child{border-bottom:none;}
+.dc-rl{color:#888;}.dc-rv{font-weight:700;color:var(--navy);}
+.qa{padding:7px 12px;background:#fff;border-top:1px solid #E8E8E8;display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;min-height:44px;align-items:center;}
+.qb{background:#fff;border:1.5px solid var(--navy);color:var(--navy);padding:7px 12px;border-radius:17px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .17s;}
+.qb:hover,.qb:active{background:var(--navy);color:#fff;}
+.qb.gold{background:linear-gradient(135deg,var(--gold),var(--gold2));border-color:transparent;color:#fff;box-shadow:0 2px 9px rgba(200,148,26,.3);}
+#rgt{grid-area:rgt;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.rp-h{padding:10px 13px;background:rgba(0,0,0,.18);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;color:var(--txt2);letter-spacing:.4px;flex-shrink:0;}
+.rp-b{flex:1;overflow-y:auto;padding:9px 11px;}
+.rp-b::-webkit-scrollbar{width:2px;}
+.rp-sec{font-size:9px;font-weight:700;color:var(--txt2);letter-spacing:.4px;margin-bottom:5px;}
+.rp-steps{display:flex;flex-direction:column;gap:3px;margin-bottom:9px;}
+.rp-st{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:7px;background:var(--panel2);font-size:10px;}
+.rp-st.done{background:rgba(52,199,89,.08);border:1px solid rgba(52,199,89,.14);}
+.rp-st.cur{background:rgba(200,148,26,.11);border:1px solid rgba(200,148,26,.24);}
+.rp-st.lock{opacity:.42;}
+.rp-sn{width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;flex-shrink:0;background:rgba(255,255,255,.08);color:var(--txt2);}
+.rp-st.done .rp-sn{background:var(--green2);color:#fff;}
+.rp-st.cur .rp-sn{background:var(--gold);color:#fff;}
+.rp-sl{font-size:10px;flex:1;}.rp-lk{margin-left:auto;font-size:10px;opacity:.28;}
+.fi-box{background:var(--panel2);border-radius:7px;padding:7px 9px;border-left:3px solid transparent;margin-bottom:5px;}
+.fi-box.red{border-color:var(--red)}.fi-box.yellow{border-color:var(--gold2)}.fi-box.green{border-color:var(--green2)}
+.fi-l{font-size:9px;color:var(--txt2);margin-bottom:2px;}
+.fi-v{font-size:11px;font-weight:700;}
+.fi-s{font-size:9px;color:var(--txt2);margin-top:1px;}
+.eng{background:var(--panel2);border-radius:7px;padding:7px 9px;}
+.eng-r{display:flex;justify-content:space-between;margin-bottom:3px;font-size:9px;}
+.eng-r:last-child{margin-bottom:0;}
+.eng-l{color:var(--txt2);}
+#stt{grid-area:stt;background:var(--panel);border-top:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.stt-h{display:flex;align-items:center;justify-content:space-between;padding:7px 13px;background:rgba(0,0,0,.18);border-bottom:1px solid var(--border);flex-shrink:0;}
+.stt-ht{font-size:10px;font-weight:700;color:var(--txt2);display:flex;align-items:center;gap:6px;}
+.stt-badge{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.28);padding:2px 7px;border-radius:8px;font-size:9px;color:var(--blue);font-weight:700;}
+.stt-msgs{flex:1;display:flex;gap:11px;align-items:flex-start;overflow-x:auto;overflow-y:hidden;padding:8px 13px;}
+.stt-msgs::-webkit-scrollbar{height:2px;}
+.stt-msgs::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);}
+.stt-m{display:flex;gap:5px;align-items:flex-end;flex-shrink:0;max-width:300px;}
+.stt-av{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;overflow:hidden;}
+.stt-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.stt-av.u{background:var(--panel2);}
+.stt-bbl{padding:6px 10px;border-radius:11px;font-size:10px;line-height:1.5;max-width:240px;word-break:keep-all;}
+.stt-bbl.ai{background:var(--navy2);color:#fff;border-bottom-left-radius:3px;}
+.stt-bbl.u{background:var(--panel2);color:var(--txt);border-bottom-right-radius:3px;}
+.stt-bbl.sys{background:rgba(200,148,26,.11);color:var(--gold2);border:1px solid rgba(200,148,26,.22);border-radius:7px;}
+.stt-ir{display:flex;align-items:center;gap:7px;padding:7px 11px;border-top:1px solid var(--border);flex-shrink:0;}
+.stt-inp{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);border-radius:17px;padding:6px 13px;font-size:12px;color:var(--txt);font-family:inherit;outline:none;transition:border-color .2s;}
+.stt-inp:focus{border-color:rgba(200,148,26,.48);}
+.stt-inp::placeholder{color:var(--txt2);}
+.stt-sb{width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;background:var(--navy2);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;transition:background .17s;}
+.stt-sb:hover{background:var(--gold);}
+#mob-shell{grid-area:mob;display:none;flex-direction:column;overflow:hidden;background:#F5F6FA;}
+.mob-pb{background:#fff;padding:8px 13px;border-bottom:1px solid #E5E7EB;flex-shrink:0;}
+.mob-pbl{font-size:9px;color:#888;font-weight:700;margin-bottom:5px;letter-spacing:.4px;}
+.mob-ptr{display:flex;gap:3px;}
+.mob-ps{flex:1;height:5px;border-radius:3px;background:#E5E7EB;transition:all .4s;}
+.mob-ps.done{background:var(--green);}
+.mob-ps.cur{background:var(--gold2);animation:sbar 1.4s infinite;}
+.mob-nms{display:flex;gap:3px;margin-top:4px;}
+.mob-nm{flex:1;font-size:8px;text-align:center;color:#aaa;overflow:hidden;white-space:nowrap;}
+.mob-nm.done{color:var(--green);}
+.mob-nm.cur{color:var(--gold);font-weight:700;}
+.mob-chat{flex:1;overflow-y:auto;padding:13px 11px;display:flex;flex-direction:column;gap:10px;}
+.mob-chat::-webkit-scrollbar{display:none;}
+.mm{display:flex;gap:7px;align-items:flex-end;}
+.mm.u{flex-direction:row-reverse;}
+.mm-av{width:28px;height:28px;border-radius:50%;flex-shrink:0;align-self:flex-start;overflow:hidden;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:13px;}
+.mm-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.mm-bd{max-width:80%;display:flex;flex-direction:column;gap:3px;}
+.mm.u .mm-bd{align-items:flex-end;}
+.bbl{padding:10px 13px;border-radius:17px;font-size:13px;line-height:1.65;word-break:keep-all;}
+.bbl.ai{background:var(--navy2);color:#fff;border-bottom-left-radius:4px;}
+.bbl.u{background:#fff;color:#1A1A2E;border:1px solid #E5E7EB;border-bottom-right-radius:4px;}
+.bbl.sys{background:rgba(200,148,26,.1);color:var(--gold);border:1px solid rgba(200,148,26,.28);border-radius:9px;font-size:11px;font-weight:700;text-align:center;padding:6px 11px;align-self:center;}
+.mm-t{font-size:9px;color:#aaa;padding:0 3px;}
+.tp-wrap{display:flex;gap:7px;align-items:flex-end;}
+.tp-bbl{background:var(--navy2);padding:10px 14px;border-radius:17px;border-bottom-left-radius:4px;display:flex;gap:5px;align-items:center;}
+.td{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.42);animation:typing 1.2s infinite;}
+.td:nth-child(2){animation-delay:.2s}.td:nth-child(3){animation-delay:.4s}
+.mc{background:#fff;border-radius:11px;border:1px solid #E5E7EB;overflow:hidden;margin:3px 0;box-shadow:0 2px 7px rgba(0,0,0,.06);}
+.mc-h{background:var(--navy);padding:7px 11px;display:flex;align-items:center;gap:6px;}
+.mc-ht{font-size:11px;font-weight:700;color:#fff;}
+.mc-hb{margin-left:auto;font-size:9px;background:rgba(232,184,48,.2);color:var(--gold2);padding:1px 6px;border-radius:5px;font-weight:700;}
+.mc-b{padding:9px 11px;}
+.mc-r{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:12px;}
+.mc-r:last-child{border-bottom:none;}
+.mc-rl{color:#888;}.mc-rv{font-weight:700;color:var(--navy);}
+.mc-st{display:flex;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid #F0F0F0;}
+.mc-st:last-child{border-bottom:none;}
+.mc-sb{width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex-shrink:0;background:#E5E7EB;color:#aaa;}
+.mc-st.cur .mc-sb{background:var(--red);color:#fff;}
+.mc-st.pass .mc-sb{background:var(--green);color:#fff;}
+.mc-si{flex:1;}
+.mc-slt{font-size:9px;font-weight:900;color:#aaa;}
+.mc-st.cur .mc-slt{color:var(--red);}
+.mc-st.pass .mc-slt{color:var(--green);}
+.mc-sn{font-size:11px;font-weight:600;color:#1A1A2E;}
+#qmob{grid-area:qmob;display:flex;gap:7px;flex-wrap:wrap;padding:7px 11px;background:#fff;border-top:1px solid #E5E7EB;align-items:center;}
+#qmob:empty{display:none;}
+.mqb{background:#fff;border:1.5px solid var(--navy);color:var(--navy);padding:7px 12px;border-radius:17px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;}
+.mqb:active{background:var(--navy);color:#fff;}
+.mqb.gold{background:linear-gradient(135deg,var(--gold),var(--gold2));border-color:transparent;color:#fff;box-shadow:0 2px 9px rgba(200,148,26,.3);}
+#imob{grid-area:imob;display:flex;align-items:center;gap:7px;padding:8px 11px;padding-bottom:calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #E5E7EB;min-height:58px;}
+.mob-inp{flex:1;background:#F5F6FA;border:1.5px solid #E5E7EB;border-radius:19px;padding:9px 13px;font-size:13px;font-family:inherit;color:#1A1A2E;outline:none;resize:none;max-height:78px;min-height:40px;line-height:1.5;transition:border-color .2s;}
+.mob-inp:focus{border-color:var(--navy);}
+.mob-sb{width:38px;height:38px;border-radius:50%;background:var(--navy);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;transition:all .15s;}
+.mob-sb:active{background:var(--navy2);transform:scale(.94);}
+#result{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.72);backdrop-filter:blur(9px);overflow-y:auto;padding:20px;}
+#result.show{display:block;}
+.rc{max-width:460px;margin:0 auto;background:var(--navy);border-radius:18px;overflow:hidden;box-shadow:0 20px 56px rgba(0,0,0,.5);}
+.rc-hero{background:linear-gradient(135deg,var(--navy),var(--navy2));padding:26px 22px;text-align:center;}
+.rc-em{font-size:42px;display:block;margin-bottom:9px;}
+.rc-t{font-size:19px;font-weight:900;color:#fff;line-height:1.4;margin-bottom:5px;}
+.rc-s{font-size:12px;color:rgba(255,255,255,.58);line-height:1.7;}
+.rc-stages{padding:14px 18px;display:flex;flex-direction:column;gap:5px;}
+.rc-band{display:flex;align-items:center;border-radius:10px;overflow:hidden;height:48px;transition:all .2s;}
+.rc-band-badge{width:44px;height:100%;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;flex-shrink:0;}
+.rc-band-info{flex:1;padding:0 11px;display:flex;flex-direction:column;justify-content:center;}
+.rc-band-sh{font-size:9px;font-weight:900;letter-spacing:.03em;}
+.rc-band-nm{font-size:12px;font-weight:700;}
+.rc-band-ic{width:36px;height:100%;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.rc-band.pass .rc-band-sh{color:rgba(255,255,255,.72);}
+.rc-band.pass .rc-band-nm{color:#fff;}
+.rc-band.cur{box-shadow:0 0 0 2px var(--gold), 0 4px 14px rgba(200,148,26,.35);}
+.rc-band.cur .rc-band-sh{color:rgba(255,255,255,.85);}
+.rc-band.cur .rc-band-nm{color:#fff;font-size:13px;}
+.rc-band.lock{background:rgba(255,255,255,.04)!important;border:1px solid rgba(255,255,255,.08);}
+.rc-band.lock .rc-band-badge{color:rgba(255,255,255,.2);background:rgba(255,255,255,.06)!important;}
+.rc-band.lock .rc-band-sh{color:rgba(255,255,255,.22);}
+.rc-band.lock .rc-band-nm{color:rgba(255,255,255,.3);}
+.rc-msg{margin:0 18px 14px;background:rgba(0,0,0,.2);border-radius:11px;padding:13px;}
+.rc-mt{font-size:12px;font-weight:900;color:var(--gold2);margin-bottom:6px;}
+.rc-mb{font-size:12px;line-height:1.8;color:rgba(255,255,255,.78);}
+.rc-ben{margin:0 18px 14px;background:rgba(255,255,255,.05);border-radius:11px;padding:12px;}
+.rc-bt{font-size:11px;font-weight:900;color:rgba(255,255,255,.65);margin-bottom:7px;}
+.rc-bi2{display:flex;align-items:flex-start;gap:6px;padding:4px 0;font-size:11px;color:rgba(255,255,255,.65);border-bottom:1px solid rgba(255,255,255,.06);}
+.rc-bi2:last-child{border-bottom:none;}
+.rc-chk{color:var(--green2);font-weight:900;flex-shrink:0;}
+.rc-cta-w{padding:0 18px 22px;}
+.rc-cta{display:block;width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border:none;padding:15px;border-radius:13px;font-size:15px;font-weight:900;text-align:center;cursor:pointer;font-family:inherit;box-shadow:0 5px 18px rgba(200,148,26,.38);}
+.rc-orig{text-align:center;margin-top:7px;font-size:11px;color:rgba(255,255,255,.38);}
+.rc-orig s{color:rgba(255,255,255,.28);}
+.rc-orig strong{color:var(--gold2);font-size:13px;}
+.rc-beta{margin:0 18px 14px;background:rgba(22,163,74,.09);border:1px solid rgba(22,163,74,.22);border-radius:11px;padding:13px;}
+.rc-bbt{font-size:12px;font-weight:900;color:var(--green2);margin-bottom:5px;}
+.rc-bbd{font-size:11px;color:rgba(255,255,255,.62);line-height:1.7;margin-bottom:9px;}
+.rc-bbc{display:block;width:100%;padding:11px;background:var(--green);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:900;text-align:center;cursor:pointer;font-family:inherit;}
+</style>
+</head>
+<body>
 
-const app = express();
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-  credentials: false
-}));
-app.use(express.json());
-app.use(express.static('public'));
+<div id="landing">
+  <div class="lo-badge">🎙️ AI 음성재무진단</div>
+  <div class="lo-logo" id="lo-logo">
+    <img src="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a" alt="AI머니야" onerror="this.style.display='none'">
+  </div>
+  <div class="lo-title">맞벌이인데<br>왜 통장은 <em>항상 비어있을까요?</em></div>
+  <div class="lo-sub">AI 머니야가 <strong style="color:var(--gold2)">음성으로</strong> DESIRE 로드맵을 안내하며<br>고객님의 재무 현재 위치를 정확히 진단해 드립니다.</div>
+  <div class="lo-pains">
+    <div class="lo-pain">😤 둘이 벌어도 저축이 안 된다</div>
+    <div class="lo-pain">😰 신용대출을 갚아도 또 생긴다</div>
+    <div class="lo-pain">😔 노후준비는 나중에… 계속 미룬다</div>
+    <div class="lo-pain">😟 전문가 상담료가 너무 부담스럽다</div>
+  </div>
+  <button id="go-btn" class="lo-cta" onclick="go()">🎙️ AI 음성재무진단 시작하기 →</button>
+  <div id="kakao-open-btn" style="display:none; margin-top:10px;">
+    <button id="chrome-android-btn" onclick="openInChrome()" style="display:none;width:100%;padding:14px;background:#FAE100;border:none;border-radius:12px;font-size:15px;font-weight:700;color:#3C1E1E;cursor:pointer;">🌐 크롬으로 열기</button>
+    <div id="chrome-ios-btn" style="display:none;">
+      <button onclick="copyLink()" style="width:100%;padding:14px;background:#FAE100;border:none;border-radius:12px;font-size:15px;font-weight:700;color:#3C1E1E;cursor:pointer;">📋 링크 복사 후 크롬에서 열기</button>
+      <p style="font-size:11px;color:rgba(255,255,255,0.5);text-align:center;margin:8px 0 0;">복사 후 크롬 주소창에 붙여넣기 해주세요</p>
+    </div>
+    <p style="font-size:11px;color:rgba(255,255,255,0.5);text-align:center;margin:8px 0 0;">음성 기능은 크롬 브라우저에서만 지원됩니다</p>
+  </div>
+  <div class="lo-note">회원가입 불필요 · 카드정보 없음 · 완전 무료</div>
+  <div class="lo-stats">
+    <div><span class="ls-n">20년</span><div class="ls-l">CFP 경력</div></div>
+    <div><span class="ls-n">2,000+</span><div class="ls-l">재무상담 건수</div></div>
+    <div><span class="ls-n">무료</span><div class="ls-l">5분 체험</div></div>
+  </div>
+</div>
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+<div id="app">
+  <div id="top">
+    <div class="tb-l">
+      <div class="tb-logo"><img src="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a" alt="M" onerror="this.style.display='none'"></div>
+      <div class="tb-brand">AI <span>머니야</span></div>
+      <span style="font-size:10px;color:var(--txt2);">스마트 재무진단</span>
+    </div>
+    <div class="tb-c">
+      <div class="live-pill"><div class="ldot"></div>LIVE</div>
+      <div class="timer" id="tmr">00:00</div>
+    </div>
+    <div class="tb-r">
+      <div class="tpill">🎤 마이크</div>
+      <div class="tpill">📹 카메라</div>
+      <div class="epill">종료</div>
+    </div>
+  </div>
+  <div id="lft">
+    <div class="ai-tag" id="ai-tag">💬 준비 중</div>
+    <div class="ai-wrap">
+      <div class="ai-circle"><img src="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a" alt="💰" onerror="this.outerHTML='💰'"></div>
+      <div class="ai-nm">AI 머니야</div>
+      <div class="ai-sub">오상열 CFP 20년 학습</div>
+      <div class="waves"><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div></div>
+    </div>
+    <div class="pip-box"><span>🙂</span><span>고객</span></div>
+  </div>
+  <div id="ctr">
+    <div class="ntb">
+      <div class="ntabs"><div class="ntab on">🗺 DESIRE 진단</div><div class="ntab">📋 스마트노트</div><div class="ntab">📊 분석결과</div></div>
+      <span style="font-size:10px;color:#bbb;">실시간 업데이트</span>
+    </div>
+    <div class="nscroll" id="nscroll">
+      <div class="dhc"><div class="dhc-t">🗺 DESIRE 로드맵 진단</div><div class="dhc-s">재무 독립의 6단계 — 지금 어느 단계에 계신지 진단합니다</div></div>
+      <div class="pb-wrap"><div class="pb-lbl">진단 진행률</div><div class="pb-tr" id="pc-pb"></div></div>
+      <div class="dsn-list" id="pc-dsn"></div>
+      <div id="pc-data"></div>
+    </div>
+    <div class="qa" id="pc-qa"></div>
+  </div>
+  <div id="rgt">
+    <div class="rp-h">📊 실시간 분석</div>
+    <div class="rp-b">
+      <div class="rp-sec">DESIRE 단계 현황</div>
+      <div class="rp-steps" id="rp-steps"></div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:7px 0;">
+      <div class="rp-sec">핵심 발견사항</div>
+      <div id="rp-fi"><div class="fi-box yellow"><div class="fi-l">💬 진단 상태</div><div class="fi-v">시작 대기 중</div><div class="fi-s">상담 시작 후 자동 업데이트</div></div></div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:7px 0;">
+      <div class="rp-sec">AI 엔진 상태</div>
+      <div class="eng">
+        <div class="eng-r"><span class="eng-l">모델</span><span style="color:var(--gold2);font-weight:700;font-size:9px;">DESIRE 에이전트</span></div>
+        <div class="eng-r"><span class="eng-l">CFP 데이터</span><span style="color:var(--green2);font-weight:700;font-size:9px;">활성 ●</span></div>
+        <div class="eng-r"><span class="eng-l">금융집짓기®</span><span style="color:var(--green2);font-weight:700;font-size:9px;">탑재 ●</span></div>
+        <div class="eng-r"><span class="eng-l">세션</span><span id="rp-tmr" style="font-weight:700;font-size:9px;">00:00</span></div>
+      </div>
+    </div>
+  </div>
+  <div id="stt">
+    <div class="stt-h">
+      <div class="stt-ht">💬 실시간 대화 <div class="stt-badge" id="stt-bd">● 대기 중</div></div>
+      <div style="font-size:9px;color:var(--txt2);">상담 종료 후 자동 저장</div>
+    </div>
+    <div class="stt-msgs" id="stt-msgs"></div>
+    <div class="stt-ir">
+      <input class="stt-inp" id="pc-inp" placeholder="메시지를 입력하거나 빠른 버튼을 눌러주세요..." onkeydown="if(event.key==='Enter')send('pc')">
+      <button class="stt-sb" onclick="send('pc')">➤</button>
+    </div>
+  </div>
+  <div id="mob-shell">
+    <div class="mob-pb">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="mob-pbl">AI 음성재무진단</div>
+        <button id="tts-toggle" onclick="toggleTTS()" style="font-size:10px;font-weight:700;background:rgba(232,184,48,.15);border:1px solid rgba(232,184,48,.3);color:var(--gold2);padding:3px 9px;border-radius:12px;cursor:pointer;font-family:inherit;">🔊 음성 ON</button>
+      </div>
+      <div class="mob-ptr" id="mob-pb"></div>
+      <div class="mob-nms" id="mob-nms"></div>
+    </div>
+    <div class="mob-chat" id="mob-chat"></div>
+  </div>
+  <div id="qmob"></div>
+  <div id="imob">
+    <textarea class="mob-inp" id="mob-inp" placeholder="메시지를 입력하세요..." rows="1"
+      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,78)+'px'"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send('mob');}"></textarea>
+    <button class="mob-sb" onclick="send('mob')">➤</button>
+  </div>
+</div>
 
-const upload = multer({ 
-  storage: multer.memoryStorage(), 
-  limits: { fileSize: 10 * 1024 * 1024 }
-});
+<div id="result">
+  <div class="rc">
+    <div class="rc-hero"><span class="rc-em" id="rc-em">🎯</span><div class="rc-t" id="rc-t">DESIRE 진단 완료!</div><div class="rc-s">고객님의 재무 현재 위치를 확인했습니다.</div></div>
+    <div class="rc-stages" id="rc-stages"></div>
+    <div class="rc-msg"><div class="rc-mt">💬 AI 머니야의 한마디</div><div class="rc-mb" id="rc-mb"></div></div>
+    <div class="rc-ben">
+      <div class="rc-bt">📋 60분 본상담에서 받으시는 것</div>
+      <div class="rc-bi2"><span class="rc-chk">✓</span>DESIRE 로드맵 월별 실행 플랜 완성</div>
+      <div class="rc-bi2"><span class="rc-chk">✓</span>금융집짓기® 재무설계도 제공</div>
+      <div class="rc-bi2"><span class="rc-chk">✓</span>상담 녹화영상 + 수료증 발급</div>
+      <div class="rc-bi2"><span class="rc-chk">✓</span>CFP 팔로업 콜 1회 포함</div>
+    </div>
+    <div id="rc-extra"></div>
+    <div id="rc-cta"></div>
+  </div>
+</div>
 
-let ragChunks = [];
+<div id="feedback-overlay" style="display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.78);backdrop-filter:blur(10px);overflow-y:auto;padding:20px;">
+  <div style="max-width:460px;margin:0 auto;background:var(--navy);border-radius:18px;overflow:hidden;box-shadow:0 20px 56px rgba(0,0,0,.5);">
+    <div style="background:linear-gradient(135deg,var(--navy),var(--navy2));padding:24px 22px;text-align:center;">
+      <div style="font-size:36px;margin-bottom:8px;">📋</div>
+      <div style="font-size:18px;font-weight:900;color:#fff;margin-bottom:5px;">AI 음성재무진단 평가</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.6;">소중한 피드백을 주시면<br><strong style="color:var(--gold2)">60분 AI재무상담을 무료로 드립니다 🎁</strong></div>
+    </div>
+    <div style="padding:20px 18px;display:flex;flex-direction:column;gap:16px;">
+      <div>
+        <div style="font-size:12px;font-weight:900;color:var(--gold2);margin-bottom:8px;">⭐ AI 음성재무진단 만족도</div>
+        <div id="star-row" style="display:flex;gap:8px;justify-content:center;">
+          <span class="star" data-v="1" onclick="setStar(1)" style="font-size:32px;cursor:pointer;opacity:.35;">★</span>
+          <span class="star" data-v="2" onclick="setStar(2)" style="font-size:32px;cursor:pointer;opacity:.35;">★</span>
+          <span class="star" data-v="3" onclick="setStar(3)" style="font-size:32px;cursor:pointer;opacity:.35;">★</span>
+          <span class="star" data-v="4" onclick="setStar(4)" style="font-size:32px;cursor:pointer;opacity:.35;">★</span>
+          <span class="star" data-v="5" onclick="setStar(5)" style="font-size:32px;cursor:pointer;opacity:.35;">★</span>
+        </div>
+        <div id="star-label" style="text-align:center;font-size:11px;color:rgba(255,255,255,.45);margin-top:5px;">별을 눌러 평가해 주세요</div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:900;color:rgba(255,255,255,.7);margin-bottom:6px;">✍️ 솔직한 후기를 남겨주세요</div>
+        <textarea id="fb-review" rows="3" placeholder="음성 안내, 진단 내용, 사용 경험 등 자유롭게 적어주세요" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:11px 13px;font-size:13px;color:#fff;font-family:inherit;resize:none;outline:none;line-height:1.6;"></textarea>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:900;color:rgba(255,255,255,.7);margin-bottom:8px;">💳 60분 AI재무상담 유료 구독 의향이 있으신가요?</div>
+        <div style="display:flex;gap:8px;">
+          <button id="intent-y" onclick="setIntent('Y')" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.65);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;">✅ 네, 있습니다</button>
+          <button id="intent-n" onclick="setIntent('N')" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.65);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;">🤔 아직 모르겠어요</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:900;color:rgba(255,255,255,.7);margin-bottom:6px;">💡 개선 아이디어 또는 추가 의견</div>
+        <textarea id="fb-idea" rows="2" placeholder="이런 기능이 있으면 좋겠다, 이런 점이 불편했다 등" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:11px 13px;font-size:13px;color:#fff;font-family:inherit;resize:none;outline:none;line-height:1.6;"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1;"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.55);margin-bottom:5px;">성함 (선택)</div><input id="fb-name" type="text" placeholder="홍길동" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;font-size:13px;color:#fff;font-family:inherit;outline:none;"></div>
+        <div style="flex:1;"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.55);margin-bottom:5px;">연락처 (선택)</div><input id="fb-phone" type="tel" placeholder="010-0000-0000" style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;font-size:13px;color:#fff;font-family:inherit;outline:none;"></div>
+      </div>
+      <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 13px;">
+        <input type="checkbox" id="fb-agree" style="margin-top:2px;accent-color:var(--green2);width:15px;height:15px;flex-shrink:0;">
+        <span style="font-size:11px;color:rgba(255,255,255,.55);line-height:1.6;">수집된 정보는 서비스 개선 및 상담 안내 목적으로만 사용되며, 제3자에게 제공되지 않습니다. <strong style="color:rgba(255,255,255,.75)">개인정보 수집·이용에 동의합니다.</strong></span>
+      </label>
+      <button onclick="submitFeedback()" style="width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border:none;padding:15px;border-radius:13px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 5px 18px rgba(200,148,26,.38);">🎁 평가 제출하고 60분 무료상담 받기</button>
+      <div style="text-align:center;font-size:11px;color:rgba(255,255,255,.3);">별점과 동의 체크 후 제출 가능합니다</div>
+    </div>
+  </div>
+</div>
 
-const loadRAGData = () => {
-  try {
-    const files = [
-      'rag_chunks.json',
-      'consultation_chunks.json',
-      'bantoe_cases_436.json',
-      'lecture_chunks.json',
-      'quotes_100.json',
-      'customer_questions_100.json',
-      'nagging_100.json',
-      'cfha_script_chunks.json'
-    ];
-    
-    files.forEach(file => {
-      const filePath = path.join(__dirname, file);
-      if (fs.existsSync(filePath)) {
-        const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        ragChunks = ragChunks.concat(data);
-        console.log(`[RAG] ${file} 로드: ${data.length}개`);
-      }
-    });
-    
-    console.log(`[RAG] 총 ${ragChunks.length}개 청크 로드 완료`);
-  } catch (e) {
-    console.error('[RAG] 데이터 로드 실패:', e.message);
+<div id="thanks-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.85);backdrop-filter:blur(12px);overflow-y:auto;padding:20px;">
+  <div style="max-width:460px;margin:0 auto;background:var(--navy);border-radius:18px;overflow:hidden;box-shadow:0 20px 56px rgba(0,0,0,.6);">
+    <div style="background:linear-gradient(135deg,#0F2A5C,#1A3A6E);padding:30px 22px;text-align:center;">
+      <div style="font-size:48px;margin-bottom:10px;">🎉</div>
+      <div style="font-size:20px;font-weight:900;color:#fff;margin-bottom:8px;">감사합니다!</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.65);line-height:1.7;">소중한 피드백 덕분에<br>AI 머니야가 더 좋아집니다</div>
+    </div>
+    <div style="padding:22px 18px;display:flex;flex-direction:column;gap:14px;">
+      <div style="background:linear-gradient(135deg,rgba(200,148,26,.18),rgba(232,184,48,.12));border:1.5px solid rgba(232,184,48,.4);border-radius:13px;padding:16px;text-align:center;">
+        <div style="font-size:13px;font-weight:900;color:var(--gold2);margin-bottom:5px;">🎁 감사 선물</div>
+        <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:4px;">60분 AI재무상담</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:10px;"><s style="color:rgba(255,255,255,.3);">정가 ₩99,000</s> → <strong style="color:var(--gold2);font-size:16px;">무료 제공</strong></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.45);">오상열 CFP와 1:1 맞춤 재무설계 60분</div>
+      </div>
+      <div id="thanks-msg" style="background:rgba(255,255,255,.05);border-radius:11px;padding:13px;font-size:12px;color:rgba(255,255,255,.72);line-height:1.7;"></div>
+      <button onclick="alert('상담 예약 페이지로 연결됩니다. (추후 연동)')" style="width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border:none;padding:15px;border-radius:13px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 5px 18px rgba(200,148,26,.38);">📅 60분 무료 상담 예약하기</button>
+      <div id="thanks-sub" style="display:none;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.22);border-radius:11px;padding:13px;">
+        <div style="font-size:12px;font-weight:900;color:var(--green2);margin-bottom:6px;">💚 정기구독 특별 안내</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.62);line-height:1.7;margin-bottom:9px;">60분 상담 후 마음에 드시면<br>AI 머니야 정기구독으로 매달 함께하세요</div>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;background:rgba(255,255,255,.06);border-radius:9px;padding:10px;text-align:center;"><div style="font-size:10px;color:rgba(255,255,255,.45);margin-bottom:3px;">월간</div><div style="font-size:16px;font-weight:900;color:#fff;">₩9,900</div><div style="font-size:9px;color:rgba(255,255,255,.35);">/ 월</div></div>
+          <div style="flex:1;background:rgba(232,184,48,.12);border:1px solid rgba(232,184,48,.3);border-radius:9px;padding:10px;text-align:center;"><div style="font-size:10px;color:var(--gold2);margin-bottom:3px;">연간 (2개월 무료)</div><div style="font-size:16px;font-weight:900;color:var(--gold2);">₩99,000</div><div style="font-size:9px;color:rgba(255,255,255,.35);">/ 년</div></div>
+        </div>
+        <button onclick="alert('구독 결제 페이지로 연결됩니다. (추후 연동)')" style="width:100%;margin-top:9px;padding:11px;background:var(--green);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">💚 정기구독 시작하기</button>
+      </div>
+      <div style="text-align:center;font-size:10px;color:rgba(255,255,255,.25);line-height:1.6;">본 무료상담 이용권은 1인 1회 제공됩니다<br>연락처 입력 시 예약 안내 문자를 보내드립니다</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const ua=(navigator.userAgent||'').toLowerCase();
+  const isKakao=ua.includes('kakaotalk');
+  const isInapp=isKakao||ua.includes('naver')||ua.includes('instagram')||ua.includes('fb_iab')||ua.includes('fban')||ua.includes('fbav');
+  const isIOS=/iphone|ipad|ipod/.test(ua);
+  if(isInapp){
+    const goBtn=document.getElementById('go-btn');
+    if(goBtn) goBtn.style.display='none';
+    const kakaoBtn=document.getElementById('kakao-open-btn');
+    if(kakaoBtn) kakaoBtn.style.display='block';
+    if(isIOS){const iosBtn=document.getElementById('chrome-ios-btn');if(iosBtn)iosBtn.style.display='block';}
+    else{const androidBtn=document.getElementById('chrome-android-btn');if(androidBtn)androidBtn.style.display='block';}
   }
-};
+})();
 
-loadRAGData();
+function openInChrome(){const url=location.href;location.href='intent://'+url.replace(/^https?:\/\//,'')+'#Intent;scheme=https;package=com.android.chrome;end';}
+function copyLink(){const url=location.href;if(navigator.clipboard){navigator.clipboard.writeText(url).then(()=>{alert('링크가 복사됐습니다.\n크롬 주소창에 붙여넣기 해주세요.');});}else{const t=document.createElement('textarea');t.value=url;document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);alert('링크가 복사됐습니다.\n크롬 주소창에 붙여넣기 해주세요.');}}
 
-const searchRAG = (query, maxResults = 3) => {
-  if (!ragChunks.length || !query) return [];
-  
-  const keywords = query.toLowerCase()
-    .replace(/[?!.,~"'()]/g, '')
-    .split(/\s+/)
-    .filter(w => w.length > 1);
-  
-  if (!keywords.length) return [];
-  
-  const scored = ragChunks.map(chunk => {
-    const content = (chunk.content || chunk.text || '').toLowerCase();
-    const title = (chunk.title || chunk.source || '').toLowerCase();
-    const category = (chunk.category || '').toLowerCase();
-    
-    let score = 0;
-    keywords.forEach(keyword => {
-      if (content.includes(keyword)) score += 2;
-      if (title.includes(keyword)) score += 3;
-      if (category.includes(keyword)) score += 1;
+const WS_URL='wss://moneya-server.onrender.com';
+let ws=null,wsReady=false;
+let audioCtx=null,audioQueue=[],audioPlaying=false,nextPlayTime=0;
+let micStream=null,micProcessor=null;
+let ttsOn=true;
+
+function initAudioCtx(){
+  if(!audioCtx){try{audioCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:24000});}catch(e){}}
+  if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume();
+}
+
+let _wsConnected=false;
+let _gameStarted=false;
+function connectWS(){
+  if(_wsConnected)return;
+  if(ws&&(ws.readyState===0||ws.readyState===1))return;
+  _wsConnected=true;
+  setMicStatus('🔄 연결 중...');
+  ws=new WebSocket(WS_URL);
+  ws.onopen=()=>{ws.send(JSON.stringify({type:'start_desire'}));};
+  ws.onmessage=(e)=>{
+    const msg=JSON.parse(e.data);
+    if(msg.type==='session_started'){if(wsReady)return;wsReady=true;setMicStatus('🎤 대기 중...');}
+    if(msg.type==='response.audio.delta'&&msg.delta){const raw=atob(msg.delta);const buf=new Int16Array(raw.length/2);for(let i=0;i<buf.length;i++)buf[i]=(raw.charCodeAt(i*2))|(raw.charCodeAt(i*2+1)<<8);enqueueAudio(buf);}
+    if(msg.type==='input_audio_buffer.speech_started'){stopWsAudio();}
+    if(msg.type==='conversation.item.input_audio_transcription.completed'){
+      if(!_gameStarted)return;
+      const txt=(msg.transcript||'').trim();
+      if(txt){setMicStatus('🎤 음성 ON');addSTT('u',txt);addMob('u',txt);if(!voiceToBtn(txt))handleFree(txt);}
+    }
+  };
+  ws.onerror=()=>{wsReady=false;setMicStatus('🔊 음성');};
+  ws.onclose=()=>{wsReady=false;stopMic();setMicStatus('🔊 음성');};
+}
+
+function setMicStatus(txt){
+  const el=document.getElementById('tts-toggle');if(el)el.textContent=txt;
+  const el2=document.getElementById('mob-mic-status');if(el2)el2.textContent=txt;
+}
+
+let _stt=null;
+function startSTT(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR)return;
+  _stt=new SR();
+  _stt.lang='ko-KR';_stt.continuous=true;_stt.interimResults=true;
+  _stt.onstart=()=>{setMicStatus('🎤 음성 ON');};
+  _stt.onresult=(e)=>{
+    if(!_gameStarted)return;
+    let interim='',final='';
+    for(let i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)final+=e.results[i][0].transcript;else interim+=e.results[i][0].transcript;}
+    if(interim)setMicStatus('🎤 '+interim);
+    if(final){final=final.trim();setMicStatus('🎤 음성 ON');addSTT('u',final);addMob('u',final);if(!voiceToBtn(final))handleFree(final);}
+  };
+  _stt.onerror=(e)=>{
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){_stt=null;setMicStatus('🔇');return;}
+    _stt=null;if(_gameStarted&&!ttsPlaying)setTimeout(startSTT,500);
+  };
+  _stt.onend=()=>{
+    if(!_gameStarted||ttsPlaying){_stt=null;return;}
+    _stt=null;setTimeout(()=>{if(_gameStarted&&!ttsPlaying)startSTT();},300);
+  };
+  try{_stt.start();}catch(e){_stt=null;}
+}
+function stopSTT(){if(_stt){try{_stt.stop();}catch(e){}}_stt=null;}
+function pauseSTT(){if(_stt){try{_stt.onend=null;_stt.abort();}catch(e){}}_stt=null;}
+function resumeSTT(){
+  if(!_gameStarted)return;
+  if(_stt){try{_stt.onend=null;_stt.onresult=null;_stt.abort();}catch(e){}}_stt=null;
+  startSTT();
+}
+async function startMic(){startSTT();}
+function stopMic(){
+  stopSTT();
+  if(micProcessor){micProcessor.disconnect();micProcessor=null;}
+  if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}
+}
+
+function enqueueAudio(i16){
+  initAudioCtx();
+  const f32=new Float32Array(i16.length);
+  for(let i=0;i<i16.length;i++)f32[i]=i16[i]/32768;
+  const buf=audioCtx.createBuffer(1,f32.length,24000);
+  buf.getChannelData(0).set(f32);
+  audioQueue.push(buf);
+  if(!audioPlaying)playNextWs();
+}
+function playNextWs(){
+  if(audioQueue.length===0){audioPlaying=false;return;}
+  audioPlaying=true;
+  const buf=audioQueue.shift();
+  const src=audioCtx.createBufferSource();
+  src.buffer=buf;src.connect(audioCtx.destination);
+  const startAt=Math.max(audioCtx.currentTime,nextPlayTime);
+  src.start(startAt);nextPlayTime=startAt+buf.duration;src.onended=playNextWs;
+}
+function stopWsAudio(){
+  audioQueue=[];audioPlaying=false;nextPlayTime=0;
+  try{if(audioCtx){audioCtx.close();audioCtx=null;}}catch(e){}
+  initAudioCtx();
+}
+
+const TTS_ENDPOINT='https://moneya-server.onrender.com/api/tts';
+let ttsQueue=[],ttsPlaying=false;
+let _greetingAudioCache=null;
+
+async function prefetchGreeting(){
+  try{
+    const res=await fetch(TTS_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'안녕하세요! 저는 AI 머니야입니다. 오상열 CFP 20년의 재무설계 노하우를 담아 만들어진 AI 재무코치예요. 오늘 딱 5분, DESIRE 로드맵으로 고객님의 재무 현재 위치를 정확히 진단해 드릴게요. 상담 내용은 저장되지 않으며, 금융상품 판매에 사용되지 않습니다. 개인 재무정보 입력에 동의하시겠어요?',voice:'nova'})});
+    if(!res.ok)return;
+    const data=await res.json();
+    if(data.success&&data.audio)_greetingAudioCache=data.audio;
+  }catch(e){}
+}
+
+async function speak(text){
+  if(!ttsOn)return;
+  const clean=text.replace(/<[^>]+>/g,'').replace(/&nbsp;/g,' ').trim();
+  if(!clean)return;
+  ttsQueue.push(clean);
+  if(!ttsPlaying)processTTSQueue();
+}
+async function processTTSQueue(){
+  if(ttsQueue.length===0){
+    ttsPlaying=false;
+    if(ttsQueue.length===0){setTimeout(()=>{if(_gameStarted)resumeSTT();},1500);}
+    return;
+  }
+  ttsPlaying=true;
+  pauseSTT();
+  const txt=ttsQueue.shift();
+  try{
+    let audioData=null;
+    if(_greetingAudioCache&&txt.startsWith('안녕하세요! 저는 AI 머니야')){audioData=_greetingAudioCache;_greetingAudioCache=null;}
+    else{
+      const res=await fetch(TTS_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt,voice:'nova'})});
+      if(!res.ok)throw new Error('TTS fail');
+      const data=await res.json();
+      if(!data.success||!data.audio)throw new Error('no audio');
+      audioData=data.audio;
+    }
+    const binary=atob(audioData);
+    const bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+    initAudioCtx();
+    if(audioCtx){
+      const decoded=await audioCtx.decodeAudioData(bytes.buffer);
+      const src=audioCtx.createBufferSource();
+      src.buffer=decoded;src.connect(audioCtx.destination);
+      src.onended=()=>{processTTSQueue();};
+      src.start(0);
+    }else{
+      const blob=new Blob([bytes],{type:'audio/mpeg'});
+      const url=URL.createObjectURL(blob);
+      const audio=new Audio(url);
+      audio.onended=()=>{URL.revokeObjectURL(url);processTTSQueue();};
+      audio.onerror=()=>processTTSQueue();
+      await audio.play();
+    }
+  }catch(e){
+    if('speechSynthesis' in window){
+      const utt=new SpeechSynthesisUtterance(txt);
+      utt.lang='ko-KR';utt.rate=0.88;utt.pitch=1.05;
+      utt.onend=()=>{processTTSQueue();};
+      speechSynthesis.speak(utt);
+    }else{processTTSQueue();}
+  }
+}
+function toggleTTS(){
+  ttsOn=!ttsOn;
+  const btn=document.getElementById('tts-toggle');
+  if(btn)btn.textContent=ttsOn?'🔊 음성 ON':'🔇 음성 OFF';
+  if(!ttsOn&&'speechSynthesis' in window)speechSynthesis.cancel();
+}
+
+let fbStar=0,fbIntent='';
+function setStar(v){
+  fbStar=v;
+  document.querySelectorAll('.star').forEach(s=>{s.style.color=parseInt(s.dataset.v)<=v?'#E8B830':'rgba(255,255,255,.25)';s.style.opacity=parseInt(s.dataset.v)<=v?'1':'.3';});
+  const labels=['','별로였어요','조금 아쉬워요','괜찮았어요','좋았어요','매우 좋았어요!'];
+  document.getElementById('star-label').textContent=labels[v];
+  document.getElementById('star-label').style.color='var(--gold2)';
+}
+function setIntent(v){
+  fbIntent=v;
+  const y=document.getElementById('intent-y');const n=document.getElementById('intent-n');
+  if(v==='Y'){y.style.background='rgba(22,163,74,.25)';y.style.borderColor='var(--green2)';y.style.color='var(--green2)';n.style.background='transparent';n.style.borderColor='rgba(255,255,255,.2)';n.style.color='rgba(255,255,255,.65)';}
+  else{n.style.background='rgba(59,130,246,.2)';n.style.borderColor='#60A5FA';n.style.color='#93C5FD';y.style.background='transparent';y.style.borderColor='rgba(255,255,255,.2)';y.style.color='rgba(255,255,255,.65)';}
+}
+async function submitFeedback(){
+  if(!fbStar){alert('별점을 선택해 주세요 ⭐');return;}
+  if(!document.getElementById('fb-agree').checked){alert('개인정보 수집·이용에 동의해 주세요');return;}
+  const payload={timestamp:new Date().toLocaleString('ko-KR'),name:document.getElementById('fb-name').value||'(미입력)',phone:document.getElementById('fb-phone').value||'(미입력)',star:fbStar,review:document.getElementById('fb-review').value||'(없음)',intent:fbIntent||'(미선택)',idea:document.getElementById('fb-idea').value||'(없음)',passCount:Object.values(ST.res).filter(v=>v==='pass').length,curStage:SG.find(s=>ST.res[s.k]==='cur')?.nm||'완성'};
+  const SHEET_URL='https://script.google.com/macros/s/YOUR_APPS_SCRIPT_ID/exec';
+  try{await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify(payload),headers:{'Content-Type':'application/json'}});}catch(e){console.warn('시트 전송 실패(무시)',e);}
+  showThanks(payload);
+}
+function showThanks(payload){
+  document.getElementById('feedback-overlay').style.display='none';
+  const to=document.getElementById('thanks-overlay');to.style.display='block';
+  const msg=document.getElementById('thanks-msg');
+  if(payload.intent==='Y'){msg.innerHTML=`🙌 <strong style="color:var(--gold2)">구독 의향을 밝혀주셔서 감사합니다!</strong><br><br>60분 무료 상담을 마치신 후 월 ₩9,900 정기구독으로 AI 머니야와 계속 함께하세요.`;document.getElementById('thanks-sub').style.display='block';}
+  else{msg.innerHTML=`😊 <strong>60분 무료 상담을 먼저 경험해 보세요.</strong><br><br>부담 없이 받아보시고, 도움이 된다고 느끼실 때 정기구독을 결정하셔도 됩니다.`;document.getElementById('thanks-sub').style.display='none';}
+}
+function openFeedback(){document.getElementById('result').classList.remove('show');document.getElementById('feedback-overlay').style.display='block';window.scrollTo(0,0);}
+
+const LOGO='https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a';
+const SG=[
+  {k:'D',l:'D',sh:'Debt Free',nm:'신용대출 상환'},
+  {k:'E',l:'E',sh:'Emergency Fund',nm:'비상예비자금 마련'},
+  {k:'S',l:'S',sh:'Save & Invest',nm:'적립식 저축투자'},
+  {k:'I',l:'I',sh:'Investment',nm:'거치식 자산운용'},
+  {k:'R',l:'R',sh:'Repay Mortgage',nm:'담보대출 상환'},
+  {k:'E2',l:'E',sh:'Early Retirement',nm:'경제적 조기은퇴'},
+];
+const ST={step:'WAIT',res:{},profile:{hasLoan:null,loanCount:null,loanAmt:null,hasEm:null,income:null,children:null,saving:null,hasAsset:null,hasMtg:null,retireAge:null,retireMon:null}};
+
+let sec=0;
+function startTimer(){setInterval(()=>{sec++;const t=fmtT(sec);document.getElementById('tmr').textContent=t;const r=document.getElementById('rp-tmr');if(r)r.textContent=t;},1000);}
+function fmtT(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
+
+function renderAll(){renderPC();renderRP();renderMob();}
+function renderPC(){
+  const pb=document.getElementById('pc-pb');if(!pb)return;
+  pb.innerHTML=SG.map(s=>{const r=ST.res[s.k];return`<div class="pb-s ${r==='pass'?'done':r==='cur'?'cur':''}"></div>`;}).join('');
+  const dsn=document.getElementById('pc-dsn');if(!dsn)return;
+  dsn.innerHTML=SG.map(s=>{const r=ST.res[s.k];const cls=r==='pass'?'dsn pass':r==='cur'?'dsn cur':'dsn lock';const ic=r==='pass'?'✅':r==='cur'?'📍':'🔒';return`<div class="${cls}"><div class="dsn-b">${s.l}</div><div class="dsn-i"><div class="dsn-lt">${s.l} — ${s.sh}</div><div class="dsn-nm">${s.nm}</div></div><div class="dsn-ic">${ic}</div></div>`;}).join('');
+}
+function renderRP(){
+  const el=document.getElementById('rp-steps');if(!el)return;
+  el.innerHTML=SG.map(s=>{const r=ST.res[s.k];const cls=r==='pass'?'rp-st done':r==='cur'?'rp-st cur':'rp-st lock';return`<div class="${cls}"><div class="rp-sn">${r==='pass'?'✓':s.l}</div><span class="rp-sl">${s.nm}</span>${!r?'<span class="rp-lk">🔒</span>':''}</div>`;}).join('');
+}
+function renderMob(){
+  const pb=document.getElementById('mob-pb');const nms=document.getElementById('mob-nms');if(!pb||!nms)return;
+  pb.innerHTML=SG.map(s=>{const r=ST.res[s.k];return`<div class="mob-ps ${r==='pass'?'done':r==='cur'?'cur':''}"></div>`;}).join('');
+  nms.innerHTML=SG.map(s=>{const r=ST.res[s.k];const cls=r==='pass'?'mob-nm done':r==='cur'?'mob-nm cur':'mob-nm';return`<div class="${cls}">${s.l}.${s.nm.substring(0,4)}</div>`;}).join('');
+}
+function setFinding(color,lbl,val,sub){const el=document.getElementById('rp-fi');if(!el)return;el.innerHTML=`<div class="fi-box ${color} fi"><div class="fi-l">${lbl}</div><div class="fi-v">${val}</div><div class="fi-s">${sub}</div></div>`;}
+function addPCData(items){const el=document.getElementById('pc-data');if(!el)return;const rows=items.map(i=>`<div class="dc-r"><span class="dc-rl">${i.l}</span><span class="dc-rv">${i.v}</span></div>`).join('');el.innerHTML=`<div class="dc fi"><div class="dc-h"><span class="dc-ht">📋 스마트노트 — 자동 기록</span><span class="dc-hb">✓ 저장</span></div><div class="dc-b">${rows}</div></div>`;}
+
+function now(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+
+let _locked=false;
+function aiSay(text,btns=[],mobCard=null){
+  if(_locked)return;_locked=true;
+  _currentBtns=btns;
+  clearBtns();showTyping();
+  setTimeout(()=>{
+    _locked=false;removeTyping();
+    document.getElementById('ai-tag').textContent='💬 상담 중';
+    document.getElementById('stt-bd').textContent='● 음성인식 중';
+    addSTT('ai',text);addMob('ai',text,mobCard);renderAll();speak(text);
+    if(btns.length)showBtns(btns);
+  },300);
+}
+function userSay(text){clearBtns();addSTT('u',text);addMob('u',text);}
+function sysSay(text){addSTTSys(text);addMobSys(text);}
+
+function addSTT(role,text){
+  const el=document.getElementById('stt-msgs');if(!el)return;
+  const isAI=role==='ai';const d=document.createElement('div');d.className='stt-m fi';
+  const t=text.replace(/<[^>]+>/g,'').substring(0,95)+(text.length>95?'...':'');
+  d.innerHTML=isAI?`<div class="stt-av"><img src="${LOGO}" alt="M" onerror="this.outerHTML='M'"></div><div class="stt-bbl ai">${t}</div>`:`<div class="stt-av u">나</div><div class="stt-bbl u">${t}</div>`;
+  el.appendChild(d);el.scrollLeft=el.scrollWidth;
+}
+function addSTTSys(text){const el=document.getElementById('stt-msgs');if(!el)return;const d=document.createElement('div');d.className='stt-m fi';d.innerHTML=`<div class="stt-bbl sys">📍 ${text}</div>`;el.appendChild(d);el.scrollLeft=el.scrollWidth;}
+function addMob(role,text,card=null){
+  const el=document.getElementById('mob-chat');if(!el)return;
+  const isAI=role==='ai';const d=document.createElement('div');d.className=`mm ${isAI?'':'u'} fi`;
+  let cardHTML=card?buildCard(card):'';
+  d.innerHTML=isAI?`<div class="mm-av"><img src="${LOGO}" alt="💰" onerror="this.outerHTML='💰'"></div><div class="mm-bd"><div class="bbl ai">${text}</div>${cardHTML}<div class="mm-t">${now()}</div></div>`:`<div class="mm-bd"><div class="bbl u">${text}</div><div class="mm-t">${now()}</div></div>`;
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+function addMobSys(text){const el=document.getElementById('mob-chat');if(!el)return;const d=document.createElement('div');d.className='mm fi';d.style.justifyContent='center';d.innerHTML=`<div class="bbl sys">📍 ${text}</div>`;el.appendChild(d);el.scrollTop=el.scrollHeight;}
+function buildCard(card){
+  if(card.type==='stages'){const rows=SG.map(s=>{const r=ST.res[s.k];const cls=r==='pass'?'mc-st pass':r==='cur'?'mc-st cur':'mc-st lock';const ic=r==='pass'?'✅':r==='cur'?'📍':'🔒';return`<div class="${cls}"><div class="mc-sb">${s.l}</div><div class="mc-si"><div class="mc-slt">${s.l} — ${s.sh}</div><div class="mc-sn">${s.nm}</div></div><span>${ic}</span></div>`;}).join('');return`<div class="mc"><div class="mc-h"><span class="mc-ht">🗺 DESIRE 로드맵</span><span class="mc-hb">실시간</span></div><div class="mc-b">${rows}</div></div>`;}
+  if(card.type==='data'){const rows=card.items.map(i=>`<div class="mc-r"><span class="mc-rl">${i.l}</span><span class="mc-rv">${i.v}</span></div>`).join('');return`<div class="mc"><div class="mc-h"><span class="mc-ht">📋 스마트노트 — 자동 기록</span><span class="mc-hb">✓ 저장</span></div><div class="mc-b">${rows}</div></div>`;}
+  return'';
+}
+function showTyping(){
+  const sm=document.getElementById('stt-msgs');
+  if(sm){const d=document.createElement('div');d.id='stt-tp';d.className='stt-m fi';d.innerHTML=`<div class="stt-av"><img src="${LOGO}" alt="M" onerror="this.outerHTML='M'"></div><div class="stt-bbl ai" style="display:flex;gap:4px;align-items:center;"><span style="width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.45);display:inline-block;animation:typing 1.2s 0s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.45);display:inline-block;animation:typing 1.2s .2s infinite;"></span><span style="width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.45);display:inline-block;animation:typing 1.2s .4s infinite;"></span></div>`;sm.appendChild(d);sm.scrollLeft=sm.scrollWidth;}
+  const mc=document.getElementById('mob-chat');
+  if(mc){const d=document.createElement('div');d.id='mob-tp';d.className='tp-wrap fi';d.innerHTML=`<div class="mm-av"><img src="${LOGO}" alt="💰" onerror="this.outerHTML='💰'"></div><div class="tp-bbl"><div class="td"></div><div class="td"></div><div class="td"></div></div>`;mc.appendChild(d);mc.scrollTop=mc.scrollHeight;}
+}
+function removeTyping(){['stt-tp','mob-tp'].forEach(id=>{const e=document.getElementById(id);if(e)e.remove();});}
+
+let _currentBtns=[];
+function showBtns(btns){
+  _currentBtns=btns;
+  ['pc-qa','qmob'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.innerHTML='';const isMob=id==='qmob';
+    btns.forEach(b=>{
+      const btn=document.createElement('button');
+      btn.className=(isMob?'mqb':'qb')+(b.gold?' gold':'');
+      btn.textContent=b.label;
+      btn.onclick=()=>{userSay(b.label);setTimeout(()=>step(b.next),280);};
+      el.appendChild(btn);
     });
-    
-    return { ...chunk, score };
   });
-  
-  return scored
-    .filter(c => c.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxResults);
-};
+}
+function clearBtns(){['pc-qa','qmob'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});}
 
-const buildRAGContext = (query) => {
-  const results = searchRAG(query, 3);
-  if (results.length === 0) return '';
-  
-  let context = '';
-  results.forEach((r, i) => {
-    const content = (r.content || r.text || '').substring(0, 300);
-    context += `${i + 1}. ${content}\n`;
-  });
-  return context;
-};
+function voiceToBtn(text){
+  const dbg=document.getElementById('ai-tag');
+  if(dbg)dbg.textContent='🎤 인식: '+text.substring(0,15);
+  setTimeout(()=>{if(dbg)dbg.textContent='💬 상담 중';},2000);
+  if(!_currentBtns||_currentBtns.length===0)return false;
+  const t=text.trim().toLowerCase();
+  const hasNumber=/\d/.test(text)||/만원|백만|천만|억/.test(text);
+  if(hasNumber&&(ST.step==='S_INCOME_WAIT'||ST.step==='D_WAIT'))return false;
+  if(t.includes('결혼')||t.includes('기혼')||t.includes('아내')||t.includes('남편')||t.includes('배우자')){clickBtnByNext('S_MARRIED');return true;}
+  if(t.includes('미혼')||t.includes('독신')||t.includes('싱글')){clickBtnByNext('S_SINGLE');return true;}
+  const isChildStep=_currentBtns.some(b=>b.next==='S_C0');
+  if(isChildStep){
+    if(t.includes('없')||t.includes('무자녀')){clickBtnByNext('S_C0');return true;}
+    if(t.includes('1명')||t.includes('한 명')||t.includes('한명')||t.includes('하나')){clickBtnByNext('S_C1');return true;}
+    if(t.includes('2명')||t.includes('두 명')||t.includes('두명')||t.includes('둘')){clickBtnByNext('S_C2');return true;}
+    if(t.includes('3명')||t.includes('세 명')||t.includes('세명')||t.includes('셋')||t.includes('이상')){clickBtnByNext('S_C3');return true;}
+  }
+  const YES=['있습니다','있어요','있어','네','예','맞아요','맞습니다','하고 있습니다','하고있습니다','하고있어요','이상입니다','됩니다','완료','통과','준비','했습니다','동의','시작'];
+  const NO=['없습니다','없어요','없어','아니요','아니','못하고','못해요','안됩니다','안돼요','아직','모르겠어요','어렵습니다','안 하고','못 하고'];
+  const isYes=YES.some(k=>t.includes(k));
+  const isNo=NO.some(k=>t.includes(k));
+  if(_currentBtns.length===1){clickBtn(0);return true;}
+  if(_currentBtns.length===2){
+    if(isYes&&!isNo){clickBtn(0);return true;}
+    if(isNo&&!isYes){clickBtn(1);return true;}
+    if(isYes){clickBtn(0);return true;}
+    if(isNo){clickBtn(1);return true;}
+  }
+  return false;
+}
+function clickBtn(index){
+  if(!_currentBtns[index])return;
+  const b=_currentBtns[index];_currentBtns=[];pauseSTT();
+  userSay(b.label);setTimeout(()=>step(b.next),280);
+}
+function clickBtnByNext(next){
+  const b=_currentBtns.find(btn=>btn.next===next);if(!b)return;
+  _currentBtns=[];pauseSTT();
+  userSay(b.label);setTimeout(()=>step(b.next),280);
+}
 
-const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '', designData = null, analysisContext = null, spendData = null) => {
-  const name = financialContext?.name || userName || '고객';
-  const age = financialContext?.age || 0;
-  const monthlyIncome = financialContext?.monthlyIncome || 0;
-  const totalAssets = financialContext?.totalAssets || 0;
-  const totalDebt = financialContext?.totalDebt || 0;
-  const netAssets = financialContext?.netAssets || (totalAssets - totalDebt);
-  const wealthIndex = financialContext?.wealthIndex || 0;
-  const financialLevel = financialContext?.financialLevel || 0;
-  const houseName = financialContext?.houseName || '';
-  
-  const livingExpense = financialContext?.livingExpense || 0;
-  const savings = financialContext?.savings || 0;
-  const pension = financialContext?.pension || 0;
-  const insurance = financialContext?.insurance || 0;
-  const loanPayment = financialContext?.loanPayment || 0;
-  const surplus = financialContext?.surplus || 0;
-  
-  const dailyBudget = budgetInfo?.dailyBudget || financialContext?.dailyBudget || 0;
-  const todaySpent = budgetInfo?.todaySpent || financialContext?.todaySpent || 0;
-  const remainingBudget = budgetInfo?.remainingBudget || financialContext?.remainingBudget || 0;
+function _sBudget(fam,type){
+  const sv=[.50,.40,.30,.20,.10];const pen=[.10,.10,.10,.10,.10];const idx=Math.min(fam,5)-1;
+  if(type==='sv')return sv[idx];if(type==='pen')return pen[idx];return sv[idx]+pen[idx];
+}
 
-  let prompt = `## 머니야 정체성 (최우선!)
+/* ══ send — 텍스트 입력창 ══ */
+function send(mode){
+  const inp=document.getElementById(mode==='pc'?'pc-inp':'mob-inp');
+  const t=inp.value.trim();if(!t)return;
+  inp.value='';if(mode==='mob')inp.style.height='auto';
+  userSay(t);
+  // 버튼 단계면 voiceToBtn으로 먼저 처리
+  if(_currentBtns&&_currentBtns.length>0){
+    if(voiceToBtn(t))return;
+  }
+  setTimeout(()=>handleFree(t),280);
+}
 
-나는 "머니야"입니다. 오상열 대표 CFP가 직접 가르친 유일한 AI 수제자입니다.
-OpenAI나 ChatGPT가 아닙니다. 오상열 대표가 직접 훈련시킨 AI 금융집사입니다.
+/* ══ handleFree — 자유 텍스트 처리 ══ */
+function handleFree(text){
+  const p=ST.profile;
 
-### 오상열 대표는 누구인가?
-- 오원트금융연구소 대표
-- CFP(국제공인재무설계사), 20년 경력 금융 전문가
-- 금융집짓기 방법론 창시자
-- 저서: "소원을 말해봐", "빚부터 갚아라", "금융집짓기"
-- 한국금융연수원 외래교수
-
-### 머니야는 누구인가?
-- 오상열 대표가 만든 AI 금융집사
-- 오상열 대표의 20년 재무설계 노하우를 학습한 AI
-- ${name}님의 개인 금융코치
-
-### 금융집짓기란?
-- 오상열 대표가 만든 가계 재무설계 방법론
-- 집을 짓듯이 재무 기초(부채관리)부터 차근차근 설계하는 방식
-- 5대 예산: 생활비, 저축투자, 노후연금, 보장성보험, 대출상환
-
-## 절대 금지 사항 (위법 방지!)
-1. 특정 금융상품명 언급 금지
-2. 특정 투자 권유 금지
-3. 본인 경험 표현 금지
-4. 출처/숫자 언급 금지
-
-## 호출 규칙 (최우선!)
-- "${name}" 또는 "머니야"라고 부르면: "네, ${name}님!" 이것만 말하고 멈추세요
-
-## 말투 규칙 (필수!)
-- 반드시 존댓말을 사용하세요
-- "~입니다", "~해요", "~하세요", "~할게요" 체를 사용하세요
-- 절대 반말 금지
-
-## 기본 규칙
-- 한국어로만 대화하세요
-- 이모지 절대 사용 금지
-- 짧고 간결하게 말하세요 (최대 2-3문장)
-- 항상 "${name}님"으로 호칭하세요
-
-## 숫자 표기 규칙
-금액을 말할 때는 반드시 한글로만 말하세요!
-
-## ${name}님의 재무 현황
-- 이름: ${name}
-- 나이: ${age}세
-- 월수입: ${monthlyIncome}만원
-- 총자산: ${totalAssets}만원
-- 총부채: ${totalDebt}만원
-- 순자산: ${netAssets}만원
-- 부자지수: ${wealthIndex}점
-- 금융집 레벨: ${financialLevel}단계 (${houseName})
-- 생활비: ${livingExpense.toLocaleString()}원
-- 저축투자: ${savings.toLocaleString()}원
-- 노후연금: ${pension.toLocaleString()}원
-- 보장성보험: ${insurance.toLocaleString()}원
-- 대출상환: ${loanPayment.toLocaleString()}원
-- 잉여자금: ${surplus.toLocaleString()}원
-- 일일 예산: ${dailyBudget.toLocaleString()}원
-- 오늘 지출: ${todaySpent.toLocaleString()}원
-- 남은 예산: ${remainingBudget.toLocaleString()}원`;
-
-  if (designData) {
-    prompt += `\n\n### 금융집짓기 재무설계 (3차 데이터) - 단위: 만원`;
-    if (designData.retire) {
-      const r = designData.retire;
-      prompt += `\n\n#### 은퇴설계\n- 현재나이: ${r.currentAge || 0}세\n- 은퇴예정: ${r.retireAge || 0}세\n- 기대수명: ${r.lifeExpectancy || 0}세\n- 월 필요생활비: ${r.monthlyExpense || 0}만원\n- 국민연금 예상: ${r.nationalPension || 0}만원\n- 개인연금 예상: ${r.personalPension || 0}만원`;
-    }
-    if (designData.debt) {
-      const d = designData.debt;
-      prompt += `\n\n#### 부채관리\n- 월소득: ${d.monthlyIncome || 0}만원\n- 주택담보대출 잔액: ${d.mortgageBalance || 0}만원\n- 신용대출 잔액: ${d.creditBalance || 0}만원`;
-    }
-    if (designData.save) {
-      const s = designData.save;
-      prompt += `\n\n#### 저축설계\n- 월소득: ${s.monthlyIncome || 0}만원\n- 월저축액: ${s.monthlySaving || 0}만원\n- 비상예비자금: ${s.emergencyFund || 0}만원`;
-    }
-    if (designData.invest) {
-      const i = designData.invest;
-      prompt += `\n\n#### 투자설계\n- 현재나이: ${i.currentAge || 0}세\n- 현재자산: ${i.currentAssets || 0}만원\n- 월투자액: ${i.monthlyInvestment || 0}만원`;
-    }
-    if (designData.insurance) {
-      const ins = designData.insurance;
-      prompt += `\n\n#### 보험설계\n- 월보험료: ${ins.monthlyPremium || 0}만원\n- 사망보장: ${ins.deathCoverage || 0}만원`;
-    }
+  /* D단계: 대출 건수/금액 */
+  if(ST.step==='D_WAIT'){
+    const nums=text.match(/\d+/g);
+    if(nums){p.loanCount=nums[0]||'?';p.loanAmt=nums[1]||nums[0];}
+    const data=[{l:'신용대출 건수',v:(p.loanCount||'?')+'건'},{l:'대출 총액',v:(p.loanAmt||'?')+'만원(입력)'},{l:'진단 단계',v:'D단계 — 신용대출 상환 필요'}];
+    addPCData(data);setFinding('red','💳 부채 위험','신용대출 상환 최우선','스노우볼 전략으로 해결');
+    ST.res['D']='cur';
+    aiSay(`확인했습니다! 📋<br><br>신용대출이 있는 상태에서는 이자가 수익을 갉아먹습니다.<br><br><strong>스노우볼 전략</strong>으로 해결합니다. 금액이 가장 작은 대출부터 먼저 상환해 작은 성취감을 쌓고, 여유자금으로 다음 대출을 공략하는 방식입니다.<br><br>재원은 두 가지입니다. ① 매달 정기수입 중 저축 가능한 금액 ② 상여금·성과급 같은 비정기수입<br><br>D단계를 이겨내면 E→S→I→R→E 순서로 반드시 경제적 조기은퇴까지 갈 수 있습니다. 다음 단계도 확인해 볼까요?`,
+      [{label:'E단계 → 비상예비자금 확인',next:'GO_E',gold:true}],{type:'data',items:data});
+    ST.step='D_DONE';return;
   }
 
-  if (analysisContext && analysisContext.analysis) {
-    prompt += `\n\n## 분석한 서류: ${analysisContext.fileName}\n${analysisContext.analysis}`;
+  /* S단계: 월 소득 */
+  if(ST.step==='S_INCOME_WAIT'){
+    let inc=0;const t2=text.replace(/,/g,'');
+    const eokmatch=t2.match(/(\d+)\s*억/);if(eokmatch)inc=parseInt(eokmatch[1])*10000;
+    const cheonman=t2.match(/(\d*)\s*천\s*만/);
+    if(!inc&&cheonman)inc=(parseInt(cheonman[1])||1)*1000;
+    else if(!inc){const cheon=t2.match(/(\d+)\s*천(?!\s*만)/);if(cheon)inc=parseInt(cheon[1])*1000;}
+    if(!inc){const baekman=t2.match(/(\d+)\s*백\s*만/);if(baekman)inc=parseInt(baekman[1])*100;}
+    if(!inc){const manmatch=t2.match(/(\d+)\s*만/);if(manmatch)inc=parseInt(manmatch[1]);}
+    if(!inc){const numonly=t2.match(/(\d+)/);if(numonly){inc=parseInt(numonly[1]);if(inc>100000)inc=Math.round(inc/10000);}}
+    p.income=inc;
+    const fam=p.family||2;const svR=_sBudget(fam,'sv');const penR=_sBudget(fam,'pen');
+    const sv=Math.round(inc*svR);const pen=Math.round(inc*penR);
+    const living=Math.round(inc*[.20,.30,.40,.50,.60][Math.min(fam,5)-1]);
+    const data=[{l:'월 소득',v:inc+'만원'},{l:'권장 생활비',v:living+'만원 ('+Math.round([20,30,40,50,60][Math.min(fam,5)-1])+'%)'},{l:'권장 저축·투자',v:sv+'만원/월 ('+Math.round(svR*100)+'%)'},{l:'권장 노후연금',v:pen+'만원/월 (10%)'},{l:'저축+연금 합계',v:(sv+pen)+'만원/월'}];
+    addPCData(data);setFinding('yellow','💰 저축 진단',`목표 ${sv+pen}만원/월`,`저축투자 ${sv}만+연금 ${pen}만`);
+    ST.step='S_CHECK';
+    aiSay(`확인했습니다! 😊<br><br>월 소득 <strong>${inc}만원</strong> 기준으로 가족 ${fam}인 권장 금액을 계산했어요.<br><br>📌 <strong>매달 저축·투자</strong>로 넣어야 할 금액: <strong>${sv}만원</strong><br>📌 <strong>노후연금</strong>(은퇴 준비)으로 넣어야 할 금액: <strong>${pen}만원</strong><br>📌 <strong>합계: 매달 ${sv+pen}만원</strong><br><br>쉽게 말씀드리면, 매달 월급 받으면 <strong>${sv+pen}만원은 먼저 저축·연금으로 빼놓으시면</strong> 됩니다.<br><br>지금 이 정도로 저축하고 계신가요?`,
+      [{label:'네, 하고 있습니다 ✅',next:'S_YES'},{label:'아직 못하고 있습니다 😅',next:'S_NO'}],{type:'data',items:data});
+    return;
   }
 
-  if (spendData && spendData.length > 0) {
-    prompt += `\n\n## 오늘 지출 내역\n${spendData.map((item, i) => `${i + 1}. ${item.time} - ${item.memo}: ${item.amount.toLocaleString()}원 (${item.category})`).join('\n')}`;
-  }
-
-  prompt += `\n\n## 음성 지출 입력 기능\n지출을 말하면 자동으로 기록해주세요.\n[SPEND_RECORD]{"memo":"내용","amount":금액,"category":"카테고리"}[/SPEND_RECORD]`;
-
-  if (ragContext) {
-    prompt += `\n\n## 참고 자료 (오상열 CFP 지식)\n${ragContext}`;
-  }
-
-  return prompt;
-};
-
-// ============================================
-// DESIRE 시스템 프롬프트 (문서 5번 전문)
-// ============================================
-const DESIRE_SYSTEM_PROMPT = `당신은 AI 재무설계사 머니야입니다.
-
-오상열 CFP(20년 경력, 2,000건 상담)의 금융집짓기® 방법론 중 DESIRE 로드맵으로 고객의 재무 현황을 진단합니다.
-
-═══════════════════════════════════════
-
-【핵심 원칙】 DESIRE 로드맵 리딩 AI
-
-═══════════════════════════════════════
-
-• 질문을 기다리지 마세요. 먼저 질문하고 D→E→S→I→R→E 순서로 리딩하세요.
-
-• 모든 답변 마지막에는 반드시 다음 단계 안내 또는 다음 질문이 있어야 합니다.
-
-• 숫자로 놀라게 하고, 비유로 쉽게 설명하고, 따뜻하지만 직설적으로 말하세요.
-
-• 금칙어: 특정 금융상품 추천, 수익 보장, 탈세·불법 안내, 매수·매도 타이밍 판단
-
-═══════════════════════════════════════
-
-【DESIRE 6단계 진단 흐름】
-
-═══════════════════════════════════════
-
-현재 진행 단계를 항상 추적하고, 트리거 조건이 충족되면 자동으로 다음 단계로 이동하세요.
-
-【오프닝】
-트리거: 고객 동의 버튼 클릭
-행동: 인사 → 목적 설명 → 면책 고지 → 동의 확인 → D단계 시작
-멘트: "안녕하세요! AI 재무설계사 머니야입니다. DESIRE 로드맵 육단계로 재무 현황을 진단해드릴게요. 먼저 신용대출이 있으신가요?"
-다음 트리거: 동의 완료 → D단계
-
-【D단계: Debt Free - 신용대출 상환】
-트리거: 오프닝 완료
-행동: 신용대출 유무 확인 → YES: E단계 이동 / NO: 건수·금액 파악 → 스노우볼 전략 설명 → 본상담 연결
-스마트노트: YES → 통과 / NO → 금액 기재
-다음 트리거: 답변 완료 → E단계
-
-【E단계: Emergency Fund - 비상예비자금】
-트리거: D단계 완료
-행동: 비상예비자금 유무 확인 → YES: S단계 이동 / NO: 두가지 방법 안내(정기적립·비정기수입) → 본상담 연결
-기준: 맞벌이 삼개월치, 외벌이 육개월치
-스마트노트: YES → 통과 / NO → 선택 방법 기재
-다음 트리거: 답변 완료 → S단계
-
-【S단계: Save & Invest - 적립식 저축투자】
-트리거: E단계 완료
-행동: 가족정보 수집(결혼·자녀·소득) → 기준 저축액 자동 계산(소득×사십퍼센트) → 현재 저축과 비교 → NO: 차이 분석·삼버킷 소개 → 본상담 연결
-공식: 저축투자 삼십퍼센트 + 노후연금 십퍼센트 = 최소 사십퍼센트
-스마트노트: YES → 통과 / NO → 차이 금액 기재
-다음 트리거: 답변 완료 → I단계
-
-【I단계: Investment - 거치식 자산운용】
-트리거: S단계 완료
-행동: 금융자산 십억 여부 확인 → YES: R단계 이동 / NO: 목표 설명·S단계 연결 → 본상담 연결
-스마트노트: YES → 통과 / NO → 목표 기재
-다음 트리거: 답변 완료 → R단계
-
-【R단계: Repay Mortgage - 담보대출 상환】
-트리거: I단계 완료
-행동: 주택담보대출 유무 확인 → YES: E2단계 이동 / 있을 경우: 은퇴 전 완납 필요성 설명 → 본상담 연결
-스마트노트: YES → 통과 / 있을 경우 → 잔액·목표 기재
-다음 트리거: 답변 완료 → E2단계
-
-【E2단계: Early Retirement - 경제적 조기은퇴】
-트리거: R단계 완료
-행동: 목표 은퇴 나이·월 생활비 질문 → 필요 은퇴 자산 자동 계산 → 결과 화면 표시 → CTA
-공식: 월 생활비 × 십이개월 × 삼십년 = 필요 은퇴 자산
-스마트노트: 목표 나이·금액·필요 자산 기재
-다음 트리거: 계산 완료 → 결과 화면 → CTA
-
-═══════════════════════════════════════
-
-【핵심 계산 공식】
-
-═══════════════════════════════════════
-
-• 기준 저축액 = 월 소득 × 사십퍼센트 (저축투자 삼십퍼센트 + 노후연금 십퍼센트)
-• 필요 은퇴 자산 = 월 생활비 × 십이개월 × 삼십년
-• 비상예비자금 = 월 생활비 × 삼개월(맞벌이) 또는 육개월(외벌이)
-• 자산 배분: 수익자산 비중 = 백 빼기 나이(퍼센트)
-
-═══════════════════════════════════════
-
-【오상열 화법 원칙】
-
-═══════════════════════════════════════
-
-• 항상 질문으로 리딩: "~은 어떻게 되세요?"
-• 숫자로 놀라게: "월 삼백만원×삼십년=십억 팔천만원입니다"
-• 비유 사용: 금융집짓기, 스노우볼, 삼버킷
-• 공감 먼저: "그 고민 충분히 이해합니다"
-• 희망으로 마무리: "지금 알게 되셨으니까 고칠 수 있어요!"
-• 본상담 연결: "정확한 플랜은 육십분 본상담에서 함께 만들어드릴게요"
-
-## 숫자 읽기 규칙 (반드시 준수)
-- 숫자는 반드시 한글로 읽으세요
-- 5분 → "오분", 3개월 → "세달", 10억 → "십억", 1억 → "일억"
-- 퍼센트: 10% → "십퍼센트", 30% → "삼십퍼센트"
-- 금액: 300만원 → "삼백만원", 650만원 → "육백오십만원"
-- 절대로 숫자를 그대로 읽지 마세요`;
-
-// Health check
-app.get('/', (req, res) => {
-  res.json({ 
-    status: 'AI머니야 서버 실행 중!', 
-    version: '3.16',
-    features: ['음성대화', 'RAG', 'OCR분석', 'OCR컨텍스트유지', '이미지최적화', '영수증OCR', '지출내역연동', '음성지출입력'],
-    rag: { enabled: true, chunks: ragChunks.length }
-  });
-});
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-app.post('/api/analyze-file', upload.single('file'), async (req, res) => {
-  try {
-    const file = req.file;
-    const { fileName, fileType, currentTab } = req.body;
-    
-    if (!file) {
-      return res.json({ success: false, error: '파일이 없습니다.' });
+  /* ══ fallback: 버튼 있는 단계에서 텍스트 입력 → 긍정/부정 자동 판단 ══ */
+  if(_currentBtns&&_currentBtns.length>0){
+    const t=text.trim().toLowerCase();
+    const YES=['있','네','예','맞','합니다','해요','했','있어','준비','통과','됩니다','동의','시작','이상','좋아','할게','하겠'];
+    const NO=['없','아니','못','안','아직','모르','어렵','부족','불가','힘들'];
+    const isYes=YES.some(k=>t.includes(k));
+    const isNo=NO.some(k=>t.includes(k));
+    if(_currentBtns.length>=2){
+      if(isYes&&!isNo){clickBtn(0);return;}
+      if(isNo&&!isYes){clickBtn(1);return;}
     }
-    
-    let optimizedBuffer = file.buffer;
-    let finalMimeType = file.mimetype || 'image/jpeg';
-    
-    try {
-      optimizedBuffer = await sharp(file.buffer)
-        .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 90, mozjpeg: true })
-        .toBuffer();
-      finalMimeType = 'image/jpeg';
-    } catch (sharpError) {
-      console.log(`[OCR] 이미지 최적화 실패, 원본 사용: ${sharpError.message}`);
-    }
-    
-    const base64Data = optimizedBuffer.toString('base64');
-    
-    const tabPrompts = {
-      retire: '연금증권, 국민연금 가입내역, 퇴직연금 관련 서류',
-      debt: '대출 관련 서류, 부채 증명서',
-      save: '저축 관련 서류, 예금증서',
-      invest: '투자 관련 서류, 증권계좌',
-      tax: '근로소득원천징수영수증, 세금 관련 서류',
-      estate: '부동산 관련 서류, 등기부등본',
-      insurance: '보험증권, 보험 관련 서류',
-      receipt: '영수증, 결제 내역서'
-    };
-    
-    const tabContext = tabPrompts[currentTab] || '재무 관련 서류';
-    
-    let expertPrompt;
-    if (currentTab === 'receipt') {
-      expertPrompt = `당신은 영수증 OCR 분석 전문가입니다.
-## 추출할 정보
-1. 상호명
-2. 결제 금액 (숫자만)
-3. 카테고리: 식비/카페/편의점/교통/쇼핑/기타
-
-## 출력 형식 (반드시 JSON으로!)
-\`\`\`json
-{"storeName": "상호명", "amount": 숫자만, "category": "카테고리명"}
-\`\`\``;
-    } else {
-      expertPrompt = `당신은 20년 경력의 재무설계사이자 OCR 분석 전문가입니다.
-현재 분석 대상: ${tabContext}
-절대로 "분석할 수 없습니다"라고 답하지 마세요.
-## 분석 결과 형식
-1. 서류 종류
-2. 기본 정보
-3. 주요 내용
-4. 핵심 요약 3가지
-5. 재무설계 관점 조언`;
-    }
-
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: expertPrompt },
-        { 
-          role: 'user', 
-          content: [
-            { type: 'text', text: `파일명: ${fileName}\n이 이미지를 분석해주세요.` },
-            { type: 'image_url', image_url: { url: `data:${finalMimeType};base64,${base64Data}`, detail: 'high' } }
-          ]
-        }
-      ],
-      max_tokens: 2500
-    });
-    
-    const analysis = response.choices[0]?.message?.content;
-    res.json({ success: true, analysis, fileName, fileType, currentTab, timestamp: new Date().toISOString() });
-    
-  } catch (error) {
-    console.error('[OCR] 에러:', error);
-    res.json({ success: false, error: error.message });
+    if(_currentBtns.length===1){clickBtn(0);return;}
+    // 판단 불가 → 버튼 다시 표시
+    showBtns(_currentBtns);
+    return;
   }
-});
+}
 
-app.post('/api/rag-search', (req, res) => {
-  try {
-    const { query } = req.body;
-    const results = searchRAG(query, 5);
-    res.json({ 
-      success: true, 
-      query,
-      count: results.length,
-      results: results.map(r => ({
-        title: r.title || r.source,
-        content: (r.content || r.text || '').substring(0, 200) + '...',
-        score: r.score
-      }))
-    });
-  } catch (error) {
-    res.json({ success: false, error: error.message });
+/* ══ 플로우 ══ */
+function step(next){
+  const p=ST.profile;
+  if(next==='AGREE'){
+    sysSay('D단계 진단 시작');ST.res['D']='cur';setFinding('yellow','📍 진단 위치','D단계 — 신용대출 상환','신용대출 여부 확인 중');
+    aiSay(`감사합니다! 지금부터 <strong>DESIRE 로드맵 6단계</strong>를 순서대로 진단해 드릴게요.<br><br>재무 독립의 길 — 고객님이 지금 어느 단계에 계신지 함께 확인해 봅시다! 🗺<br><br>아래 <strong>첫 번째 질문</strong> 버튼을 클릭해 주시겠습니까?`,
+      [{label:'첫 번째 질문으로 →',next:'Q_D',gold:true}],{type:'stages'});return;
   }
-});
-
-app.post('/api/chat', async (req, res) => {
-  try {
-    const { message, userName, financialContext, budgetInfo, designData, spendData } = req.body;
-    
-    const ragContext = buildRAGContext(message);
-    const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext, designData, null, spendData);
-    
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: message }
-      ],
-      max_tokens: 200,
-      temperature: 0.7,
-    });
-
-    const aiMessage = response.choices[0]?.message?.content || '다시 말씀해주세요!';
-    res.json({ success: true, message: aiMessage });
-  } catch (error) {
-    res.json({ success: false, message: '잠시 후 다시 시도해주세요.' });
+  if(next==='Q_D'){aiSay(`<strong>D단계 질문입니다.</strong><br><br>현재 <strong>신용대출</strong>(카드론 포함)이 있으신가요?`,[{label:'있습니다',next:'D_YES'},{label:'없습니다',next:'D_NO'}]);return;}
+  if(next==='D_YES'){p.hasLoan=true;aiSay(`몇 건이나 되시나요? 총 잔액은 대략 얼마인가요?<br><br><span style="font-size:12px;opacity:.7">예) 2건, 총 3천만원</span>`,[]);ST.step='D_WAIT';return;}
+  if(next==='D_NO'){p.hasLoan=false;ST.res['D']='pass';sysSay('✅ D단계 통과!');aiSay(`훌륭합니다! <strong>D단계(신용대출 상환) 통과!</strong> 👍<br><br>신용대출이 없으신 분은 이미 재무 독립의 첫걸음을 완료하셨습니다. E단계로 넘어갑니다.<br><br>아래 버튼을 클릭해 주시겠습니까?`,[{label:'E단계 → 비상예비자금 확인',next:'GO_E',gold:true}]);return;}
+  if(next==='GO_E'){sysSay('E단계 진단');if(!ST.res['E'])ST.res['E']='cur';renderAll();aiSay(`<strong>E단계 질문입니다.</strong><br><br>🛡 <strong>비상예비자금</strong>이 준비되어 있으신가요?<br><br><span style="font-size:12px;opacity:.72">💡 맞벌이 → 월 생활비 3개월치 / 외벌이 → 6개월치</span>`,[{label:'있습니다',next:'E_YES'},{label:'없습니다',next:'E_NO'}]);return;}
+  if(next==='E_YES'){ST.res['E']='pass';sysSay('✅ E단계 통과!');aiSay(`완벽합니다! <strong>E단계(비상예비자금) 통과!</strong> 👍<br><br>갑작스러운 일이 생겨도 신용대출 없이 버틸 수 있는 재무 안전망이 갖춰진 상태입니다. S단계로 넘어갑니다.<br><br>아래 버튼을 클릭해 주시겠습니까?`,[{label:'S단계 → 저축투자 확인',next:'GO_S',gold:true}]);return;}
+  if(next==='E_NO'){ST.res['E']='cur';aiSay(`비상예비자금은 두 가지 방법으로 마련합니다.<br><br><strong>① 정기수입</strong>에서 매달 일정 금액을 분리 계좌에 적립<br><strong>② 상여금·성과급</strong> 같은 비정기수입이 들어올 때 우선 채우기<br><br>두 방법 병행이 가장 빠릅니다. 구체적인 금액과 일정은 본상담에서 설계해 드릴게요.<br><br>다음 단계도 확인해 볼까요? 아래 버튼을 클릭해 주시겠습니까?`,[{label:'S단계 → 저축투자 확인',next:'GO_S',gold:true}]);return;}
+  if(next==='GO_S'){sysSay('S단계 진단');if(!ST.res['S'])ST.res['S']='cur';renderAll();aiSay(`<strong>S단계입니다 — 저축·투자 진단</strong> 💰<br><br>먼저 가족 구성을 여쭤볼게요.<br><br>결혼하셨나요?`,[{label:'네, 결혼했습니다',next:'S_MARRIED'},{label:'아직 미혼입니다',next:'S_SINGLE'}]);return;}
+  if(next==='S_MARRIED'){p.married=true;aiSay(`자녀가 몇 명인가요?`,[{label:'자녀 없음',next:'S_C0'},{label:'1명',next:'S_C1'},{label:'2명',next:'S_C2'},{label:'3명 이상',next:'S_C3'}]);return;}
+  if(next==='S_SINGLE'){p.married=false;p.family=1;aiSay(`알겠습니다! 그럼 한 가지만 더 여쭤볼게요.<br><br>매달 실제로 받으시는 월 소득이 얼마인가요?<br><br><span style="font-size:12px;opacity:.72">예) 300만원, 450만원 — 세금 빼고 실제 받는 금액으로 말씀해 주세요</span>`,[]);ST.step='S_INCOME_WAIT';return;}
+  if(next==='S_C0'){p.family=2;p.children=0;}if(next==='S_C1'){p.family=3;p.children=1;}if(next==='S_C2'){p.family=4;p.children=2;}if(next==='S_C3'){p.family=5;p.children=3;}
+  if(['S_C0','S_C1','S_C2','S_C3'].includes(next)){aiSay(`알겠습니다! 그럼 한 가지만 더 여쭤볼게요.<br><br>부부 고객님이 매달 실제로 받으시는 <strong>합산 월 소득</strong>이 얼마인가요?<br><br><span style="font-size:12px;opacity:.72">예) 600만원, 800만원 — 세금 빼고 실제 받는 금액의 합산으로 말씀해 주세요</span>`,[]);ST.step='S_INCOME_WAIT';return;}
+  if(next==='S_YES'){ST.res['S']='pass';sysSay('✅ S단계 통과!');aiSay(`정말 잘하고 계십니다! 👏<br><br><strong>S단계(저축·투자) 통과!</strong><br><br>매달 꾸준히 저축·투자하시는 분들이 결국 부자가 됩니다. 복리의 힘은 시간이 지날수록 눈덩이처럼 불어납니다.<br><br>다음 I단계로 넘어갑니다! 아래 버튼을 클릭해 주시겠습니까?`,[{label:'I단계 → 자산운용 확인',next:'GO_I',gold:true}]);return;}
+  if(next==='S_NO'){
+    const fam=p.family||2;const inc=p.income||0;const sv=Math.round(inc*_sBudget(fam,'sv'));const pen=Math.round(inc*0.1);const monthly=sv+pen;const annual=monthly*10;p.s_monthly=monthly;p.s_annual=annual;
+    aiSay(`아, 매달 딱 맞추기가 쉽지 않으시죠. 충분히 이해합니다 😊<br><br>그런데 한 가지만 더 여쭤볼게요!<br><br>상여금, 성과급, 부업 수입처럼 <strong>비정기적으로 들어오는 돈</strong>을 모아서<br>1년에 <strong>${annual}만원</strong> 정도는 저축하고 계신가요?<br><br><span style="font-size:12px;opacity:.72">💡 ${annual}만원 = 매달 목표 ${monthly}만원의 10개월치<br>한꺼번에 목돈으로 저축하셔도 됩니다</span>`,[{label:'네, 그 정도는 합니다 ✅',next:'S_IRREGULAR_YES'},{label:'그것도 쉽지 않습니다 😅',next:'S_IRREGULAR_NO'}]);return;
   }
-});
+  if(next==='S_IRREGULAR_YES'){ST.res['S']='pass';sysSay('✅ S단계 통과!');const annual=p.s_annual||0;aiSay(`훌륭합니다! 👏<br><br>비정기 수입으로 연간 <strong>${annual}만원</strong> 저축하고 계시는군요.<br><strong>S단계 통과!</strong> 다음 I단계로 넘어갑니다! 아래 버튼을 클릭해 주시겠습니까?`,[{label:'I단계 → 자산운용 확인',next:'GO_I',gold:true}]);return;}
+  if(next==='S_IRREGULAR_NO'){ST.res['S']='cur';const monthly=p.s_monthly||0;aiSay(`괜찮습니다! 지금 알았으니까 앞으로 맞춰가면 됩니다 😊<br><br>목표는 매달 <strong>${monthly}만원</strong>, 또는 1년에 목돈으로 모으는 것!<br>어떤 상품에, 어떤 순서로 저축해야 하는지는 AI 머니야 본상담에서 하나하나 쉽게 안내해 드릴게요.<br><br>다음 I단계도 확인해 볼까요? 아래 버튼을 클릭해 주시겠습니까?`,[{label:'I단계 → 자산운용 확인',next:'GO_I',gold:true}]);return;}
+  if(next==='GO_I'){sysSay('I단계 진단');if(!ST.res['I'])ST.res['I']='cur';renderAll();aiSay(`<strong>I단계 질문입니다.</strong><br><br>현재 금융자산(예금·펀드·주식·연금 등) 합산이 <strong>10억원 이상</strong>인가요?`,[{label:'10억 이상입니다',next:'I_YES'},{label:'아직 아닙니다',next:'I_NO'}]);return;}
+  if(next==='I_YES'){ST.res['I']='pass';sysSay('✅ I단계 통과!');aiSay(`대단합니다! <strong>I단계(거치식 자산운용) 통과!</strong> 👍<br><br>금융자산 10억 포트폴리오는 자산 자체가 수익을 만들어내는 강력한 구조입니다. R단계로 넘어갑니다.<br><br>아래 버튼을 클릭해 주시겠습니까?`,[{label:'R단계 → 담보대출 확인',next:'GO_R',gold:true}]);return;}
+  if(next==='I_NO'){ST.res['I']='cur';aiSay(`거치식 자산운용은 목돈을 다양한 자산군에 분산 투자하여 자산 자체가 수익을 만들도록 설계하는 것입니다. 목표는 <strong>금융자산 10억원 포트폴리오</strong>입니다.<br><br>S단계에서 꾸준히 적립한 자금이 쌓이면 자연스럽게 I단계의 재원이 됩니다. R단계도 확인해 볼까요? 아래 버튼을 클릭해 주시겠습니까?`,[{label:'R단계 → 담보대출 확인',next:'GO_R',gold:true}]);return;}
+  if(next==='GO_R'){sysSay('R단계 진단');if(!ST.res['R'])ST.res['R']='cur';renderAll();aiSay(`<strong>R단계 질문입니다.</strong><br><br>현재 <strong>주택담보대출</strong>이 남아 있으신가요?`,[{label:'있습니다',next:'R_YES'},{label:'주택담보대출이 없습니다',next:'R_NO'}]);return;}
+  if(next==='R_YES'){p.hasMtg=true;ST.res['R']='cur';aiSay(`R단계 과제가 있습니다.<br><br>주택담보대출은 금리가 낮아 D단계처럼 최우선 상환 대상은 아닙니다. 하지만 <strong>은퇴 전까지 반드시 완납</strong>해야 합니다.<br><br>상환 목표 시점과 전략은 본상담에서 함께 잡아드릴게요. 마지막 E단계로 넘어갑니다.<br><br>아래 버튼을 클릭해 주시겠습니까?`,[{label:'마지막 단계 →',next:'GO_E2',gold:true}]);return;}
+  if(next==='R_NO'){p.hasMtg=false;ST.res['R']='pass';sysSay('✅ R단계 통과!');aiSay(`훌륭합니다! <strong>R단계(담보대출 상환) 통과!</strong> 👍<br><br>주택담보대출이 없으시군요. 부채 없이 자산만 쌓아가는 완벽한 구조입니다! 마지막 E단계로 넘어갑니다.<br><br>아래 버튼을 클릭해 주시겠습니까?`,[{label:'마지막 단계 →',next:'GO_E2',gold:true}]);return;}
+  if(next==='GO_E2'){sysSay('E2단계 — 상속 플랜');if(!ST.res['E2'])ST.res['E2']='cur';renderAll();aiSay(`<strong>마지막 질문입니다! 🎯</strong><br><br>D → E → S → I → R 단계를 모두 점검했습니다. 수고 많으셨습니다.<br><br>마지막으로 <strong>상속 플랜</strong>이 준비되어 있으신가요?<br><br><span style="font-size:12px;opacity:.72">💡 상속 플랜 = 가업승계, 상속·증여 설계, 유언장 등</span>`,[{label:'네, 준비되어 있습니다',next:'E2_YES'},{label:'아직 없습니다',next:'E2_NO'}]);return;}
+  if(next==='E2_YES'){ST.res['E2']='pass';sysSay('🏆 DESIRE 로드맵 완성!');aiSay(`🎉 <strong>축하드립니다!</strong><br><br>DESIRE 로드맵 <strong>6단계를 모두 완성</strong>하셨습니다!<br><br>재무 독립의 완전한 여정을 완주하셨습니다.<br><strong>이제 행복한 조기은퇴를 누리십시오.</strong> 🏆<br><br>아래 버튼을 클릭해 주시겠습니까?`,[{label:'진단 결과 보기 →',next:'SHOW_RESULT',gold:true}]);return;}
+  if(next==='E2_NO'){ST.res['E2']='cur';aiSay(`상속 플랜이 아직 없으시군요.<br><br>평생 열심히 쌓아온 자산이 다음 세대로 온전히 이전되려면 <strong>가업승계 플랜</strong>과 <strong>상속·증여 설계</strong>가 반드시 필요합니다.<br><br><strong>지금 바로 AI 머니야 전문 CFP와 함께 상속·증여 플랜을 체계적으로 세우시기 바랍니다.</strong><br><br>아래 버튼을 클릭해 주시겠습니까?`,[{label:'진단 결과 보기 →',next:'SHOW_RESULT',gold:true}]);return;}
+  if(next==='SHOW_RESULT'){showResult();return;}
+}
 
-app.post('/api/tts', async (req, res) => {
-  try {
-    const { text, voice = 'shimmer', stream = false } = req.body;
+function showResult(){
+  const p=ST.profile;
+  const passCount=SG.filter(s=>ST.res[s.k]==='pass').length;
+  const curStage=SG.find(s=>ST.res[s.k]==='cur')||SG[0];
+  const allPass=passCount>=6;
+  document.getElementById('rc-em').textContent=allPass?'🏆':'🎯';
+  document.getElementById('rc-t').textContent=allPass?'DESIRE 로드맵 완성! 행복한 조기은퇴를 응원합니다!':'DESIRE 진단 완료!';
+  const BAND_COLORS=[
+    {pass:'rgba(255,255,255,.18)',cur:'rgba(255,255,255,.32)',badge:'rgba(230,230,230,.95)',textDark:true},
+    {pass:'rgba(234,179,8,.38)',cur:'rgba(234,179,8,.72)',badge:'rgba(180,138,0,.95)',textDark:false},
+    {pass:'rgba(34,197,94,.38)',cur:'rgba(34,197,94,.72)',badge:'rgba(22,163,74,.95)',textDark:false},
+    {pass:'rgba(59,130,246,.40)',cur:'rgba(59,130,246,.75)',badge:'rgba(37,99,235,.95)',textDark:false},
+    {pass:'rgba(239,68,68,.42)',cur:'rgba(239,68,68,.78)',badge:'rgba(200,40,40,.95)',textDark:false},
+    {pass:'rgba(30,30,30,.80)',cur:'rgba(15,15,15,.95)',badge:'rgba(40,40,40,.98)',textDark:false,blackBelt:true},
+  ];
+  document.getElementById('rc-stages').innerHTML=SG.map((s,i)=>{
+    const r=ST.res[s.k]||'lock';const c=BAND_COLORS[i];
+    const ic=r==='pass'?'✅':r==='cur'?'📍':'🔒';
+    const bg=(r==='pass')?c.pass:(r==='cur')?c.cur:'';
+    const badgeBg=(r!=='lock')?c.badge:'';
+    const badgeTxt=c.textDark?'color:#1A1A2E;':'';
+    const blackStyle=c.blackBelt&&r!=='lock'?'border:1.5px solid rgba(255,255,255,.28);':'';
+    return`<div class="rc-band ${r}" style="background:${bg};${blackStyle}"><div class="rc-band-badge" style="${badgeBg?'background:'+badgeBg+';':''} ${badgeTxt}">${s.l}</div><div class="rc-band-info"><div class="rc-band-sh" style="${c.textDark&&r!=='lock'?'color:rgba(30,30,60,.65);':''}">${s.l} — ${s.sh}</div><div class="rc-band-nm" style="${c.textDark&&r!=='lock'?'color:rgba(20,20,50,.90);':''}">${s.nm}</div></div><div class="rc-band-ic">${ic}</div></div>`;
+  }).join('');
+  let msg='';
+  if(allPass){msg=`🎉 축하드립니다! DESIRE 로드맵 <strong>6단계를 모두 완성</strong>하셨습니다!<br><br>재무 독립의 완전한 여정을 완주하셨습니다. AI 머니야와 함께 이 자산을 더욱 효율적으로 운용하고 <strong>행복한 조기은퇴</strong>를 누리시기 바랍니다!`;}
+  else{const cur=curStage;msg=`오늘 진단에서 <strong>${passCount}단계를 통과</strong>하셨습니다.<br><br>현재 <strong>${cur.l}단계(${cur.nm})</strong>가 가장 중요한 과제입니다.<br><br>AI 머니야와 함께 <strong>돈의 순서</strong>를 올바르게 밟아가시면, 반드시 <strong>경제적 조기은퇴</strong>에 도달하실 수 있습니다.`;}
+  document.getElementById('rc-mb').innerHTML=msg;
+  document.getElementById('rc-extra').innerHTML='';
+  document.getElementById('rc-cta').innerHTML=`<div class="rc-cta-w"><button class="rc-cta" onclick="openFeedback()">📋 진단 평가하고 60분 무료상담 받기 🎁</button><div class="rc-orig">소중한 피드백 → <strong style="color:var(--gold2)">60분 AI재무상담 무료 증정</strong></div></div>`;
+  document.getElementById('result').classList.add('show');
+  aiSay(allPass?'🏆 축하드립니다! 모든 단계 통과! AI 머니야와 함께 더 탄탄한 재무 독립을 완성해 가시기 바랍니다!':`진단 완료! 현재 ${curStage.l}단계(${curStage.nm})부터 AI 머니야와 함께 돈의 순서를 올바르게 밟아가시면 반드시 경제적 독립에 도달하실 수 있습니다.`);
+  const _endCheck=setInterval(()=>{if(!ttsPlaying){clearInterval(_endCheck);stopSTT();wsReady=false;if(ws){try{ws.close();}catch(e){}ws=null;}setMicStatus('✅ 진단 완료');}},300);
+}
 
-    if (!text || typeof text !== 'string') {
-      return res.status(400).json({ success: false, error: 'text required' });
-    }
+function go(){
+  _gameStarted=true;initAudioCtx();
+  const lo=document.getElementById('landing');lo.classList.add('gone');setTimeout(()=>lo.style.display='none',480);
+  startTimer();renderAll();_startGreeting();
+}
+function _startGreeting(){
+  if(wsReady){
+    aiSay(`안녕하세요! 😊<br><br>저는 <strong>AI 머니야</strong>입니다. 오상열 CFP 20년의 재무설계 노하우를 담아 만들어진 AI 재무코치예요.<br><br>오늘 딱 5분, <strong>DESIRE 로드맵</strong>으로 고객님의 재무 현재 위치를 정확히 진단해 드릴게요.<br><br>⚠️ 상담 내용은 저장되지 않으며, 금융상품 판매에 사용되지 않습니다.<br><br>개인 재무정보 입력에 동의하시겠어요?`,
+      [{label:'✅ 동의하고 시작합니다',next:'AGREE'}]);
+  }else{setTimeout(_startGreeting,200);}
+}
 
-    const trimmed = text.slice(0, 4000);
-
-    const mp3 = await openai.audio.speech.create({
-      model: 'tts-1',
-      voice: voice,
-      input: trimmed,
-      speed: 1.1,
-      response_format: 'mp3',
-    });
-
-    const buffer = Buffer.from(await mp3.arrayBuffer());
-
-    const wantStream = stream === true || stream === 'true' ||
-                       (req.headers['accept'] && req.headers['accept'].includes('audio/'));
-
-    if (wantStream) {
-      res.set({
-        'Content-Type': 'audio/mpeg',
-        'Content-Length': buffer.length,
-        'Cache-Control': 'no-cache',
-      });
-      return res.send(buffer);
-    }
-
-    const base64Audio = buffer.toString('base64');
-    res.json({ success: true, audio: base64Audio });
-
-  } catch (error) {
-    res.json({ success: false, error: 'TTS failed', detail: error.message });
-  }
-});
-
-const PORT = process.env.PORT || 3001;
-const server = app.listen(PORT, () => {
-  console.log(`AI머니야 서버 v3.16 시작! 포트: ${PORT}`);
-  console.log(`[OCR] 이미지 최적화 (sharp) 활성화`);
-  console.log(`[음성지출] 음성 지출 입력 기능 활성화`);
-  console.log(`[TTS] moneya_v6 음성재무진단 연동 준비 완료`);
-  console.log(`[DESIRE] 음성 재무진단 서비스 준비 완료 - v3.16 (문서 기반 시스템 프롬프트 적용)`);
-});
-
-const wss = new WebSocket.Server({ server });
-
-wss.on('connection', (ws, req) => {
-  console.log('[Realtime] WebSocket 연결됨');
-  
-  let openaiWs = null;
-  let userName = '고객';
-  let financialContext = null;
-  let budgetInfo = null;
-  let designData = null;
-  let analysisContext = null;
-  let spendData = null;
-
-  ws.on('message', (message) => {
-    try {
-      const msg = JSON.parse(message);
-
-      if (msg.type === 'update_context' && msg.analysisContext) {
-        analysisContext = msg.analysisContext;
-        console.log('[Realtime] OCR 분석 컨텍스트 수신:', analysisContext.fileName);
-        
-        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-          const updatedPrompt = createSystemPrompt(userName, financialContext, budgetInfo, '', designData, analysisContext, spendData);
-          openaiWs.send(JSON.stringify({
-            type: 'session.update',
-            session: { instructions: updatedPrompt }
-          }));
-        }
-        return;
-      }
-
-      if (msg.type === 'start_app') {
-        userName = msg.userName || '고객';
-        financialContext = msg.financialContext || null;
-        budgetInfo = msg.budgetInfo || null;
-        designData = msg.designData || null;
-        analysisContext = msg.analysisContext || null;
-        spendData = msg.spendData || null;
-
-        openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
-          headers: {
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-            'OpenAI-Beta': 'realtime=v1'
-          }
-        });
-
-        openaiWs.on('open', () => {
-          console.log('[Realtime] OpenAI 연결됨!');
-          const systemPrompt = createSystemPrompt(userName, financialContext, budgetInfo, '', designData, analysisContext, spendData);
-          
-          openaiWs.send(JSON.stringify({
-            type: 'session.update',
-            session: {
-              modalities: ['text', 'audio'],
-              instructions: systemPrompt,
-              voice: 'shimmer',
-              input_audio_format: 'pcm16',
-              output_audio_format: 'pcm16',
-              input_audio_transcription: { model: 'whisper-1', language: 'ko' },
-              turn_detection: {
-                type: 'server_vad',
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 1500
-              }
-            }
-          }));
-
-          ws.send(JSON.stringify({ type: 'session_started' }));
-        });
-
-        openaiWs.on('message', (data) => {
-          try {
-            const event = JSON.parse(data.toString());
-
-            if (event.type === 'response.audio.delta' && event.delta) {
-              ws.send(JSON.stringify({ type: 'audio', data: event.delta }));
-            }
-            if (event.type === 'input_audio_buffer.speech_started') {
-              ws.send(JSON.stringify({ type: 'interrupt' }));
-            }
-            if (event.type === 'response.audio_transcript.done') {
-              console.log('머니야:', event.transcript);
-              ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
-            }
-            if (event.type === 'conversation.item.input_audio_transcription.completed') {
-              const userText = event.transcript;
-              console.log('사용자:', userText);
-              ws.send(JSON.stringify({ type: 'transcript', text: userText, role: 'user' }));
-              
-              const ragContext = buildRAGContext(userText);
-              if (ragContext) {
-                const updatedPrompt = createSystemPrompt(userName, financialContext, budgetInfo, ragContext, designData, analysisContext, spendData);
-                openaiWs.send(JSON.stringify({
-                  type: 'session.update',
-                  session: { instructions: updatedPrompt }
-                }));
-              }
-            }
-            if (event.type === 'error') {
-              console.error('OpenAI 에러:', event.error);
-              ws.send(JSON.stringify({ type: 'error', error: event.error?.message }));
-            }
-          } catch (e) {
-            console.error('OpenAI 메시지 파싱 에러:', e);
-          }
-        });
-
-        openaiWs.on('error', (err) => {
-          console.error('OpenAI WebSocket 에러:', err.message);
-          ws.send(JSON.stringify({ type: 'error', error: err.message }));
-        });
-
-        openaiWs.on('close', () => {
-          console.log('OpenAI 연결 종료');
-        });
-      }
-
-      // ============================================
-      // start_desire — DESIRE 무료 음성진단 v3.16
-      // ============================================
-      if (msg.type === 'start_desire') {
-        console.log('[DESIRE] 진단 시작 v3.16');
-
-        openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17', {
-          headers: {
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-            'OpenAI-Beta': 'realtime=v1'
-          }
-        });
-
-        openaiWs.on('open', () => {
-          console.log('[DESIRE] OpenAI 연결됨!');
-
-          openaiWs.send(JSON.stringify({
-            type: 'session.update',
-            session: {
-              modalities: ['text', 'audio'],
-              instructions: DESIRE_SYSTEM_PROMPT,
-              voice: 'shimmer',
-              input_audio_format: 'pcm16',
-              output_audio_format: 'pcm16',
-              input_audio_transcription: { model: 'whisper-1', language: 'ko' },
-              turn_detection: {
-                type: 'server_vad',
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 1200
-              }
-            }
-          }));
-        });
-
-        openaiWs.on('message', (data) => {
-          try {
-            const event = JSON.parse(data.toString());
-            console.log('[DESIRE][OpenAI 이벤트]', event.type);
-
-            if (event.type === 'session.updated') {
-              console.log('[DESIRE] session.updated 수신 → session_started 전송');
-              ws.send(JSON.stringify({ type: 'session_started' }));
-            }
-            if (event.type === 'response.audio.delta' && event.delta) {
-              ws.send(JSON.stringify({ type: 'response.audio.delta', delta: event.delta }));
-            }
-            if (event.type === 'response.audio.done') {
-              ws.send(JSON.stringify({ type: 'response.audio.done' }));
-            }
-            if (event.type === 'response.audio_transcript.delta') {
-              ws.send(JSON.stringify({ type: 'response.audio_transcript.delta', delta: event.delta }));
-            }
-            if (event.type === 'response.audio_transcript.done') {
-              ws.send(JSON.stringify({ type: 'response.audio_transcript.done', transcript: event.transcript }));
-            }
-            if (event.type === 'conversation.item.input_audio_transcription.completed') {
-              console.log('[DESIRE] 고객 음성 인식:', event.transcript);
-              ws.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', transcript: event.transcript }));
-            }
-            if (event.type === 'response.done') {
-              ws.send(JSON.stringify({ type: 'response.done' }));
-            }
-            if (event.type === 'response.created') {
-              ws.send(JSON.stringify({ type: 'response.created' }));
-            }
-            if (event.type === 'input_audio_buffer.speech_started') {
-              console.log('[DESIRE] 고객 말 시작');
-              ws.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }));
-            }
-            if (event.type === 'input_audio_buffer.speech_stopped') {
-              console.log('[DESIRE] 고객 말 멈춤 → transcription 시작');
-              ws.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
-            }
-            if (event.type === 'error') {
-              console.error('[DESIRE] OpenAI error:', event.error);
-              ws.send(JSON.stringify({ type: 'error', error: event.error }));
-            }
-          } catch (e) {
-            console.error('[DESIRE] 메시지 파싱 에러:', e);
-          }
-        });
-
-        openaiWs.on('error', (err) => {
-          console.error('[DESIRE] OpenAI 에러:', err.message);
-          ws.send(JSON.stringify({ type: 'error', error: err.message }));
-        });
-
-        openaiWs.on('close', () => {
-          console.log('[DESIRE] OpenAI 연결 종료');
-        });
-      }
-
-      if (msg.type === 'input_audio_buffer.append' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-        openaiWs.send(JSON.stringify({
-          type: 'input_audio_buffer.append',
-          audio: msg.audio
-        }));
-      }
-
-      if (msg.type === 'input_audio_buffer.commit' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-        openaiWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-      }
-
-      if (msg.type === 'response.create' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-        openaiWs.send(JSON.stringify({ type: 'response.create' }));
-      }
-
-      if (msg.type === 'audio' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-        openaiWs.send(JSON.stringify({
-          type: 'input_audio_buffer.append',
-          audio: msg.data
-        }));
-      }
-
-      if (msg.type === 'stop') {
-        if (openaiWs) openaiWs.close();
-      }
-    } catch (e) {
-      console.error('메시지 처리 에러:', e);
-    }
-  });
-
-  ws.on('close', () => {
-    console.log('[Realtime] 클라이언트 연결 종료');
-    if (openaiWs) openaiWs.close();
-  });
-});
-
-console.log('AI머니야 서버 초기화 완료!');
+renderAll();
+connectWS();
+prefetchGreeting();
+</script>
+</body>
+</html>
