@@ -1172,10 +1172,14 @@ function voiceToBtn(text){
   if(t.includes('미혼')||t.includes('독신')||t.includes('싱글')){ clickBtnByNext('S_SINGLE'); return true; }
 
   // 자녀 수 키워드 (버튼 4개)
-  if((t.includes('없')&&(t.includes('자녀')||t.includes('애')||t.includes('아이')))){ clickBtnByNext('S_C0'); return true; }
-  if((t.includes('1명')||t.includes('한 명')||t.includes('한명')||t.includes('하나'))&&(t.includes('자녀')||t.includes('애')||t.includes('아이'))){ clickBtnByNext('S_C1'); return true; }
-  if((t.includes('2명')||t.includes('두 명')||t.includes('두명')||t.includes('둘'))&&(t.includes('자녀')||t.includes('애')||t.includes('아이'))){ clickBtnByNext('S_C2'); return true; }
-  if((t.includes('3명')||t.includes('세 명')||t.includes('세명')||t.includes('셋')||t.includes('이상'))&&(t.includes('자녀')||t.includes('애')||t.includes('아이'))){ clickBtnByNext('S_C3'); return true; }
+  // 자녀 수 — 버튼이 S_C0~S_C3일 때만 적용 (자녀/애/아이 키워드 불필요)
+  const isChildStep=_currentBtns.some(b=>b.next==='S_C0');
+  if(isChildStep){
+    if(t.includes('없')||t.includes('무자녀')){ clickBtnByNext('S_C0'); return true; }
+    if(t.includes('1명')||t.includes('한 명')||t.includes('한명')||t.includes('하나')){ clickBtnByNext('S_C1'); return true; }
+    if(t.includes('2명')||t.includes('두 명')||t.includes('두명')||t.includes('둘')){ clickBtnByNext('S_C2'); return true; }
+    if(t.includes('3명')||t.includes('세 명')||t.includes('세명')||t.includes('셋')||t.includes('이상')){ clickBtnByNext('S_C3'); return true; }
+  }
 
   // 긍정 키워드
   const YES=['있습니다','있어요','있어','네','예','맞아요','맞습니다','하고 있습니다','하고있습니다','하고있어요','이상입니다','됩니다','완료','통과','준비','했습니다','동의','시작'];
@@ -1320,8 +1324,11 @@ function handleFree(text){
     aiSay('버튼을 눌러 응답해 주세요.', [{label:'네, 준비되어 있습니다',next:'E2_YES'},{label:'아직 없습니다',next:'E2_NO'}]);
     return;
   }
-  // fallback
-  aiSay('말씀 잘 들었습니다. 계속 진행할까요?',[{label:'네, 계속요',next:'AGREE',gold:true}]);
+  // fallback — 현재 버튼이 있으면 버튼 다시 안내, 없으면 기다림
+  if(_currentBtns&&_currentBtns.length>0){
+    showBtns(_currentBtns);
+  }
+  // 아무것도 안함 — AGREE로 돌아가지 않음
 }
 
 /* ══ 플로우 — 완전한 체인 ══ */
