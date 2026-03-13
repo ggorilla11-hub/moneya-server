@@ -510,6 +510,56 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// DESIRE-004 | 피드백 저장 API | 2026-03-14
+// 목적: Apps Script 없이 서버에서 직접 구글시트 저장
+// 엔드포인트: POST /api/desire-feedback
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const https = require('https');
+
+app.post('/api/desire-feedback', async (req, res) => {
+  try {
+    const data = req.body;
+    console.log('[DESIRE-004] 피드백 수신:', JSON.stringify(data).slice(0, 200));
+
+    // 구글시트 Apps Script로 서버에서 직접 전송 (CORS 문제 없음)
+    const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwQ0lVhbuSEDLf8E8ILVZbCX2HU1NQgWW-G8yqRXMc3dmRpYbaYUvkBSlCuy9vf9yGTeA/exec';
+    const postData = JSON.stringify(data);
+
+    const result = await new Promise((resolve, reject) => {
+      const urlObj = new URL(SHEET_URL);
+      const options = {
+        hostname: urlObj.hostname,
+        path: urlObj.pathname + urlObj.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+        timeout: 10000,
+      };
+      const req2 = https.request(options, (res2) => {
+        let body = '';
+        res2.on('data', chunk => body += chunk);
+        res2.on('end', () => {
+          console.log('[DESIRE-004] 시트 응답:', body.slice(0, 200));
+          resolve({ status: res2.statusCode, body });
+        });
+      });
+      req2.on('error', reject);
+      req2.on('timeout', () => reject(new Error('timeout')));
+      req2.write(postData);
+      req2.end();
+    });
+
+    res.json({ success: true, sheet: result.status });
+  } catch (err) {
+    console.error('[DESIRE-004] 피드백 저장 오류:', err.message);
+    // 오류가 나도 클라이언트에는 성공 응답 (UX 보호)
+    res.json({ success: true, fallback: true });
+  }
+});
+
 app.post('/api/rag-search', (req, res) => {
   try {
     const { query, topK = 5 } = req.body;
@@ -676,11 +726,30 @@ const server = app.listen(PORT, () => console.log(`AI머니야 서버 v9.1 시�
 
 const wss = new WebSocket.Server({ server });
 
+// ★ DESIRE 중복 세션 차단 — IP당 1개 세션만 허용
+const activeDesiresessions = new Map(); // ip → ws
+
 wss.on('connection', (ws, req) => {
   console.log('[WS] 연결됨');
   const url = new URL(req.url, `http://localhost`);
   const mode = url.searchParams.get('mode');
   console.log(`[WS] 모드: ${mode || 'default'}`);
+
+  // DESIRE 세션 중복 차단
+  const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
+  if (mode === 'desire') {
+    const existingWs = activeDesiresessions.get(clientIP);
+    if (existingWs && existingWs.readyState === 1) { // OPEN
+      console.log(`[DESIRE-WS] 중복 세션 차단 — IP: ${clientIP} (기존 세션 종료)`);
+      try { existingWs.close(1000, 'duplicate_session'); } catch(e) {}
+    }
+    activeDesiresessions.set(clientIP, ws);
+    ws.on('close', () => {
+      if (activeDesiresessions.get(clientIP) === ws) {
+        activeDesiresessions.delete(clientIP);
+      }
+    });
+  }
 
   let openaiWs = null;
   let userName = '고객';
