@@ -742,13 +742,14 @@ function startSTT(){
   };
 
   _stt.onerror=(e)=>{
-    // 모든 오류 조용히 처리 - 팝업/에러 메시지 없음
     if(e.error==='not-allowed'||e.error==='service-not-allowed'){
-      wsReady=false; // 재시도 중단
       _stt=null;
-      setMicStatus(''); // 상태표시도 제거
+      setMicStatus('🔇');
+      return; // wsReady는 건드리지 않음
     }
-    // no-speech, aborted 등 나머지는 무시
+    // no-speech, aborted, network 등 나머지는 무시하고 재시작
+    _stt=null;
+    if(!ttsPlaying) setTimeout(startSTT, 500);
   };
 
   _stt.onend=()=>{
@@ -770,7 +771,11 @@ function pauseSTT(){
   }
 }
 function resumeSTT(){
-  if(_stt) return; // 이미 실행 중
+  // 기존 STT 완전히 정리 후 새로 시작
+  if(_stt){
+    try{_stt.onend=null;_stt.onresult=null;_stt.abort();}catch(e){}
+    _stt=null;
+  }
   startSTT();
 }
 
@@ -825,8 +830,8 @@ async function speak(text){
 async function processTTSQueue(){
   if(ttsQueue.length===0){
     ttsPlaying=false;
-    // TTS 큐 완전히 비었을 때 STT 무조건 재개
-    setTimeout(resumeSTT,400);
+    // TTS 큐 완전히 비었을 때만 STT 재개
+    if(ttsQueue.length===0){ setTimeout(resumeSTT,400); }
     return;
   }
   ttsPlaying=true;
@@ -1662,7 +1667,7 @@ function go(){
 function _startGreeting(){
   if(wsReady){
     aiSay(
-      `안녕하세요! 😊 저는 <strong>AI 머니야</strong>입니다.<br><br>지금 바로 <strong>DESIRE 로드맵</strong>으로 재무 현재 위치를 진단해 드릴게요.<br><br>개인 재무정보 입력에 동의하시겠어요?`,
+      `안녕하세요! 😊<br><br>저는 <strong>AI 머니야</strong>입니다. 오상열 CFP 20년의 재무설계 노하우를 담아 만들어진 AI 재무코치예요.<br><br>오늘 딱 5분, <strong>DESIRE 로드맵</strong>으로 고객님의 재무 현재 위치를 정확히 진단해 드릴게요.<br><br>⚠️ 상담 내용은 저장되지 않으며, 금융상품 판매에 사용되지 않습니다.<br><br>개인 재무정보 입력에 동의하시겠어요?`,
       [{label:'✅ 동의하고 시작합니다',next:'AGREE'}]
     );
   } else {
@@ -1671,8 +1676,8 @@ function _startGreeting(){
 }
 
 renderAll();
-// 페이지 로드 즉시 WS 미리 연결 — 버튼 클릭 전에 준비 완료
-setTimeout(()=>{ connectWS(); },500);
+// 페이지 로드 즉시 WS 미리 연결
+connectWS();
 </script>
 </body>
 </html>
