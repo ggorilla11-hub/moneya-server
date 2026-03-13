@@ -19,11 +19,11 @@
 <style>
 :root{
   --navy:#0F2A5C;--navy2:#1A3A6E;
-  --gold:#C8941A;--gold2:#D4940A;
-  --bg:#F4F6FB;--panel:#FFFFFF;--panel2:#EEF1F8;
-  --border:rgba(15,42,92,0.10);
-  --green:#16A34A;--green2:#15803D;--red:#DC2626;
-  --txt:#1A1A2E;--txt2:#6B7280;
+  --gold:#C8941A;--gold2:#E8B830;
+  --bg:#1C1C1E;--panel:#252530;--panel2:#2E2E3A;
+  --border:rgba(255,255,255,0.09);
+  --green:#16A34A;--green2:#34C759;--red:#DC2626;
+  --txt:rgba(255,255,255,0.87);--txt2:rgba(255,255,255,0.45);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt);overflow:hidden;}
@@ -54,10 +54,10 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 .mvp-sub{font-size:8px;opacity:.75;font-weight:600;}
 
 /* 재연결 */
-#reconnect-banner{display:none;position:fixed;bottom:120px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(255,255,255,.98);backdrop-filter:blur(8px);border:1px solid rgba(201,165,62,.4);border-radius:24px;padding:8px 18px;align-items:center;gap:8px;white-space:nowrap;}
+#reconnect-banner{display:none;position:fixed;bottom:120px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(30,30,30,.92);backdrop-filter:blur(8px);border:1px solid rgba(201,165,62,.4);border-radius:24px;padding:8px 18px;align-items:center;gap:8px;white-space:nowrap;}
 #reconnect-banner.show{display:flex;}
 .spin{width:14px;height:14px;border:2px solid rgba(201,165,62,.3);border-top:2px solid var(--gold2);border-radius:50%;animation:spin .8s linear infinite;}
-.reconnect-txt{font-size:12px;color:#1A1A2E;font-weight:600;}
+.reconnect-txt{font-size:12px;color:rgba(255,255,255,.9);font-weight:600;}
 
 /* 토스트 */
 .toast{position:fixed;bottom:120px;left:50%;transform:translateX(-50%);background:rgba(22,163,74,.92);color:#fff;padding:8px 18px;border-radius:20px;font-size:12px;font-weight:700;z-index:9999;display:none;white-space:nowrap;}
@@ -71,16 +71,16 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 .lo-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
 .lo-title{font-size:clamp(20px,5vw,30px);font-weight:900;color:#fff;line-height:1.4;margin-bottom:11px;}
 .lo-title em{font-style:normal;color:var(--gold2);}
-.lo-sub{font-size:14px;color:rgba(15,42,92,.65);line-height:1.7;margin-bottom:24px;max-width:360px;}
+.lo-sub{font-size:14px;color:rgba(255,255,255,.62);line-height:1.7;margin-bottom:24px;max-width:360px;}
 .lo-pains{display:flex;flex-direction:column;gap:8px;max-width:320px;margin:0 auto 26px;text-align:left;}
-.lo-pain{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;font-size:13px;color:rgba(15,42,92,.82);}
+.lo-pain{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;font-size:13px;color:rgba(255,255,255,.82);}
 .lo-cta{display:block;max-width:340px;width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border:none;padding:17px 28px;border-radius:16px;font-size:16px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 6px 28px rgba(200,148,26,.44);transition:all .22s;margin:0 auto;}
 .lo-cta:hover{transform:translateY(-2px);}
-.lo-note{font-size:11px;color:rgba(15,42,92,.38);margin-top:10px;}
+.lo-note{font-size:11px;color:rgba(255,255,255,.32);margin-top:10px;}
 .lo-warn{margin-top:14px;padding:10px 14px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;font-size:11px;color:#fc8181;line-height:1.6;max-width:340px;}
-.lo-stats{display:flex;gap:28px;justify-content:center;margin-top:28px;padding-top:24px;border-top:1px solid rgba(15,42,92,.12);}
+.lo-stats{display:flex;gap:28px;justify-content:center;margin-top:28px;padding-top:24px;border-top:1px solid rgba(255,255,255,.1);}
 .ls-n{font-size:20px;font-weight:900;color:var(--gold2);display:block;}
-.ls-l{font-size:10px;color:rgba(15,42,92,.45);}
+.ls-l{font-size:10px;color:rgba(255,255,255,.42);}
 
 /* 앱 */
 #app{height:100%;display:flex;flex-direction:column;max-width:480px;margin:0 auto;}
@@ -102,7 +102,7 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 .mb-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
 .mb-info{flex:1;}
 .mb-name{font-size:13px;font-weight:900;color:#fff;}
-.mb-status{font-size:11px;color:rgba(15,42,92,.55);margin-top:1px;}
+.mb-status{font-size:11px;color:rgba(255,255,255,.6);margin-top:1px;}
 .wave-bars{display:flex;gap:2px;align-items:center;height:18px;}
 .wb{width:3px;border-radius:3px;background:var(--gold2);animation:wave 1s ease-in-out infinite;}
 .wb:nth-child(2){animation-delay:.15s;}.wb:nth-child(3){animation-delay:.3s;}.wb:nth-child(4){animation-delay:.45s;}.wb:nth-child(5){animation-delay:.6s;}
@@ -110,15 +110,15 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 
 /* DESIRE 바 */
 .desire-bar{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;padding:10px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;}
-.db-step{display:flex;flex-direction:column;align-items:center;padding:6px 2px;border-radius:8px;background:rgba(15,42,92,.05);border:1px solid transparent;cursor:pointer;transition:all .2s;user-select:none;}
+.db-step{display:flex;flex-direction:column;align-items:center;padding:6px 2px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid transparent;cursor:pointer;transition:all .2s;user-select:none;}
 .db-step.active{background:rgba(201,165,62,.15);border-color:rgba(201,165,62,.4);}
 .db-step.done{background:rgba(22,163,74,.1);border-color:rgba(22,163,74,.3);}
 .db-step.cur-bad{background:rgba(220,38,38,.1);border-color:rgba(220,38,38,.3);}
-.db-letter{font-size:14px;font-weight:900;color:rgba(15,42,92,.3);}
+.db-letter{font-size:14px;font-weight:900;color:rgba(255,255,255,.3);}
 .db-step.active .db-letter{color:var(--gold2);}
 .db-step.done .db-letter{color:var(--green2);}
 .db-step.cur-bad .db-letter{color:#fc8181;}
-.db-name{font-size:8px;color:rgba(15,42,92,.32);margin-top:2px;line-height:1.2;text-align:center;}
+.db-name{font-size:8px;color:rgba(255,255,255,.28);margin-top:2px;line-height:1.2;text-align:center;}
 .db-step.active .db-name{color:rgba(232,184,48,.7);}
 .db-step.done .db-name{color:rgba(52,199,89,.7);}
 .db-step.cur-bad .db-name{color:rgba(252,129,129,.7);}
@@ -126,7 +126,7 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 /* 채팅 */
 .chat-area{flex:1;overflow-y:auto;padding:14px 12px;display:flex;flex-direction:column;gap:10px;}
 .chat-area::-webkit-scrollbar{width:3px;}
-.chat-area::-webkit-scrollbar-thumb{background:rgba(15,42,92,.12);border-radius:3px;}
+.chat-area::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px;}
 .msg{display:flex;gap:8px;animation:fi .35s ease;}
 .msg.ai{align-items:flex-start;}
 .msg.user{flex-direction:row-reverse;align-items:flex-start;}
@@ -134,7 +134,7 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 .msg-av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;overflow:hidden;}
 .msg-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
 .msg-bubble{max-width:78%;padding:10px 13px;border-radius:16px;font-size:13px;line-height:1.65;}
-.msg.ai .msg-bubble{background:#EEF1F8;color:var(--txt);border-bottom-left-radius:4px;}
+.msg.ai .msg-bubble{background:var(--panel2);color:var(--txt);border-bottom-left-radius:4px;}
 .msg.user .msg-bubble{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;border-bottom-right-radius:4px;}
 .msg.sys .msg-bubble{background:rgba(201,165,62,.1);border:1px solid rgba(201,165,62,.25);color:var(--gold2);font-size:11px;font-weight:700;padding:5px 14px;border-radius:20px;}
 
@@ -148,18 +148,18 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 /* 보조 버튼 바 */
 .edit-bar{background:rgba(15,42,92,.8);border-top:2px solid var(--border);padding:10px 12px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0;}
 .edit-bar::-webkit-scrollbar{display:none;}
-.eb-btn{white-space:nowrap;padding:5px 12px;border-radius:14px;border:1px solid rgba(15,42,92,.18);background:rgba(15,42,92,.05);color:rgba(15,42,92,.70);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0;}
+.eb-btn{white-space:nowrap;padding:5px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0;}
 .eb-btn:active{background:rgba(255,255,255,.14);}
 
 /* 마이크 바 */
-.mic-bar{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#F0FAF2;border-top:1px solid rgba(22,163,74,.25);flex-shrink:0;}
+.mic-bar{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:rgba(22,163,74,.08);border-top:1px solid rgba(22,163,74,.15);flex-shrink:0;}
 .mic-ind{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--green2);}
 .mic-label{font-size:11px;font-weight:700;}
 .mic-end{padding:4px 14px;border-radius:14px;border:1px solid rgba(220,38,38,.4);background:rgba(220,38,38,.1);color:#fc8181;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;}
 
 /* 텍스트 입력 */
-.input-bar{background:#fff;border-top:1px solid var(--border);padding:10px 12px;display:flex;align-items:center;gap:8px;flex-shrink:0;}
-.inp-field{flex:1;background:#fff;border:1px solid var(--border);border-radius:22px;padding:9px 14px;color:var(--txt);font-size:13px;font-family:inherit;outline:none;}
+.input-bar{background:var(--panel);border-top:1px solid var(--border);padding:10px 12px;display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.inp-field{flex:1;background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:22px;padding:9px 14px;color:var(--txt);font-size:13px;font-family:inherit;outline:none;}
 .inp-field::placeholder{color:var(--txt2);}
 .inp-field:focus{border-color:rgba(201,165,62,.4);}
 .inp-send{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));border:none;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
@@ -178,54 +178,54 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 .rc-hero{background:linear-gradient(135deg,var(--navy),var(--navy2));padding:28px 22px;text-align:center;}
 .rc-em{font-size:44px;display:block;margin-bottom:10px;}
 .rc-t{font-size:20px;font-weight:900;color:#fff;line-height:1.4;margin-bottom:6px;}
-.rc-s{font-size:12px;color:rgba(15,42,92,.58);line-height:1.7;}
+.rc-s{font-size:12px;color:rgba(255,255,255,.58);line-height:1.7;}
 .rc-stages{padding:16px 18px;display:flex;flex-direction:column;gap:7px;}
 .rc-st{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:11px;}
 .rc-st.pass{background:rgba(22,163,74,.09);border:1px solid rgba(22,163,74,.22);}
 .rc-st.cur{background:rgba(220,38,38,.09);border:1px solid rgba(220,38,38,.22);}
-.rc-st.lock{background:rgba(15,42,92,.04);border:1px solid rgba(15,42,92,.10);}
+.rc-st.lock{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);}
 .rc-b{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0;}
 .rc-st.pass .rc-b{background:var(--green);color:#fff;}
 .rc-st.cur .rc-b{background:var(--red);color:#fff;}
-.rc-st.lock .rc-b{background:rgba(15,42,92,.10);color:rgba(15,42,92,.38);}
+.rc-st.lock .rc-b{background:rgba(255,255,255,.1);color:rgba(255,255,255,.35);}
 .rc-bi{flex:1;}
 .rc-lt{font-size:9px;font-weight:900;}
 .rc-st.pass .rc-lt{color:rgba(52,199,89,.7);}
 .rc-st.cur .rc-lt{color:rgba(220,100,100,.7);}
-.rc-st.lock .rc-lt{color:rgba(15,42,92,.35);}
-.rc-nm{font-size:13px;font-weight:700;color:rgba(15,42,92,.85);}
+.rc-st.lock .rc-lt{color:rgba(255,255,255,.28);}
+.rc-nm{font-size:13px;font-weight:700;color:rgba(255,255,255,.85);}
 .rc-ic{font-size:17px;}
 .rc-msg{margin:0 18px 14px;background:rgba(0,0,0,.22);border-radius:12px;padding:14px;}
 .rc-mt{font-size:12px;font-weight:900;color:var(--gold2);margin-bottom:7px;}
-.rc-mb{font-size:12px;line-height:1.85;color:rgba(15,42,92,.78);}
-.rc-ben{margin:0 18px 14px;background:rgba(15,42,92,.04);border-radius:12px;padding:13px;}
-.rc-bt{font-size:11px;font-weight:900;color:rgba(15,42,92,.60);margin-bottom:8px;}
-.rc-bi2{display:flex;align-items:flex-start;gap:7px;padding:5px 0;font-size:11px;color:rgba(15,42,92,.65);border-bottom:1px solid rgba(15,42,92,.08);}
+.rc-mb{font-size:12px;line-height:1.85;color:rgba(255,255,255,.78);}
+.rc-ben{margin:0 18px 14px;background:rgba(255,255,255,.05);border-radius:12px;padding:13px;}
+.rc-bt{font-size:11px;font-weight:900;color:rgba(255,255,255,.6);margin-bottom:8px;}
+.rc-bi2{display:flex;align-items:flex-start;gap:7px;padding:5px 0;font-size:11px;color:rgba(255,255,255,.65);border-bottom:1px solid rgba(255,255,255,.06);}
 .rc-bi2:last-child{border-bottom:none;}
 .rc-chk{color:var(--green2);font-weight:900;flex-shrink:0;}
-.survey-wrap{margin:0 18px 14px;background:rgba(15,42,92,.03);border:1px solid var(--border);border-radius:12px;padding:14px;}
+.survey-wrap{margin:0 18px 14px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px;}
 /* #13 설문 입력 필드 */
-.sv-inp{width:100%;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--txt);font-size:13px;font-family:inherit;outline:none;}
+.sv-inp{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--txt);font-size:13px;font-family:inherit;outline:none;}
 .sv-inp:focus{border-color:rgba(201,165,62,.4);}
 .sv-req{color:#f87171;font-size:10px;margin-left:3px;}
 /* #13 개인정보동의 */
-.sv-agree{margin:10px 0 6px;padding:10px 12px;background:rgba(15,42,92,.04);border:1px solid rgba(15,42,92,.15);border-radius:8px;}
+.sv-agree{margin:10px 0 6px;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(201,165,62,.2);border-radius:8px;}
 .sv-agree-label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt);cursor:pointer;}
 .sv-agree-label input{accent-color:var(--gold2);width:16px;height:16px;cursor:pointer;}
 .sv-agree-detail{font-size:10px;color:var(--txt2);margin-top:5px;line-height:1.5;padding-left:22px;}
 /* #4 상담 다시하기 버튼 */
 .rc-restart{padding:14px 18px 4px;text-align:center;}
-.rc-restart-btn{background:rgba(15,42,92,.06);border:1px solid var(--border);color:var(--txt2);padding:11px 28px;border-radius:24px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.rc-restart-btn{background:rgba(255,255,255,.08);border:1px solid var(--border);color:var(--txt2);padding:11px 28px;border-radius:24px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
 .sv-title{font-size:12px;font-weight:900;color:var(--gold2);margin-bottom:12px;}
 .sv-q{margin-bottom:13px;}
-.sv-ql{font-size:11px;color:rgba(15,42,92,.72);margin-bottom:7px;font-weight:700;}
+.sv-ql{font-size:11px;color:rgba(255,255,255,.72);margin-bottom:7px;font-weight:700;}
 .star-row{display:flex;gap:8px;}
 .star{font-size:24px;cursor:pointer;opacity:.3;transition:opacity .15s;user-select:none;}
 .star.on{opacity:1;}
 .sv-opts{display:flex;flex-wrap:wrap;gap:5px;}
-.sv-opt{padding:5px 12px;border-radius:14px;border:1px solid rgba(15,42,92,.18);background:transparent;color:rgba(15,42,92,.60);font-size:11px;cursor:pointer;font-family:inherit;transition:all .18s;}
+.sv-opt{padding:5px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.15);background:transparent;color:rgba(255,255,255,.6);font-size:11px;cursor:pointer;font-family:inherit;transition:all .18s;}
 .sv-opt.sel{background:rgba(201,165,62,.2);border-color:var(--gold2);color:var(--gold2);}
-.sv-textarea{width:100%;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--txt);font-size:12px;font-family:inherit;resize:none;outline:none;min-height:60px;}
+.sv-textarea{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--txt);font-size:12px;font-family:inherit;resize:none;outline:none;min-height:60px;}
 .sv-textarea:focus{border-color:rgba(201,165,62,.4);}
 .sv-submit{display:block;width:100%;margin-top:11px;padding:13px;border-radius:11px;border:none;background:linear-gradient(135deg,var(--green),#15803d);color:#fff;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;}
 .paid-detail{margin:0 18px 14px;background:linear-gradient(135deg,rgba(15,42,92,.85),rgba(26,58,110,.85));border:1px solid rgba(201,165,62,.3);border-radius:14px;padding:18px;text-align:center;}
@@ -596,18 +596,19 @@ function addAI(html){
   d.innerHTML='<div class="msg-av"><img src="'+LOGO+'" alt="머니야" onerror="this.parentElement.textContent=\'💰\'"></div>'
     +'<div class="msg-bubble">'+html+'</div>';
   area.appendChild(d);area.scrollTop=area.scrollHeight;
-  /* 통과 표시 */
-  if(html.indexOf('D단계 통과')>-1)stageRes['D']='pass';
-  if(html.indexOf('E단계 통과')>-1)stageRes['E']='pass';
-  if(html.indexOf('S단계 통과')>-1)stageRes['S']='pass';
-  if(html.indexOf('I단계 통과')>-1)stageRes['I']='pass';
-  if(html.indexOf('R단계 통과')>-1)stageRes['R']='pass';
-  if(html.indexOf('6단계 완성')>-1)stageRes['E2']='pass';
+  /* [2번] 통과 표시 — 풀네임 포함 확장 */
+  if(html.indexOf('1단계 Debt Free 통과')>-1||html.indexOf('D단계 통과')>-1)stageRes['D']='pass';
+  if(html.indexOf('2단계 Emergency Fund 통과')>-1||html.indexOf('E단계 통과')>-1)stageRes['E']='pass';
+  if(html.indexOf('3단계 Savings 통과')>-1||html.indexOf('S단계 통과')>-1)stageRes['S']='pass';
+  if(html.indexOf('4단계 Investment 통과')>-1||html.indexOf('I단계 통과')>-1)stageRes['I']='pass';
+  if(html.indexOf('5단계 Repay Mortgage 통과')>-1||html.indexOf('R단계 통과')>-1)stageRes['R']='pass';
+  if(html.indexOf('6단계 완성')>-1||html.indexOf('Early Retirement')>-1&&html.indexOf('완성')>-1)stageRes['E2']='pass';
   renderBar();
-  /* 단계별 안내배너 자동 표시 */
   detectStageAndSetButtons(html);
   var stage=SG.find(function(s){return s.k===curStageKey;});
   if(stage)document.getElementById('mb-status').textContent=stage.nm+' 진행 중';
+  /* [6번] AI 발화 후 idleTimer 리셋 */
+  if(sessionActive)resetIdleTimer();
 }
 function addUser(text){
   var area=document.getElementById('chat-area');
@@ -718,6 +719,11 @@ function connectWS(){
       document.getElementById('wave-bars').classList.add('idle');
     }
 
+    /* [10번] AI 응답 완전 종료 신호 — 이 시점부터 idleTimer 카운트 */
+    if(msg.type==='response_done'){
+      if(sessionActive)resetIdleTimer();
+    }
+
     if(msg.type==='result'){
       if(msg.stages)stageRes=msg.stages;
       showResult();
@@ -769,15 +775,17 @@ function cleanupMedia(){
   audioQueue=[];isPlaying=false;isPaused=false;
 }
 
-/* #6 장기 대기 모드 — 10초 무응답 시 */
-var idleTimer=null;
+/* [6번] 대기 모드 — 30초, AI발화 후 리셋, 결과화면 중단 */
+var idleTimer=null;var idleCount=0;
 function resetIdleTimer(){
   if(idleTimer)clearTimeout(idleTimer);
   idleTimer=setTimeout(function(){
-    addSys('잠시 대기 중입니다. 준비되시면 말씀하시거나 아래 버튼을 눌러주세요.');
-    var btns=STAGE_BUTTONS[curStageKey]||STAGE_BUTTONS.OPENING;
-    setQB(btns);
-  },10000);
+    if(document.getElementById('result').classList.contains('show'))return;
+    idleCount++;
+    if(idleCount===1)addSys('말씀하시거나 아래 버튼을 눌러주세요.');
+    var qb=document.getElementById('quick-btns');
+    if(!qb.innerHTML.trim()){var btns=STAGE_BUTTONS[curStageKey]||STAGE_BUTTONS.OPENING;setQB(btns);}
+  },30000);
 }
 
 /* #8 텍스트 입력 — 엔터키 전 구간 정상 */
@@ -824,17 +832,19 @@ function showHint(){
 
 /* #11 결과화면 — 마지막 클로징 문구 포함 */
 /* DESIRE FULLNAME 정의 */
-var SG_FULLNAME = [
-  {k:'D',  num:1, full:'D — Debt Free',         desc:'신용대출이 있으면 이 단계',        color:'#DC2626'},
-  {k:'E',  num:2, full:'E — Emergency Fund',     desc:'비상예비자금이 없으면 이 단계',     color:'#D97706'},
-  {k:'S',  num:3, full:'S — Savings & Invest',   desc:'저축·투자·연금 마련 단계',         color:'#0369A1'},
-  {k:'I',  num:4, full:'I — Investment',         desc:'금융자산 10억원 달성 단계',         color:'#7C3AED'},
-  {k:'R',  num:5, full:'R — Repay Mortgage',     desc:'담보대출 상환 단계',               color:'#B45309'},
-  {k:'E2', num:6, full:'E — Early Retirement',   desc:'상속플랜 후 경제적 조기은퇴 단계', color:'#15803D'}
+var SG_FULLNAME=[
+  {k:'D',  num:1, full:'D — Debt Free',        desc:'신용대출이 있으면 이 단계',        color:'#DC2626'},
+  {k:'E',  num:2, full:'E — Emergency Fund',    desc:'비상예비자금이 없으면 이 단계',    color:'#D97706'},
+  {k:'S',  num:3, full:'S — Savings & Invest',  desc:'저축·투자·연금 마련 단계',        color:'#0369A1'},
+  {k:'I',  num:4, full:'I — Investment',        desc:'금융자산 10억원 달성 단계',        color:'#7C3AED'},
+  {k:'R',  num:5, full:'R — Repay Mortgage',    desc:'담보대출 상환 단계',              color:'#B45309'},
+  {k:'E2', num:6, full:'E — Early Retirement',  desc:'상속플랜 후 경제적 조기은퇴 단계',color:'#15803D'}
 ];
 
 function showResult(){
   cleanupMedia();
+  /* [8번] TTS 중복 방지 — 결과화면 진입 시 기존 TTS 즉시 취소 */
+  if('speechSynthesis' in window)window.speechSynthesis.cancel();
   var passCount=SG.filter(function(s){return stageRes[s.k]==='pass';}).length;
   var curStage=SG.find(function(s){return stageRes[s.k]==='cur';})||null;
   var curNum=curStage?SG_FULLNAME.find(function(x){return x.k===curStage.k;}).num:1;
@@ -843,48 +853,49 @@ function showResult(){
   document.getElementById('rc-em').textContent=allPass?'🏆':'🎯';
   document.getElementById('rc-t').textContent=allPass?'DESIRE 완성! 행복한 조기은퇴를 응원합니다!':'DESIRE 진단 완료!';
 
-  /* ── DESIRE FULLNAME 아코디언 ── */
-  var fnHtml='<div style="margin:0 18px 14px;background:var(--panel2);border-radius:12px;padding:14px;">'
-    +'<div style="font-size:11px;font-weight:900;color:var(--gold);margin-bottom:10px;letter-spacing:.5px;">📖 DESIRE 로드맵 전체 단계</div>'
-    +SG_FULLNAME.map(function(x){
-      var isCur=curStage&&curStage.k===x.k;
-      var r=stageRes[x.k]||'lock';
-      var bgColor=isCur?'rgba(220,38,38,.08)':(r==='pass'?'rgba(22,163,74,.07)':'transparent');
-      var border=isCur?'1.5px solid rgba(220,38,38,.35)':(r==='pass'?'1px solid rgba(22,163,74,.25)':'1px solid rgba(0,0,0,.06)');
-      var icon=r==='pass'?'✅':isCur?'📍':'🔒';
-      var numBadge=isCur
-        ?'<span style="background:'+x.color+';color:#fff;font-size:10px;font-weight:900;padding:2px 7px;border-radius:10px;margin-right:6px;">'+x.num+'단계</span>'
-        :'<span style="background:rgba(0,0,0,.08);color:rgba(0,0,0,.4);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-right:6px;">'+x.num+'단계</span>';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:'+bgColor+';border:'+border+';margin-bottom:5px;">'
-        +numBadge
-        +'<div style="flex:1;">'
-        +'<div style="font-size:12px;font-weight:900;color:'+(isCur?x.color:(r==='pass'?'#15803D':'var(--txt)'))+'">'+(isCur?'★ ':'')+x.full+'</div>'
-        +'<div style="font-size:10px;color:var(--txt2);margin-top:1px;">'+x.desc+'</div>'
-        +'</div>'
-        +'<span style="font-size:15px;">'+icon+'</span>'
-        +'</div>';
-    }).join('')
-    +'</div>';
-
-  /* ── 최종단계 안내 배너 ── */
+  /* [2번] 최종단계 컬러 배너 */
   var stageAnnounce='';
-  if(!allPass && curStage){
+  if(!allPass&&curStage){
     var cf=SG_FULLNAME.find(function(x){return x.k===curStage.k;});
-    stageAnnounce='<div style="margin:0 18px 14px;background:linear-gradient(135deg,'+cf.color+','+cf.color+'cc);border-radius:12px;padding:16px;text-align:center;">'
+    stageAnnounce='<div style="margin:0 0 12px;background:linear-gradient(135deg,'+cf.color+','+cf.color+'cc);border-radius:12px;padding:16px;text-align:center;">'
       +'<div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:700;margin-bottom:4px;">고객님의 현재 DESIRE 단계</div>'
       +'<div style="font-size:22px;font-weight:900;color:#fff;line-height:1.3;">'+cf.num+'단계 · '+cf.full+'</div>'
       +'<div style="font-size:12px;color:rgba(255,255,255,.85);margin-top:6px;">'+cf.desc+'</div>'
       +'</div>';
-  } else if(allPass){
-    stageAnnounce='<div style="margin:0 18px 14px;background:linear-gradient(135deg,#15803D,#16a34a);border-radius:12px;padding:16px;text-align:center;">'
+  }else if(allPass){
+    stageAnnounce='<div style="margin:0 0 12px;background:linear-gradient(135deg,#15803D,#16a34a);border-radius:12px;padding:16px;text-align:center;">'
       +'<div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:700;margin-bottom:4px;">고객님의 현재 DESIRE 단계</div>'
       +'<div style="font-size:22px;font-weight:900;color:#fff;">6단계 완성! 🏆</div>'
       +'<div style="font-size:12px;color:rgba(255,255,255,.85);margin-top:6px;">E — Early Retirement 달성</div>'
       +'</div>';
   }
 
-  document.getElementById('rc-stages').innerHTML = stageAnnounce + fnHtml;
+  /* [2번] DESIRE FULLNAME 전체 단계 목록 */
+  var fnHtml='<div style="background:rgba(255,255,255,.04);border-radius:12px;padding:14px;margin-bottom:12px;">'
+    +'<div style="font-size:11px;font-weight:900;color:var(--gold);margin-bottom:10px;letter-spacing:.5px;">📖 DESIRE 로드맵 전체 단계</div>'
+    +SG_FULLNAME.map(function(x){
+      var isCur=curStage&&curStage.k===x.k;
+      var r=stageRes[x.k]||'lock';
+      var bgColor=isCur?'rgba(220,38,38,.12)':(r==='pass'?'rgba(22,163,74,.09)':'transparent');
+      var border=isCur?'1.5px solid rgba(220,38,38,.4)':(r==='pass'?'1px solid rgba(22,163,74,.3)':'1px solid rgba(255,255,255,.07)');
+      var icon=r==='pass'?'✅':isCur?'📍':'🔒';
+      var numBadge=isCur
+        ?'<span style="background:'+x.color+';color:#fff;font-size:10px;font-weight:900;padding:2px 7px;border-radius:10px;margin-right:6px;">'+x.num+'단계</span>'
+        :'<span style="background:rgba(255,255,255,.1);color:rgba(255,255,255,.4);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-right:6px;">'+x.num+'단계</span>';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:'+bgColor+';border:'+border+';margin-bottom:5px;">'
+        +numBadge
+        +'<div style="flex:1;">'
+        +'<div style="font-size:12px;font-weight:900;color:'+(isCur?x.color:(r==='pass'?'#34C759':'rgba(255,255,255,.7)'))+'">'+(isCur?'★ ':'')+x.full+'</div>'
+        +'<div style="font-size:10px;color:rgba(255,255,255,.45);margin-top:1px;">'+x.desc+'</div>'
+        +'</div>'
+        +'<span style="font-size:15px;">'+icon+'</span>'
+        +'</div>';
+    }).join('')
+    +'</div>';
 
+  document.getElementById('rc-stages').innerHTML=stageAnnounce+fnHtml;
+
+  /* [3번] 개선하실 수 있어요 */
   var closing='<br><br><em>지금 알게 되셨으니 개선하실 수 있어요!</em><br>60분 본상담에서 각 단계별 월별 실행 플랜을 함께 완성해 드리겠습니다.';
   var msg=allPass
     ?'🎉 DESIRE 로드맵 <strong>6단계를 모두 완성</strong>하셨습니다!<br><br>AI 금융집사 머니야와 함께 더 탄탄한 재무 독립을 완성해 가시기 바랍니다!'+closing
@@ -901,7 +912,7 @@ function showResult(){
   }
   document.getElementById('result').classList.add('show');
 
-  /* TTS 결과 클로징 멘트 */
+  /* TTS 결과 클로징 */
   setTimeout(function(){
     var ctxt=allPass
       ?'고객님의 DESIRE 로드맵 6단계를 모두 완성하셨습니다! 진심으로 축하드립니다!'
@@ -914,13 +925,17 @@ function showResult(){
   },600);
 }
 
-/* #4 상담 다시하기 */
+/* 상담 다시하기 */
 function restartDiag(){
+  /* [8번] TTS 중복 방지 */
+  if('speechSynthesis' in window)window.speechSynthesis.cancel();
   document.getElementById('result').classList.remove('show');
   stageRes={};curStageKey='D';timerSec=0;
   sessionActive=false;reconnectCount=0;
   audioQueue=[];isPlaying=false;isPaused=false;
-  lastAiText='';idleTimer=null;
+  lastAiText='';
+  if(idleTimer){clearTimeout(idleTimer);idleTimer=null;}
+  idleCount=0;
   document.getElementById('chat-area').innerHTML='';
   document.getElementById('quick-btns').innerHTML='';
   document.getElementById('tmr').textContent='00:00';
