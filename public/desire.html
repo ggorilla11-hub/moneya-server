@@ -1075,19 +1075,23 @@ function submitSurvey(){
     curStage:(SG.find(function(s){return stageRes[s.k]==='cur';})||{}).nm||'전체통과',
     star:surveyData.star,helpful:surveyData.helpful,voice:surveyData.voice,
     willPay:surveyData.willPay,comment:surveyData.comment,ua:navigator.userAgent.slice(0,120)};
-  var SHEET_URL='https://script.google.com/macros/s/AKfycbwQ0lVhbuSEDLf8E8ILVZbCX2HU1NQgWW-G8yqRXMc3dmRpYbaYUvkBSlCuy9vf9yGTeA/exec';
-  if(SHEET_URL){
-    /* CORS 우회 — Apps Script는 JSON preflight 차단, URLSearchParams+no-cors 방식 사용 */
-    var formBody=new URLSearchParams();
-    formBody.append('data',JSON.stringify(payload));
-    fetch(SHEET_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:formBody.toString()})
-      .then(function(){showToast('✅ 피드백 감사합니다!');setTimeout(showPaidDetail,1000);})
-      .catch(function(e){console.error('[DESIRE] 시트 오류:',e);showToast('✅ 피드백 감사합니다!');setTimeout(showPaidDetail,1000);});
-  }else{
-    console.log('[DESIRE-001] 설문:',payload);
+  /* ★ 서버 API를 통해 전송 — CORS 문제 완전 해결 */
+  fetch('/api/desire-feedback',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  })
+  .then(function(r){return r.json();})
+  .then(function(r){
+    console.log('[DESIRE] 피드백 저장 결과:', r);
     showToast('✅ 피드백 감사합니다!');
     setTimeout(showPaidDetail,1000);
-  }
+  })
+  .catch(function(e){
+    console.error('[DESIRE] 피드백 오류:',e);
+    showToast('✅ 피드백 감사합니다!');
+    setTimeout(showPaidDetail,1000);
+  });
 }
 function showPaidDetail(){
   document.getElementById('rc-extra').innerHTML=
