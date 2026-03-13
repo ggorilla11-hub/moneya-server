@@ -434,9 +434,24 @@ var surveyData={star:0,helpful:'',voice:'',willPay:'',comment:''};
 /* 카카오 감지 */
 (function(){
   var ua=navigator.userAgent||'';
-  if(ua.indexOf('KAKAOTALK')>-1||ua.indexOf('kakao')>-1){
+  var isKakao=ua.indexOf('KAKAOTALK')>-1||ua.indexOf('kakaoagent')>-1;
+  if(isKakao){
     document.getElementById('kakao-banner').classList.add('show');
     document.getElementById('landing').style.paddingTop='130px';
+    /* ★ 카카오 인앱브라우저에서는 시작 버튼 완전 차단 */
+    window.addEventListener('DOMContentLoaded',function(){
+      var cta=document.querySelector('.lo-cta');
+      if(cta){
+        cta.textContent='⚠️ 크롬으로 열어야 시작 가능합니다';
+        cta.style.background='rgba(255,255,255,0.15)';
+        cta.style.cursor='not-allowed';
+        cta.onclick=function(e){
+          e.preventDefault();
+          openChrome();
+          return false;
+        };
+      }
+    });
   }
 })();
 function openChrome(){
