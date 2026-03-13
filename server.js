@@ -917,9 +917,9 @@ wss.on('connection', (ws, req) => {
 
 【★ 소음·오인식 절대 금지 원칙 — 가장 중요한 규칙 ★】
 • STT로 입력된 내용이 아래 유효한 답변 목록에 해당하지 않으면 절대로 반응하지 마세요.
-• TV 소리, 라디오, 뉴스, 주변 대화 소리 등 소음에 반응하는 것은 절대 금지입니다.
-• "감사합니다", "알겠습니다", "맞습니다", "그렇군요" 등 맥락 없는 단어는 무시하세요.
-• 유효하지 않은 STT가 들어오면 동일한 질문을 한 번 더 반복하세요. 절대 혼자 진행하지 마세요.
+• TV·라디오·뉴스 소리가 STT로 잡히는 경우가 많습니다. 예: "MBC 뉴스 이덕영입니다", "앵커 멘트", 뉴스 자막 등 — 이런 내용은 100% 소음이므로 완전히 무시하세요.
+• "안녕", "안녕하세요", "감사합니다", "수고하세요", "알겠습니다", "그렇습니다", "네 네" 등 현재 질문과 맥락이 맞지 않는 단어는 소음으로 간주하고 무시하세요.
+• 유효하지 않은 STT가 들어오면 같은 질문을 한 번 더 반복하세요. 절대 혼자 진행하지 마세요.
 • 유효 답변 목록:
   - 오프닝: 네/동의합니다/동의하고 시작합니다/시작합니다
   - 1단계 Debt Free: 네/있습니다/없습니다/아니오/있어요/없어요
@@ -1051,7 +1051,7 @@ wss.on('connection', (ws, req) => {
               input_audio_format: 'pcm16',
               output_audio_format: 'pcm16',
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
-              turn_detection: { type: 'server_vad', threshold: 0.85, prefix_padding_ms: 400, silence_duration_ms: 1800 },
+              turn_detection: { type: 'server_vad', threshold: 0.92, prefix_padding_ms: 500, silence_duration_ms: 2200 },
               tool_choice: 'none'
             }
           }));
@@ -1078,12 +1078,26 @@ wss.on('connection', (ws, req) => {
             if (event.type === 'conversation.item.input_audio_transcription.completed') {
               const userText = (event.transcript || '').trim();
               console.log('[DESIRE-WS] 고객(STT):', userText);
-              // [10번] STT 2글자 이하 소음 필터
-              if (userText.length >= 2) {
-                ws.send(JSON.stringify({ type: 'transcript', text: userText, role: 'user' }));
-              } else {
+
+              // ★ 소음 STT 필터 — 3단계 차단 ★
+              // 1단계: 너무 짧은 텍스트 (3글자 이하)
+              if (userText.length <= 3) {
                 console.log('[DESIRE-WS] STT 너무 짧음(소음) — 무시:', userText);
+                return;
               }
+              // 2단계: 소음 블랙리스트 패턴 (뉴스/방송/잡음 STT 오인식)
+              const noisePatterns = [
+                /뉴스/, /기자/, /앵커/, /입니다\.$/, /MBC/, /KBS/, /SBS/, /YTN/,
+                /안녕하세요$/, /감사합니다$/, /수고하세요$/, /네\s*네$/, /안녕$/,
+                /네\s*맞습니다$/, /알겠습니다$/, /그렇습니다$/
+              ];
+              const isNoise = noisePatterns.some(p => p.test(userText));
+              if (isNoise) {
+                console.log('[DESIRE-WS] 소음 패턴 감지 — 무시:', userText);
+                return;
+              }
+              // 3단계: 정상 STT — 전달
+              ws.send(JSON.stringify({ type: 'transcript', text: userText, role: 'user' }));
             }
             // [10번] response.done — AI 응답 완전 종료 신호 전달
             if (event.type === 'response.done') {
