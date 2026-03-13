@@ -490,6 +490,10 @@ app.get('/desire.html', (req, res) => {
 });
 
 app.get('/', (req, res) => {
+  // ★ mode=desire 잘못된 GET 요청 차단 — desire.html로 리다이렉트
+  if (req.query.mode === 'desire') {
+    return res.redirect('/desire.html?mode=beta');
+  }
   res.json({
     status: 'AI머니야 서버 실행 중!', version: '9.1 (Smart Note Phase3)',
     rag: {
@@ -1188,7 +1192,7 @@ wss.on('connection', (ws, req) => {
                   console.log('[DESIRE-WS] 클로징 감지 → 결과화면 전송');
                   setTimeout(() => {
                     try { ws.send(JSON.stringify({ type: 'result', stages: {} })); } catch(e) {}
-                  }, 2000); // TTS 재생 여유 2초
+                  }, 4000); // TTS 재생 여유 4초 (PC 대응)
                 }
               }
             }
