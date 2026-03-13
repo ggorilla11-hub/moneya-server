@@ -786,6 +786,9 @@ function connectWS(){
     if(msg.type==='result'){
       if(msg.stages)stageRes=msg.stages;
       showResult();
+      /* ★ 결과화면 표시 후 WebSocket 정상 종료 */
+      sessionActive=false;
+      setTimeout(function(){ try{ws.close();}catch(e){} },1000);
     }
   };
   ws.onclose=function(){
