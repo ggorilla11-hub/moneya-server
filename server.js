@@ -526,7 +526,7 @@ app.post('/api/desire-feedback', async (req, res) => {
     const payload = req.body;
     console.log('[DESIRE-FB] 피드백 수신:', JSON.stringify(payload));
 
-    const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwQ0lVhbuSEDLf8E8ILVZbCX2HU1NQgWW-G8yqRXMc3dmRpYbaYUvkBSlCuy9vf9yGTeA/exec';
+    const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzWuaLuARVwLYCeSrZkGVN1tmjSrsTtdNGdNTJcgR_MLQ7kj7YY1treilP-rViILb1mew/exec';
 
     const response = await fetch(SHEET_URL, {
       method: 'POST',
