@@ -988,7 +988,6 @@ wss.on('connection', (ws, req) => {
 • 고객이 아래 중단 신호를 보내면 즉시 하던 말을 멈추고 "네, 고객님! 말씀하세요." 라고 짧게 답한 뒤 고객의 말을 경청하세요.
 • 중단 신호 키워드: "여보세요", "잠깐요", "잠깐만요", "아니요", "틀렸어요", "다시요", "수정", "잘못", "아닌데", "다르게", "다시 말씀", "제 말 들으세요", "그게 아니라"
 • 고객이 수정 요청을 하면: "네, 고객님! 다시 말씀해 주세요. 정확히 기록하겠습니다." 라고 말하고 고객의 수정 답변을 받아서 반영하세요.
-• 특히 숫자(소득, 금액 등)는 반드시 복창해서 확인하세요. 예: "월 소득이 천만 원이 맞으신가요?"
 • 고객이 "아니요" 또는 "틀렸어요"라고 하면 절대 계속 진행하지 말고 해당 질문을 다시 하세요.
 
 【★ 소음·오인식 절대 금지 원칙 ★】
@@ -1057,12 +1056,8 @@ wss.on('connection', (ws, req) => {
 → 여기서 멈추고 고객의 답변을 기다리세요.
 
 소득 확인 후:
-★ 반드시 소득을 복창하여 확인하세요 ★
-"월 [소득]만원이 맞으신가요?" 라고 먼저 확인하세요.
-고객이 "네" 또는 맞다고 하면:
+→ 복창 없이 바로 저축 목표를 안내하세요.
 "월 [소득]만원 기준으로 목표 저축액은 월 [소득×비율]만원 이상입니다. 현재 이 정도 저축과 투자를 하고 계신가요?"
-고객이 "아니요" 또는 "틀렸어요"라고 하면:
-"죄송합니다! 다시 말씀해 주세요. 세후 월 소득이 얼마나 되시나요?" 라고 재질문하세요.
 → 여기서 멈추고 고객의 답변을 기다리세요.
 
 고객이 "하고 있다"고 답하면:
@@ -1183,6 +1178,19 @@ wss.on('connection', (ws, req) => {
             // [10번] response.done — AI 응답 완전 종료 신호 전달
             if (event.type === 'response.done') {
               ws.send(JSON.stringify({ type: 'response_done' }));
+
+              // ★ 클로징 멘트 감지 → 결과화면 자동 전환
+              const outputs = event.response?.output || [];
+              for (const out of outputs) {
+                const textContent = out.content?.find(c => c.type === 'text' || c.type === 'audio');
+                const transcript = textContent?.transcript || textContent?.text || '';
+                if (transcript.includes('안녕히 계세요') || transcript.includes('진단이 완료')) {
+                  console.log('[DESIRE-WS] 클로징 감지 → 결과화면 전송');
+                  setTimeout(() => {
+                    try { ws.send(JSON.stringify({ type: 'result', stages: {} })); } catch(e) {}
+                  }, 2000); // TTS 재생 여유 2초
+                }
+              }
             }
             if (event.type === 'error') { console.error('[DESIRE-WS] OpenAI 에러:', event.error); ws.send(JSON.stringify({ type: 'error', error: event.error?.message })); }
           } catch (e) { console.error('[DESIRE-WS] 메시지 파싱 에러:', e); }
