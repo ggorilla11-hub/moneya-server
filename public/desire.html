@@ -682,7 +682,17 @@ function startMicCapture(){
 /* WebSocket */
 function connectWS(){
   ws=new WebSocket(WS_URL+'?mode=desire');
-  ws.onopen=function(){ws.send(JSON.stringify({type:'start_desire'}));};
+  var heartbeatInt=null;
+  ws.onopen=function(){
+    ws.send(JSON.stringify({type:'start_desire'}));
+    /* Heartbeat — 25초마다 ping 전송 (삼성브라우저 절전 차단) */
+    if(heartbeatInt)clearInterval(heartbeatInt);
+    heartbeatInt=setInterval(function(){
+      if(ws&&ws.readyState===WebSocket.OPEN){
+        ws.send(JSON.stringify({type:'ping'}));
+      }
+    },25000);
+  };
   ws.onmessage=function(e){
     var msg;try{msg=JSON.parse(e.data);}catch(err){return;}
 
@@ -709,7 +719,16 @@ function connectWS(){
 
     if(msg.type==='transcript'&&msg.text){
       if(msg.role==='assistant')addAI(msg.text);
-      if(msg.role==='user'&&msg.source!=='text')addUser(msg.text);
+      if(msg.role==='user'&&msg.source!=='text'){
+        addUser(msg.text);
+        /* ★ 중단 신호 감지 — 시각적 표시 */
+        var stopWords=['여보세요','잠깐요','잠깐만요','틀렸어요','다시요','수정해','아닌데요','다르게요'];
+        var isStop=stopWords.some(function(s){return msg.text.indexOf(s)>-1;});
+        if(isStop){
+          addSys('✋ 수정 요청을 감지했습니다. 머니야가 다시 경청합니다.');
+          document.getElementById('mb-status').textContent='수정 요청 수신 — 경청 중...';
+        }
+      }
     }
 
     if(msg.type==='audio'&&msg.data)enqueueAudio(msg.data);
@@ -730,15 +749,17 @@ function connectWS(){
     }
   };
   ws.onclose=function(){
-    if(sessionActive)return;
-    if(reconnectCount<3){
+    if(heartbeatInt){clearInterval(heartbeatInt);heartbeatInt=null;}
+    /* 진단 완료 후 종료는 정상 — 결과화면이 열려있으면 무시 */
+    if(document.getElementById('result').classList.contains('show'))return;
+    if(reconnectCount<5){
       reconnectCount++;
-      document.getElementById('reconnect-txt').textContent='🔄 연결 최적화 중... ('+reconnectCount+'/3)';
+      document.getElementById('reconnect-txt').textContent='🔄 재연결 중... ('+reconnectCount+'/5)';
       document.getElementById('reconnect-banner').classList.add('show');
-      setTimeout(connectWS,2500);
+      setTimeout(connectWS,2000);
     }else{
       document.getElementById('reconnect-banner').classList.remove('show');
-      showToast('⚠️ 연결이 종료되었습니다');
+      showToast('⚠️ 연결이 끊겼습니다. 새로고침 해주세요');
     }
   };
   ws.onerror=function(err){console.error('[DESIRE-001] WS Error',err);};
