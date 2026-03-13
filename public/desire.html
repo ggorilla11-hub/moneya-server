@@ -1,21 +1,20 @@
 <!DOCTYPE html>
+<!--
+  파일명  : desire.html | DESIRE-001 | v2.0.0 | 2026-03-13
+  변경    : 시뮬레이터 v2 UI 기준 전면 재작성
+            · 클릭 버튼 (동의/네/아니오 등) 유지
+            · 잠깐 멈춤 / 다시 듣기 / 힌트 버튼 추가
+            · 성함 질문 제거 (오프닝 후 바로 동의)
+            · S단계 가족수 기반 저축률 계산
+            · 진단 결과 후 재시작 오류 수정 (sessionActive 플래그)
+            · VAD + 클릭 이중 입력 구조
+            · MVP BETA 배지 유지
+-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>AI 음성재무진단 — 머니야</title>
-<!-- 카톡/SNS OG 태그 -->
-<meta property="og:type" content="website">
-<meta property="og:title" content="AI 음성재무진단 — 머니야">
-<meta property="og:description" content="오상열 CFP 20년 노하우 · DESIRE 로드맵으로 5분 만에 재무 현재 위치를 진단합니다">
-<meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a">
-<meta property="og:image:width" content="800">
-<meta property="og:image:height" content="800">
-<meta property="og:locale" content="ko_KR">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="AI 음성재무진단 — 머니야">
-<meta name="twitter:description" content="오상열 CFP 20년 노하우 · DESIRE 로드맵으로 5분 만에 재무 현재 위치를 진단합니다">
-<meta name="twitter:image" content="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a">
+<title>AI 금융집사 머니야 — AI 음성 무료 재무진단</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -23,29 +22,49 @@
   --gold:#C8941A;--gold2:#E8B830;
   --bg:#1C1C1E;--panel:#252530;--panel2:#2E2E3A;
   --border:rgba(255,255,255,0.09);
-  --green:#16A34A;--green2:#34C759;--red:#DC2626;--blue:#3B82F6;
+  --green:#16A34A;--green2:#34C759;--red:#DC2626;
   --txt:rgba(255,255,255,0.87);--txt2:rgba(255,255,255,0.45);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--txt);overflow:hidden;}
-
-/* ─ 애니메이션 ─ */
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 4px rgba(232,184,48,.14),0 0 36px rgba(232,184,48,.14)}50%{box-shadow:0 0 0 8px rgba(232,184,48,.07),0 0 52px rgba(232,184,48,.26)}}
 @keyframes wave{0%,100%{height:4px;opacity:.3}50%{height:16px;opacity:1}}
-@keyframes typing{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-4px);opacity:1}}
 @keyframes fi{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
-@keyframes sbar{0%,100%{opacity:1}50%{opacity:.45}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .fi{animation:fi .38s ease both;}
 
-/* ════════════ LANDING ════════════ */
-#landing{
-  position:fixed;inset:0;z-index:400;
-  background:linear-gradient(160deg,#091528 0%,#0F2A5C 55%,#071020 100%);
-  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
-  overflow-y:auto;padding:40px 20px 48px;text-align:center;
-  transition:opacity .45s ease;
-}
+/* 카카오 배너 */
+#kakao-banner{display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#FEE500,#F5D800);padding:12px 16px;flex-direction:column;align-items:center;gap:8px;box-shadow:0 2px 12px rgba(0,0,0,.2);}
+#kakao-banner.show{display:flex;}
+.kb-top{display:flex;align-items:center;gap:8px;width:100%;}
+.kb-icon{font-size:20px;}
+.kb-text{flex:1;}
+.kb-title{font-size:13px;font-weight:900;color:#1a1a1a;line-height:1.3;}
+.kb-sub{font-size:11px;color:#555;margin-top:1px;}
+.kb-btn{background:#1a1a1a;color:#FEE500;border:none;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.kb-steps{display:flex;gap:10px;font-size:10px;color:#555;width:100%;justify-content:center;flex-wrap:wrap;}
+
+/* MVP BETA 배지 */
+.mvp-badge{position:fixed;top:0;right:0;z-index:9990;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-size:10px;font-weight:900;padding:6px 12px 6px 10px;border-bottom-left-radius:14px;letter-spacing:.5px;display:none;align-items:center;gap:5px;box-shadow:0 2px 14px rgba(124,58,237,.5);}
+.mvp-badge.show{display:flex;}
+.mvp-dot{width:6px;height:6px;border-radius:50%;background:#fde047;flex-shrink:0;animation:blink 1.5s infinite;}
+.mvp-txt{display:flex;flex-direction:column;line-height:1.2;}
+.mvp-main{font-size:10px;font-weight:900;}
+.mvp-sub{font-size:8px;opacity:.75;font-weight:600;}
+
+/* 재연결 */
+#reconnect-banner{display:none;position:fixed;bottom:120px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(30,30,30,.92);backdrop-filter:blur(8px);border:1px solid rgba(201,165,62,.4);border-radius:24px;padding:8px 18px;align-items:center;gap:8px;white-space:nowrap;}
+#reconnect-banner.show{display:flex;}
+.spin{width:14px;height:14px;border:2px solid rgba(201,165,62,.3);border-top:2px solid var(--gold2);border-radius:50%;animation:spin .8s linear infinite;}
+.reconnect-txt{font-size:12px;color:rgba(255,255,255,.9);font-weight:600;}
+
+/* 토스트 */
+.toast{position:fixed;bottom:120px;left:50%;transform:translateX(-50%);background:rgba(22,163,74,.92);color:#fff;padding:8px 18px;border-radius:20px;font-size:12px;font-weight:700;z-index:9999;display:none;white-space:nowrap;}
+.toast.show{display:block;}
+
+/* 랜딩 */
+#landing{position:fixed;inset:0;z-index:400;background:linear-gradient(160deg,#091528 0%,#0F2A5C 55%,#071020 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;overflow-y:auto;padding:36px 20px 48px;text-align:center;transition:opacity .45s ease;}
 #landing.gone{opacity:0;pointer-events:none;}
 .lo-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(232,184,48,.14);border:1px solid rgba(232,184,48,.4);color:var(--gold2);padding:5px 15px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.8px;margin-bottom:20px;}
 .lo-logo{width:92px;height:92px;border-radius:50%;overflow:hidden;margin:0 auto 18px;animation:pulse 3s ease-in-out infinite;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:42px;}
@@ -56,423 +75,315 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 .lo-pains{display:flex;flex-direction:column;gap:8px;max-width:320px;margin:0 auto 26px;text-align:left;}
 .lo-pain{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 14px;font-size:13px;color:rgba(255,255,255,.82);}
 .lo-cta{display:block;max-width:340px;width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border:none;padding:17px 28px;border-radius:16px;font-size:16px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 6px 28px rgba(200,148,26,.44);transition:all .22s;margin:0 auto;}
-.lo-cta:hover{transform:translateY(-2px);box-shadow:0 10px 36px rgba(200,148,26,.5);}
+.lo-cta:hover{transform:translateY(-2px);}
 .lo-note{font-size:11px;color:rgba(255,255,255,.32);margin-top:10px;}
+.lo-warn{margin-top:14px;padding:10px 14px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;font-size:11px;color:#fc8181;line-height:1.6;max-width:340px;}
 .lo-stats{display:flex;gap:28px;justify-content:center;margin-top:28px;padding-top:24px;border-top:1px solid rgba(255,255,255,.1);}
 .ls-n{font-size:20px;font-weight:900;color:var(--gold2);display:block;}
-.ls-l{font-size:10px;color:rgba(255,255,255,.4);margin-top:2px;}
+.ls-l{font-size:10px;color:rgba(255,255,255,.42);}
 
-/* ════════════ APP SHELL ════════════ */
-#app{height:100vh;display:grid;}
-
-/* PC 3열 */
-@media(min-width:1024px){
-  #app{grid-template-columns:220px 1fr 260px;grid-template-rows:46px 1fr 148px;grid-template-areas:"top top top" "lft ctr rgt" "stt stt stt";}
-  #mob-shell{display:none!important;}
-}
-/* 태블릿 2열 */
-@media(min-width:768px) and (max-width:1023px){
-  #app{grid-template-columns:200px 1fr;grid-template-rows:46px 1fr 144px;grid-template-areas:"top top" "lft ctr" "stt stt";}
-  #rgt{display:none!important;}
-  #mob-shell{display:none!important;}
-}
-/* 모바일 */
-@media(max-width:767px){
-  #app{grid-template-columns:1fr;grid-template-rows:50px 1fr auto;grid-template-areas:"top" "mob" "qmob";padding-bottom:58px;}
-  #imob{position:fixed;bottom:0;left:0;right:0;z-index:100;}
-  #lft,#ctr,#rgt,#stt{display:none!important;}
-  #mob-shell{display:flex!important;flex-direction:column;overflow:hidden;}
-}
-
-/* ─ 탑바 ─ */
-#top{grid-area:top;background:rgba(0,0,0,.72);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 14px;z-index:100;}
-.tb-l{display:flex;align-items:center;gap:9px;}
+/* 앱 */
+#app{height:100%;display:flex;flex-direction:column;max-width:480px;margin:0 auto;}
+#top{background:rgba(15,42,92,.95);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:52px;flex-shrink:0;z-index:100;}
 .tb-logo{width:30px;height:30px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:15px;}
 .tb-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
-.tb-brand{font-size:13px;font-weight:900;}.tb-brand span{color:var(--gold);}
-.tb-c{display:flex;align-items:center;gap:10px;}
+.tb-info{flex:1;padding:0 10px;}
+.tb-brand{font-size:13px;font-weight:900;}
+.tb-brand span{color:var(--gold);}
+.tb-sub{font-size:10px;color:var(--txt2);}
 .live-pill{display:flex;align-items:center;gap:5px;background:rgba(52,199,89,.11);border:1px solid rgba(52,199,89,.3);padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;color:var(--green2);}
 .ldot{width:6px;height:6px;border-radius:50%;background:var(--green2);animation:blink 1.8s infinite;}
-.timer{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;}
-.tb-r{display:flex;gap:5px;}
-.tpill{background:rgba(255,255,255,.07);border:1px solid var(--border);padding:3px 9px;border-radius:14px;font-size:10px;color:var(--txt2);cursor:pointer;}
-.epill{background:rgba(255,69,58,.12);border:1px solid rgba(255,69,58,.3);padding:3px 11px;border-radius:14px;font-size:10px;color:#FF453A;cursor:pointer;font-weight:700;}
-@media(max-width:767px){.tpill{display:none;}}
+/* #12 타이머 강조 표시 */
+.tmr{font-size:13px;color:var(--gold2);font-weight:900;margin-left:6px;background:rgba(201,165,62,.12);border:1px solid rgba(201,165,62,.3);padding:3px 9px;border-radius:12px;letter-spacing:.5px;}
 
-/* ─ 좌 패널 ─ */
-#lft{grid-area:lft;background:linear-gradient(158deg,#0A1B3E,#0F2A5C,#132B60);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;}
-#lft::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 32%,rgba(200,148,26,.09) 0%,transparent 62%);}
-.ai-wrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:9px;}
-.ai-circle{width:84px;height:84px;border-radius:50%;overflow:hidden;animation:pulse 3s ease-in-out infinite;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:38px;}
-.ai-circle img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
-.ai-nm{font-size:13px;font-weight:900;}
-.ai-sub{font-size:10px;color:var(--txt2);margin-top:-5px;}
-.waves{display:flex;gap:3px;align-items:center;height:18px;margin-top:3px;}
+/* 머니야 배너 */
+.moneya-banner{background:linear-gradient(135deg,var(--navy),var(--navy2));padding:12px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.mb-avatar{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:22px;animation:pulse 3s ease-in-out infinite;flex-shrink:0;overflow:hidden;}
+.mb-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.mb-info{flex:1;}
+.mb-name{font-size:13px;font-weight:900;color:#fff;}
+.mb-status{font-size:11px;color:rgba(255,255,255,.6);margin-top:1px;}
+.wave-bars{display:flex;gap:2px;align-items:center;height:18px;}
 .wb{width:3px;border-radius:3px;background:var(--gold2);animation:wave 1s ease-in-out infinite;}
-.wb:nth-child(2){animation-delay:.15s}.wb:nth-child(3){animation-delay:.3s}.wb:nth-child(4){animation-delay:.15s}
-.ai-tag{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.48);backdrop-filter:blur(8px);border:1px solid rgba(200,148,26,.3);padding:3px 9px;border-radius:14px;font-size:9px;color:var(--gold);font-weight:700;z-index:3;}
-.pip-box{position:absolute;bottom:10px;right:10px;width:62px;height:80px;border-radius:9px;background:linear-gradient(145deg,#2a2a2a,#1a1a1a);border:1.5px solid rgba(255,255,255,.1);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
-.pip-box span:first-child{font-size:22px;}
-.pip-box span:last-child{font-size:9px;color:var(--txt2);}
+.wb:nth-child(2){animation-delay:.15s;}.wb:nth-child(3){animation-delay:.3s;}.wb:nth-child(4){animation-delay:.45s;}.wb:nth-child(5){animation-delay:.6s;}
+.wave-bars.idle .wb{animation:none;height:4px;opacity:.35;}
 
-/* ─ 중앙 스마트노트 ─ */
-#ctr{grid-area:ctr;background:#FAFAF8;display:flex;flex-direction:column;overflow:hidden;}
-.ntb{display:flex;align-items:center;justify-content:space-between;padding:7px 13px;background:#fff;border-bottom:1px solid #E8E8E8;flex-shrink:0;}
-.ntabs{display:flex;gap:2px;}
-.ntab{padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;color:#999;cursor:pointer;transition:all .2s;}
-.ntab.on{background:#FFF3CC;color:var(--gold);}
-.nscroll{flex:1;overflow-y:auto;padding:15px 17px;}
-.nscroll::-webkit-scrollbar{width:3px;}
-.nscroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);}
-.dhc{background:linear-gradient(135deg,var(--navy),var(--navy2));border-radius:11px;padding:13px;text-align:center;margin-bottom:12px;}
-.dhc-t{font-size:14px;font-weight:900;color:var(--gold2);}
-.dhc-s{font-size:11px;color:rgba(255,255,255,.58);margin-top:3px;}
-.pb-wrap{margin-bottom:11px;}
-.pb-lbl{font-size:9px;color:#999;font-weight:700;letter-spacing:.4px;margin-bottom:5px;}
-.pb-tr{display:flex;gap:3px;}
-.pb-s{flex:1;height:5px;border-radius:3px;background:#E8E8E8;transition:all .5s;}
-.pb-s.done{background:var(--green);}
-.pb-s.cur{background:var(--gold2);animation:sbar 1.4s infinite;}
-.dsn-list{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
-.dsn{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;border:1px solid #E8E8E8;background:#fff;transition:all .3s;}
-.dsn.cur{background:#FFF8E7;border-color:rgba(200,148,26,.38);}
-.dsn.pass{background:#F0FDF4;border-color:rgba(22,163,74,.28);}
-.dsn.lock{opacity:.55;}
-.dsn-b{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex-shrink:0;background:#E8E8E8;color:#888;}
-.dsn.cur .dsn-b{background:var(--red);color:#fff;}
-.dsn.pass .dsn-b{background:var(--green);color:#fff;}
-.dsn-i{flex:1;}
-.dsn-lt{font-size:9px;font-weight:900;color:#aaa;}
-.dsn.cur .dsn-lt{color:var(--red);}
-.dsn.pass .dsn-lt{color:var(--green);}
-.dsn-nm{font-size:12px;color:#1A1A2E;font-weight:600;}
-.dsn-ic{font-size:14px;}
-.dc{background:#fff;border-radius:9px;border:1px solid #E8E8E8;overflow:hidden;margin-top:9px;}
-.dc-h{background:var(--navy);padding:7px 11px;display:flex;align-items:center;gap:6px;}
-.dc-ht{font-size:11px;font-weight:700;color:#fff;}
-.dc-hb{margin-left:auto;font-size:9px;background:rgba(232,184,48,.2);color:var(--gold2);padding:1px 6px;border-radius:5px;font-weight:700;}
-.dc-b{padding:8px 11px;display:flex;flex-direction:column;gap:4px;}
-.dc-r{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:12px;}
-.dc-r:last-child{border-bottom:none;}
-.dc-rl{color:#888;}.dc-rv{font-weight:700;color:var(--navy);}
-.qa{padding:7px 12px;background:#fff;border-top:1px solid #E8E8E8;display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;min-height:44px;align-items:center;}
-.qb{background:#fff;border:1.5px solid var(--navy);color:var(--navy);padding:7px 12px;border-radius:17px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .17s;}
-.qb:hover,.qb:active{background:var(--navy);color:#fff;}
-.qb.gold{background:linear-gradient(135deg,var(--gold),var(--gold2));border-color:transparent;color:#fff;box-shadow:0 2px 9px rgba(200,148,26,.3);}
+/* DESIRE 바 */
+.desire-bar{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;padding:10px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;}
+.db-step{display:flex;flex-direction:column;align-items:center;padding:6px 2px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid transparent;cursor:pointer;transition:all .2s;user-select:none;}
+.db-step.active{background:rgba(201,165,62,.15);border-color:rgba(201,165,62,.4);}
+.db-step.done{background:rgba(22,163,74,.1);border-color:rgba(22,163,74,.3);}
+.db-step.cur-bad{background:rgba(220,38,38,.1);border-color:rgba(220,38,38,.3);}
+.db-letter{font-size:14px;font-weight:900;color:rgba(255,255,255,.3);}
+.db-step.active .db-letter{color:var(--gold2);}
+.db-step.done .db-letter{color:var(--green2);}
+.db-step.cur-bad .db-letter{color:#fc8181;}
+.db-name{font-size:8px;color:rgba(255,255,255,.28);margin-top:2px;line-height:1.2;text-align:center;}
+.db-step.active .db-name{color:rgba(232,184,48,.7);}
+.db-step.done .db-name{color:rgba(52,199,89,.7);}
+.db-step.cur-bad .db-name{color:rgba(252,129,129,.7);}
 
-/* ─ 우 패널 ─ */
-#rgt{grid-area:rgt;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
-.rp-h{padding:10px 13px;background:rgba(0,0,0,.18);border-bottom:1px solid var(--border);font-size:10px;font-weight:700;color:var(--txt2);letter-spacing:.4px;flex-shrink:0;}
-.rp-b{flex:1;overflow-y:auto;padding:9px 11px;}
-.rp-b::-webkit-scrollbar{width:2px;}
-.rp-sec{font-size:9px;font-weight:700;color:var(--txt2);letter-spacing:.4px;margin-bottom:5px;}
-.rp-steps{display:flex;flex-direction:column;gap:3px;margin-bottom:9px;}
-.rp-st{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:7px;background:var(--panel2);font-size:10px;}
-.rp-st.done{background:rgba(52,199,89,.08);border:1px solid rgba(52,199,89,.14);}
-.rp-st.cur{background:rgba(200,148,26,.11);border:1px solid rgba(200,148,26,.24);}
-.rp-st.lock{opacity:.42;}
-.rp-sn{width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;flex-shrink:0;background:rgba(255,255,255,.08);color:var(--txt2);}
-.rp-st.done .rp-sn{background:var(--green2);color:#fff;}
-.rp-st.cur .rp-sn{background:var(--gold);color:#fff;}
-.rp-sl{font-size:10px;flex:1;}.rp-lk{margin-left:auto;font-size:10px;opacity:.28;}
-.fi-box{background:var(--panel2);border-radius:7px;padding:7px 9px;border-left:3px solid transparent;margin-bottom:5px;}
-.fi-box.red{border-color:var(--red)}.fi-box.yellow{border-color:var(--gold2)}.fi-box.green{border-color:var(--green2)}
-.fi-l{font-size:9px;color:var(--txt2);margin-bottom:2px;}
-.fi-v{font-size:11px;font-weight:700;}
-.fi-s{font-size:9px;color:var(--txt2);margin-top:1px;}
-.eng{background:var(--panel2);border-radius:7px;padding:7px 9px;}
-.eng-r{display:flex;justify-content:space-between;margin-bottom:3px;font-size:9px;}
-.eng-r:last-child{margin-bottom:0;}
-.eng-l{color:var(--txt2);}
+/* 채팅 */
+.chat-area{flex:1;overflow-y:auto;padding:14px 12px;display:flex;flex-direction:column;gap:10px;}
+.chat-area::-webkit-scrollbar{width:3px;}
+.chat-area::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px;}
+.msg{display:flex;gap:8px;animation:fi .35s ease;}
+.msg.ai{align-items:flex-start;}
+.msg.user{flex-direction:row-reverse;align-items:flex-start;}
+.msg.sys{justify-content:center;}
+.msg-av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;overflow:hidden;}
+.msg-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.msg-bubble{max-width:78%;padding:10px 13px;border-radius:16px;font-size:13px;line-height:1.65;}
+.msg.ai .msg-bubble{background:var(--panel2);color:var(--txt);border-bottom-left-radius:4px;}
+.msg.user .msg-bubble{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;border-bottom-right-radius:4px;}
+.msg.sys .msg-bubble{background:rgba(201,165,62,.1);border:1px solid rgba(201,165,62,.25);color:var(--gold2);font-size:11px;font-weight:700;padding:5px 14px;border-radius:20px;}
 
-/* ─ STT 하단 ─ */
-#stt{grid-area:stt;background:var(--panel);border-top:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
-.stt-h{display:flex;align-items:center;justify-content:space-between;padding:7px 13px;background:rgba(0,0,0,.18);border-bottom:1px solid var(--border);flex-shrink:0;}
-.stt-ht{font-size:10px;font-weight:700;color:var(--txt2);display:flex;align-items:center;gap:6px;}
-.stt-badge{background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.28);padding:2px 7px;border-radius:8px;font-size:9px;color:var(--blue);font-weight:700;}
-.stt-msgs{flex:1;display:flex;gap:11px;align-items:flex-start;overflow-x:auto;overflow-y:hidden;padding:8px 13px;}
-.stt-msgs::-webkit-scrollbar{height:2px;}
-.stt-msgs::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);}
-.stt-m{display:flex;gap:5px;align-items:flex-end;flex-shrink:0;max-width:300px;}
-.stt-av{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;overflow:hidden;}
-.stt-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
-.stt-av.u{background:var(--panel2);}
-.stt-bbl{padding:6px 10px;border-radius:11px;font-size:10px;line-height:1.5;max-width:240px;word-break:keep-all;}
-.stt-bbl.ai{background:var(--navy2);color:#fff;border-bottom-left-radius:3px;}
-.stt-bbl.u{background:var(--panel2);color:var(--txt);border-bottom-right-radius:3px;}
-.stt-bbl.sys{background:rgba(200,148,26,.11);color:var(--gold2);border:1px solid rgba(200,148,26,.22);border-radius:7px;}
-.stt-ir{display:flex;align-items:center;gap:7px;padding:7px 11px;border-top:1px solid var(--border);flex-shrink:0;}
-.stt-inp{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);border-radius:17px;padding:6px 13px;font-size:12px;color:var(--txt);font-family:inherit;outline:none;transition:border-color .2s;}
-.stt-inp:focus{border-color:rgba(200,148,26,.48);}
-.stt-inp::placeholder{color:var(--txt2);}
-.stt-sb{width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;background:var(--navy2);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;transition:background .17s;}
-.stt-sb:hover{background:var(--gold);}
+/* 빠른 버튼 */
+/* #7 안내배너 상하 여백 확대 — TTS/STT 오입력 방지 */
+.quick-btns{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px 12px;border-top:1px solid var(--border);margin-top:4px;}
+.qb{padding:8px 14px;border-radius:20px;border:1px solid rgba(201,165,62,.4);background:rgba(201,165,62,.08);color:var(--gold2);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;}
+.qb:active{transform:scale(.97);}
+.qb.gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border-color:transparent;}
 
-/* ════════════ MOBILE SHELL ════════════ */
-#mob-shell{grid-area:mob;display:none;flex-direction:column;overflow:hidden;background:#F5F6FA;}
-.mob-pb{background:#fff;padding:8px 13px;border-bottom:1px solid #E5E7EB;flex-shrink:0;}
-.mob-pbl{font-size:9px;color:#888;font-weight:700;margin-bottom:5px;letter-spacing:.4px;}
-.mob-ptr{display:flex;gap:3px;}
-.mob-ps{flex:1;height:5px;border-radius:3px;background:#E5E7EB;transition:all .4s;}
-.mob-ps.done{background:var(--green);}
-.mob-ps.cur{background:var(--gold2);animation:sbar 1.4s infinite;}
-.mob-nms{display:flex;gap:3px;margin-top:4px;}
-.mob-nm{flex:1;font-size:8px;text-align:center;color:#aaa;overflow:hidden;white-space:nowrap;}
-.mob-nm.done{color:var(--green);}
-.mob-nm.cur{color:var(--gold);font-weight:700;}
-.mob-chat{flex:1;overflow-y:auto;padding:13px 11px;display:flex;flex-direction:column;gap:10px;}
-.mob-chat::-webkit-scrollbar{display:none;}
-.mm{display:flex;gap:7px;align-items:flex-end;}
-.mm.u{flex-direction:row-reverse;}
-.mm-av{width:28px;height:28px;border-radius:50%;flex-shrink:0;align-self:flex-start;overflow:hidden;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:13px;}
-.mm-av img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
-.mm-bd{max-width:80%;display:flex;flex-direction:column;gap:3px;}
-.mm.u .mm-bd{align-items:flex-end;}
-.bbl{padding:10px 13px;border-radius:17px;font-size:13px;line-height:1.65;word-break:keep-all;}
-.bbl.ai{background:var(--navy2);color:#fff;border-bottom-left-radius:4px;}
-.bbl.u{background:#fff;color:#1A1A2E;border:1px solid #E5E7EB;border-bottom-right-radius:4px;}
-.bbl.sys{background:rgba(200,148,26,.1);color:var(--gold);border:1px solid rgba(200,148,26,.28);border-radius:9px;font-size:11px;font-weight:700;text-align:center;padding:6px 11px;align-self:center;}
-.mm-t{font-size:9px;color:#aaa;padding:0 3px;}
-/* 타이핑 */
-.tp-wrap{display:flex;gap:7px;align-items:flex-end;}
-.tp-bbl{background:var(--navy2);padding:10px 14px;border-radius:17px;border-bottom-left-radius:4px;display:flex;gap:5px;align-items:center;}
-.td{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.42);animation:typing 1.2s infinite;}
-.td:nth-child(2){animation-delay:.2s}.td:nth-child(3){animation-delay:.4s}
-/* 스마트카드 모바일 */
-.mc{background:#fff;border-radius:11px;border:1px solid #E5E7EB;overflow:hidden;margin:3px 0;box-shadow:0 2px 7px rgba(0,0,0,.06);}
-.mc-h{background:var(--navy);padding:7px 11px;display:flex;align-items:center;gap:6px;}
-.mc-ht{font-size:11px;font-weight:700;color:#fff;}
-.mc-hb{margin-left:auto;font-size:9px;background:rgba(232,184,48,.2);color:var(--gold2);padding:1px 6px;border-radius:5px;font-weight:700;}
-.mc-b{padding:9px 11px;}
-.mc-r{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F0F0F0;font-size:12px;}
-.mc-r:last-child{border-bottom:none;}
-.mc-rl{color:#888;}.mc-rv{font-weight:700;color:var(--navy);}
-.mc-st{display:flex;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid #F0F0F0;}
-.mc-st:last-child{border-bottom:none;}
-.mc-sb{width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex-shrink:0;background:#E5E7EB;color:#aaa;}
-.mc-st.cur .mc-sb{background:var(--red);color:#fff;}
-.mc-st.pass .mc-sb{background:var(--green);color:#fff;}
-.mc-si{flex:1;}
-.mc-slt{font-size:9px;font-weight:900;color:#aaa;}
-.mc-st.cur .mc-slt{color:var(--red);}
-.mc-st.pass .mc-slt{color:var(--green);}
-.mc-sn{font-size:11px;font-weight:600;color:#1A1A2E;}
+/* 보조 버튼 바 */
+.edit-bar{background:rgba(15,42,92,.8);border-top:2px solid var(--border);padding:10px 12px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0;}
+.edit-bar::-webkit-scrollbar{display:none;}
+.eb-btn{white-space:nowrap;padding:5px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0;}
+.eb-btn:active{background:rgba(255,255,255,.14);}
 
-#qmob{grid-area:qmob;display:flex;gap:7px;flex-wrap:wrap;padding:7px 11px;background:#fff;border-top:1px solid #E5E7EB;align-items:center;}
-#qmob:empty{display:none;}
-.mqb{background:#fff;border:1.5px solid var(--navy);color:var(--navy);padding:7px 12px;border-radius:17px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;}
-.mqb:active{background:var(--navy);color:#fff;}
-.mqb.gold{background:linear-gradient(135deg,var(--gold),var(--gold2));border-color:transparent;color:#fff;box-shadow:0 2px 9px rgba(200,148,26,.3);}
+/* 마이크 바 */
+.mic-bar{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:rgba(22,163,74,.08);border-top:1px solid rgba(22,163,74,.15);flex-shrink:0;}
+.mic-ind{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--green2);}
+.mic-label{font-size:11px;font-weight:700;}
+.mic-end{padding:4px 14px;border-radius:14px;border:1px solid rgba(220,38,38,.4);background:rgba(220,38,38,.1);color:#fc8181;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;}
 
-#imob{grid-area:imob;display:flex;align-items:center;gap:7px;padding:8px 11px;padding-bottom:calc(8px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #E5E7EB;min-height:58px;}
-.mob-inp{flex:1;background:#F5F6FA;border:1.5px solid #E5E7EB;border-radius:19px;padding:9px 13px;font-size:13px;font-family:inherit;color:#1A1A2E;outline:none;resize:none;max-height:78px;min-height:40px;line-height:1.5;transition:border-color .2s;}
-.mob-inp:focus{border-color:var(--navy);}
-.mob-sb{width:38px;height:38px;border-radius:50%;background:var(--navy);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;transition:all .15s;}
-.mob-sb:active{background:var(--navy2);transform:scale(.94);}
+/* 텍스트 입력 */
+.input-bar{background:var(--panel);border-top:1px solid var(--border);padding:10px 12px;display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.inp-field{flex:1;background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:22px;padding:9px 14px;color:var(--txt);font-size:13px;font-family:inherit;outline:none;}
+.inp-field::placeholder{color:var(--txt2);}
+.inp-field:focus{border-color:rgba(201,165,62,.4);}
+.inp-send{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));border:none;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 
-/* ════════════ RESULT OVERLAY ════════════ */
-#result{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.72);backdrop-filter:blur(9px);overflow-y:auto;padding:20px;}
+/* 대기 화면 */
+.idle-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 20px;gap:16px;}
+.idle-logo{width:80px;height:80px;border-radius:50%;overflow:hidden;animation:pulse 3s ease-in-out infinite;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:36px;}
+.idle-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.idle-title{font-size:18px;font-weight:900;color:#fff;text-align:center;line-height:1.5;}
+.idle-sub{font-size:13px;color:var(--txt2);text-align:center;line-height:1.7;}
+
+/* 결과 */
+#result{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.78);backdrop-filter:blur(10px);overflow-y:auto;padding:20px 16px 40px;}
 #result.show{display:block;}
-.rc{max-width:460px;margin:0 auto;background:var(--navy);border-radius:18px;overflow:hidden;box-shadow:0 20px 56px rgba(0,0,0,.5);}
-.rc-hero{background:linear-gradient(135deg,var(--navy),var(--navy2));padding:26px 22px;text-align:center;}
-.rc-em{font-size:42px;display:block;margin-bottom:9px;}
-.rc-t{font-size:19px;font-weight:900;color:#fff;line-height:1.4;margin-bottom:5px;}
+.rc{max-width:480px;margin:0 auto;border-radius:18px;overflow:hidden;background:var(--panel);}
+.rc-hero{background:linear-gradient(135deg,var(--navy),var(--navy2));padding:28px 22px;text-align:center;}
+.rc-em{font-size:44px;display:block;margin-bottom:10px;}
+.rc-t{font-size:20px;font-weight:900;color:#fff;line-height:1.4;margin-bottom:6px;}
 .rc-s{font-size:12px;color:rgba(255,255,255,.58);line-height:1.7;}
-/* ── DESIRE 가로 띠 스택 ── */
-.rc-stages{padding:14px 18px;display:flex;flex-direction:column;gap:5px;}
-.rc-band{display:flex;align-items:center;border-radius:10px;overflow:hidden;height:48px;transition:all .2s;}
-
-/* 왼쪽 알파벳 배지 */
-.rc-band-badge{width:44px;height:100%;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;flex-shrink:0;}
-
-/* 중앙 텍스트 영역 */
-.rc-band-info{flex:1;padding:0 11px;display:flex;flex-direction:column;justify-content:center;}
-.rc-band-sh{font-size:9px;font-weight:900;letter-spacing:.03em;}
-.rc-band-nm{font-size:12px;font-weight:700;}
-
-/* 오른쪽 아이콘 */
-.rc-band-ic{width:36px;height:100%;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
-
-/* ── pass 상태 (단계별 색상은 JS에서 인라인) ── */
-.rc-band.pass .rc-band-sh{color:rgba(255,255,255,.72);}
-.rc-band.pass .rc-band-nm{color:#fff;}
-
-/* ── cur 상태 : 골드 테두리 + 강조 ── */
-.rc-band.cur{box-shadow:0 0 0 2px var(--gold), 0 4px 14px rgba(200,148,26,.35);}
-.rc-band.cur .rc-band-sh{color:rgba(255,255,255,.85);}
-.rc-band.cur .rc-band-nm{color:#fff;font-size:13px;}
-
-/* ── lock 상태 ── */
-.rc-band.lock{background:rgba(255,255,255,.04)!important;border:1px solid rgba(255,255,255,.08);}
-.rc-band.lock .rc-band-badge{color:rgba(255,255,255,.2);background:rgba(255,255,255,.06)!important;}
-.rc-band.lock .rc-band-sh{color:rgba(255,255,255,.22);}
-.rc-band.lock .rc-band-nm{color:rgba(255,255,255,.3);}
-.rc-msg{margin:0 18px 14px;background:rgba(0,0,0,.2);border-radius:11px;padding:13px;}
-.rc-mt{font-size:12px;font-weight:900;color:var(--gold2);margin-bottom:6px;}
-.rc-mb{font-size:12px;line-height:1.8;color:rgba(255,255,255,.78);}
-.rc-ben{margin:0 18px 14px;background:rgba(255,255,255,.05);border-radius:11px;padding:12px;}
-.rc-bt{font-size:11px;font-weight:900;color:rgba(255,255,255,.65);margin-bottom:7px;}
-.rc-bi2{display:flex;align-items:flex-start;gap:6px;padding:4px 0;font-size:11px;color:rgba(255,255,255,.65);border-bottom:1px solid rgba(255,255,255,.06);}
+.rc-stages{padding:16px 18px;display:flex;flex-direction:column;gap:7px;}
+.rc-st{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:11px;}
+.rc-st.pass{background:rgba(22,163,74,.09);border:1px solid rgba(22,163,74,.22);}
+.rc-st.cur{background:rgba(220,38,38,.09);border:1px solid rgba(220,38,38,.22);}
+.rc-st.lock{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);}
+.rc-b{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0;}
+.rc-st.pass .rc-b{background:var(--green);color:#fff;}
+.rc-st.cur .rc-b{background:var(--red);color:#fff;}
+.rc-st.lock .rc-b{background:rgba(255,255,255,.1);color:rgba(255,255,255,.35);}
+.rc-bi{flex:1;}
+.rc-lt{font-size:9px;font-weight:900;}
+.rc-st.pass .rc-lt{color:rgba(52,199,89,.7);}
+.rc-st.cur .rc-lt{color:rgba(220,100,100,.7);}
+.rc-st.lock .rc-lt{color:rgba(255,255,255,.28);}
+.rc-nm{font-size:13px;font-weight:700;color:rgba(255,255,255,.85);}
+.rc-ic{font-size:17px;}
+.rc-msg{margin:0 18px 14px;background:rgba(0,0,0,.22);border-radius:12px;padding:14px;}
+.rc-mt{font-size:12px;font-weight:900;color:var(--gold2);margin-bottom:7px;}
+.rc-mb{font-size:12px;line-height:1.85;color:rgba(255,255,255,.78);}
+.rc-ben{margin:0 18px 14px;background:rgba(255,255,255,.05);border-radius:12px;padding:13px;}
+.rc-bt{font-size:11px;font-weight:900;color:rgba(255,255,255,.6);margin-bottom:8px;}
+.rc-bi2{display:flex;align-items:flex-start;gap:7px;padding:5px 0;font-size:11px;color:rgba(255,255,255,.65);border-bottom:1px solid rgba(255,255,255,.06);}
 .rc-bi2:last-child{border-bottom:none;}
 .rc-chk{color:var(--green2);font-weight:900;flex-shrink:0;}
-.rc-cta-w{padding:0 18px 22px;}
-.rc-cta{display:block;width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border:none;padding:15px;border-radius:13px;font-size:15px;font-weight:900;text-align:center;cursor:pointer;font-family:inherit;box-shadow:0 5px 18px rgba(200,148,26,.38);}
-.rc-orig{text-align:center;margin-top:7px;font-size:11px;color:rgba(255,255,255,.38);}
-.rc-orig s{color:rgba(255,255,255,.28);}
+.survey-wrap{margin:0 18px 14px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px;}
+/* #13 설문 입력 필드 */
+.sv-inp{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--txt);font-size:13px;font-family:inherit;outline:none;}
+.sv-inp:focus{border-color:rgba(201,165,62,.4);}
+.sv-req{color:#f87171;font-size:10px;margin-left:3px;}
+/* #13 개인정보동의 */
+.sv-agree{margin:10px 0 6px;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(201,165,62,.2);border-radius:8px;}
+.sv-agree-label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt);cursor:pointer;}
+.sv-agree-label input{accent-color:var(--gold2);width:16px;height:16px;cursor:pointer;}
+.sv-agree-detail{font-size:10px;color:var(--txt2);margin-top:5px;line-height:1.5;padding-left:22px;}
+/* #4 상담 다시하기 버튼 */
+.rc-restart{padding:14px 18px 4px;text-align:center;}
+.rc-restart-btn{background:rgba(255,255,255,.08);border:1px solid var(--border);color:var(--txt2);padding:11px 28px;border-radius:24px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.sv-title{font-size:12px;font-weight:900;color:var(--gold2);margin-bottom:12px;}
+.sv-q{margin-bottom:13px;}
+.sv-ql{font-size:11px;color:rgba(255,255,255,.72);margin-bottom:7px;font-weight:700;}
+.star-row{display:flex;gap:8px;}
+.star{font-size:24px;cursor:pointer;opacity:.3;transition:opacity .15s;user-select:none;}
+.star.on{opacity:1;}
+.sv-opts{display:flex;flex-wrap:wrap;gap:5px;}
+.sv-opt{padding:5px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.15);background:transparent;color:rgba(255,255,255,.6);font-size:11px;cursor:pointer;font-family:inherit;transition:all .18s;}
+.sv-opt.sel{background:rgba(201,165,62,.2);border-color:var(--gold2);color:var(--gold2);}
+.sv-textarea{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--txt);font-size:12px;font-family:inherit;resize:none;outline:none;min-height:60px;}
+.sv-textarea:focus{border-color:rgba(201,165,62,.4);}
+.sv-submit{display:block;width:100%;margin-top:11px;padding:13px;border-radius:11px;border:none;background:linear-gradient(135deg,var(--green),#15803d);color:#fff;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;}
+.paid-detail{margin:0 18px 14px;background:linear-gradient(135deg,rgba(15,42,92,.85),rgba(26,58,110,.85));border:1px solid rgba(201,165,62,.3);border-radius:14px;padding:18px;text-align:center;}
+.pd-gift{font-size:36px;margin-bottom:10px;}
+.pd-title{font-size:16px;font-weight:900;color:#fff;margin-bottom:5px;line-height:1.4;}
+.pd-sub{font-size:11px;color:rgba(255,255,255,.6);line-height:1.7;margin-bottom:13px;}
+.pd-checks{display:flex;flex-direction:column;gap:6px;margin-bottom:15px;text-align:left;}
+.pd-ck{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.75);}
+.pd-ck-icon{color:var(--green2);flex-shrink:0;}
+.pd-price{margin-bottom:15px;}
+.pd-orig{font-size:11px;color:rgba(255,255,255,.32);text-decoration:line-through;}
+.pd-now{font-size:24px;font-weight:900;color:var(--gold2);}
+.pd-btns{display:flex;flex-direction:column;gap:8px;}
+.pd-btn-now{padding:14px;border-radius:11px;border:none;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;}
+.pd-btn-later{padding:12px;border-radius:11px;border:1px solid rgba(201,165,62,.4);background:transparent;color:var(--gold2);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.rc-cta-w{padding:0 18px 24px;}
+.rc-cta{display:block;width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border:none;padding:16px;border-radius:14px;font-size:15px;font-weight:900;text-align:center;cursor:pointer;font-family:inherit;}
+.rc-orig{text-align:center;margin-top:8px;font-size:11px;color:rgba(255,255,255,.38);}
+.rc-orig s{color:rgba(255,255,255,.25);}
 .rc-orig strong{color:var(--gold2);font-size:13px;}
-.rc-beta{margin:0 18px 14px;background:rgba(22,163,74,.09);border:1px solid rgba(22,163,74,.22);border-radius:11px;padding:13px;}
-.rc-bbt{font-size:12px;font-weight:900;color:var(--green2);margin-bottom:5px;}
-.rc-bbd{font-size:11px;color:rgba(255,255,255,.62);line-height:1.7;margin-bottom:9px;}
-.rc-bbc{display:block;width:100%;padding:11px;background:var(--green);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:900;text-align:center;cursor:pointer;font-family:inherit;}
+.monthly-cta{margin:0 18px 24px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.22);border-radius:12px;padding:14px;text-align:center;}
+.mc-t{font-size:12px;font-weight:900;color:#93c5fd;margin-bottom:4px;}
+.mc-d{font-size:11px;color:rgba(255,255,255,.52);line-height:1.65;margin-bottom:10px;}
+.mc-btn{display:block;width:100%;padding:12px;border-radius:10px;border:none;background:rgba(59,130,246,.55);color:#fff;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;}
 </style>
 </head>
 <body>
 
-<!-- ════ LANDING ════ -->
+<div id="kakao-banner">
+  <div class="kb-top">
+    <span class="kb-icon">🔊</span>
+    <div class="kb-text">
+      <div class="kb-title">AI 음성 진단을 위해 크롬으로 열어주세요</div>
+      <div class="kb-sub">카카오톡 내에서는 마이크·음성이 제한됩니다</div>
+    </div>
+    <button class="kb-btn" onclick="openChrome()">크롬으로 열기</button>
+  </div>
+  <div class="kb-steps">
+    <div>① 우측 하단 ···</div>
+    <div>→ ② 다른 브라우저로 열기</div>
+    <div>→ ③ Chrome 선택</div>
+  </div>
+</div>
+
+<div class="mvp-badge" id="mvp-badge">
+  <div class="mvp-dot"></div>
+  <div class="mvp-txt">
+    <span class="mvp-main">🔧 MVP BETA</span>
+    <span class="mvp-sub">테스트 버전 · 피드백 수집 중</span>
+  </div>
+</div>
+
+<div id="reconnect-banner">
+  <div class="spin"></div>
+  <span class="reconnect-txt" id="reconnect-txt">🔄 연결 최적화 중... (1/3)</span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 랜딩 -->
 <div id="landing">
-  <div class="lo-badge">🎙️ AI 음성재무진단</div>
-  <div class="lo-logo" id="lo-logo">
-    <img src="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a" alt="AI머니야" onerror="this.style.display='none'">
+  <div class="lo-badge">✦ 국내 최초 음성리딩 AI 금융집사 · 머니야 ✦</div>
+  <div class="lo-logo">
+    <img src="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a" alt="AI머니야" onerror="this.parentElement.textContent='💰'">
   </div>
-  <div class="lo-title">맞벌이인데<br>왜 통장은 <em>항상 비어있을까요?</em></div>
-  <div class="lo-sub">AI 머니야가 <strong style="color:var(--gold2)">음성으로</strong> DESIRE 로드맵을 안내하며<br>고객님의 재무 현재 위치를 정확히 진단해 드립니다.</div>
+  <div class="lo-title">오분으로 알아보는<br><em>나의 재무 현재 위치</em></div>
+  <div class="lo-sub">오상열 CFP 20년의 금융집사 노하우<br>DESIRE 로드맵 AI 음성 재무진단</div>
   <div class="lo-pains">
-    <div class="lo-pain">😤 둘이 벌어도 저축이 안 된다</div>
-    <div class="lo-pain">😰 신용대출을 갚아도 또 생긴다</div>
-    <div class="lo-pain">😔 노후준비는 나중에… 계속 미룬다</div>
-    <div class="lo-pain">😟 전문가 상담료가 너무 부담스럽다</div>
+    <div class="lo-pain">💸 매달 돈이 모자라는 이유를 모른다</div>
+    <div class="lo-pain">😰 노후 준비가 안 된 것 같아 불안하다</div>
+    <div class="lo-pain">🏠 대출 상환과 저축을 어떻게 해야 할지 모른다</div>
   </div>
-  <button id="go-btn" class="lo-cta" onclick="go()">🎙️ AI 음성재무진단 시작하기 →</button>
-  <div id="kakao-open-btn" style="display:none; margin-top:10px;">
-    <button id="chrome-android-btn" onclick="openInChrome()" style="display:none;width:100%;padding:14px;background:#FAE100;border:none;border-radius:12px;font-size:15px;font-weight:700;color:#3C1E1E;cursor:pointer;">
-      🌐 크롬으로 열기
-    </button>
-    <div id="chrome-ios-btn" style="display:none;">
-      <button onclick="copyLink()" style="width:100%;padding:14px;background:#FAE100;border:none;border-radius:12px;font-size:15px;font-weight:700;color:#3C1E1E;cursor:pointer;">
-        📋 링크 복사 후 크롬에서 열기
-      </button>
-      <p style="font-size:11px;color:rgba(255,255,255,0.5);text-align:center;margin:8px 0 0;">복사 후 크롬 주소창에 붙여넣기 해주세요</p>
-    </div>
-    <p style="font-size:11px;color:rgba(255,255,255,0.5);text-align:center;margin:8px 0 0;">음성 기능은 크롬 브라우저에서만 지원됩니다</p>
-  </div>
-  <div class="lo-note">회원가입 불필요 · 카드정보 없음 · 완전 무료</div>
+  <button class="lo-cta" onclick="startSession()">🎤 AI 음성 무료 재무진단 시작 (오분)</button>
+  <div class="lo-note">⚠️ 상담 내용은 저장되지 않으며 금융상품 판매에 사용되지 않습니다</div>
+  <div class="lo-warn">🔊 음성 진단입니다. 크롬(Chrome) 브라우저에서 여시면 가장 잘 작동합니다.</div>
   <div class="lo-stats">
-    <div><span class="ls-n">20년</span><div class="ls-l">CFP 경력</div></div>
-    <div><span class="ls-n">2,000+</span><div class="ls-l">재무상담 건수</div></div>
-    <div><span class="ls-n">무료</span><div class="ls-l">5분 체험</div></div>
+    <div><span class="ls-n">2,000+</span><span class="ls-l">진단 건수</span></div>
+    <div><span class="ls-n">20년</span><span class="ls-l">CFP 경력</span></div>
+    <div><span class="ls-n">6단계</span><span class="ls-l">DESIRE 로드맵</span></div>
   </div>
 </div>
 
-<!-- ════ APP ════ -->
-<div id="app">
-  <!-- 탑바 -->
+<!-- 메인 앱 -->
+<div id="app" style="display:none;height:100%;flex-direction:column;">
   <div id="top">
-    <div class="tb-l">
-      <div class="tb-logo"><img src="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a" alt="M" onerror="this.style.display='none'"></div>
-      <div class="tb-brand">AI <span>머니야</span></div>
-      <span style="font-size:10px;color:var(--txt2);">스마트 재무진단</span>
+    <div class="tb-logo">
+      <img src="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a" alt="머니야" onerror="this.parentElement.textContent='💰'">
     </div>
-    <div class="tb-c">
-      <div class="live-pill"><div class="ldot"></div>LIVE</div>
-      <div class="timer" id="tmr">00:00</div>
+    <div class="tb-info">
+      <div class="tb-brand">AI <span>금융집사 머니야</span></div>
+      <div class="tb-sub">AI 음성 무료 재무진단</div>
     </div>
-    <div class="tb-r">
-      <div class="tpill">🎤 마이크</div>
-      <div class="tpill">📹 카메라</div>
-      <div class="epill">종료</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div class="live-pill" id="live-pill" style="display:none;"><div class="ldot"></div>진단중</div>
+      <div class="tmr" id="tmr" style="display:none;">00:00</div>
     </div>
   </div>
 
-  <!-- 좌 AI -->
-  <div id="lft">
-    <div class="ai-tag" id="ai-tag">💬 준비 중</div>
-    <div class="ai-wrap">
-      <div class="ai-circle"><img src="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a" alt="💰" onerror="this.outerHTML='💰'"></div>
-      <div class="ai-nm">AI 머니야</div>
-      <div class="ai-sub">오상열 CFP 20년 학습</div>
-      <div class="waves"><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div></div>
+  <div class="moneya-banner">
+    <div class="mb-avatar">
+      <img src="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a" alt="머니야" onerror="this.parentElement.textContent='💰'">
     </div>
-    <div class="pip-box"><span>🙂</span><span>고객</span></div>
-  </div>
-
-  <!-- 중앙 노트 -->
-  <div id="ctr">
-    <div class="ntb">
-      <div class="ntabs"><div class="ntab on">🗺 DESIRE 진단</div><div class="ntab">📋 스마트노트</div><div class="ntab">📊 분석결과</div></div>
-      <span style="font-size:10px;color:#bbb;">실시간 업데이트</span>
+    <div class="mb-info">
+      <div class="mb-name">AI 금융집사 머니야</div>
+      <div class="mb-status" id="mb-status">연결 중...</div>
     </div>
-    <div class="nscroll" id="nscroll">
-      <div class="dhc"><div class="dhc-t">🗺 DESIRE 로드맵 진단</div><div class="dhc-s">재무 독립의 6단계 — 지금 어느 단계에 계신지 진단합니다</div></div>
-      <div class="pb-wrap"><div class="pb-lbl">진단 진행률</div><div class="pb-tr" id="pc-pb"></div></div>
-      <div class="dsn-list" id="pc-dsn"></div>
-      <div id="pc-data"></div>
-    </div>
-    <div class="qa" id="pc-qa"></div>
-  </div>
-
-  <!-- 우 패널 -->
-  <div id="rgt">
-    <div class="rp-h">📊 실시간 분석</div>
-    <div class="rp-b">
-      <div class="rp-sec">DESIRE 단계 현황</div>
-      <div class="rp-steps" id="rp-steps"></div>
-      <hr style="border:none;border-top:1px solid var(--border);margin:7px 0;">
-      <div class="rp-sec">핵심 발견사항</div>
-      <div id="rp-fi"><div class="fi-box yellow"><div class="fi-l">💬 진단 상태</div><div class="fi-v">시작 대기 중</div><div class="fi-s">상담 시작 후 자동 업데이트</div></div></div>
-      <hr style="border:none;border-top:1px solid var(--border);margin:7px 0;">
-      <div class="rp-sec">AI 엔진 상태</div>
-      <div class="eng">
-        <div class="eng-r"><span class="eng-l">모델</span><span style="color:var(--gold2);font-weight:700;font-size:9px;">DESIRE 에이전트</span></div>
-        <div class="eng-r"><span class="eng-l">CFP 데이터</span><span style="color:var(--green2);font-weight:700;font-size:9px;">활성 ●</span></div>
-        <div class="eng-r"><span class="eng-l">금융집짓기®</span><span style="color:var(--green2);font-weight:700;font-size:9px;">탑재 ●</span></div>
-        <div class="eng-r"><span class="eng-l">세션</span><span id="rp-tmr" style="font-weight:700;font-size:9px;">00:00</span></div>
-      </div>
+    <div class="wave-bars idle" id="wave-bars">
+      <div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div>
     </div>
   </div>
 
-  <!-- STT -->
-  <div id="stt">
-    <div class="stt-h">
-      <div class="stt-ht">💬 실시간 대화 <div class="stt-badge" id="stt-bd">● 대기 중</div></div>
-      <div style="font-size:9px;color:var(--txt2);">상담 종료 후 자동 저장</div>
+  <div class="desire-bar" id="desire-bar"></div>
+
+  <div class="idle-screen" id="idle-screen">
+    <div class="idle-logo">
+      <img src="https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a" alt="머니야" onerror="this.parentElement.textContent='💰'">
     </div>
-    <div class="stt-msgs" id="stt-msgs"></div>
-    <div class="stt-ir">
-      <input class="stt-inp" id="pc-inp" placeholder="메시지를 입력하거나 빠른 버튼을 눌러주세요..." onkeydown="if(event.key==='Enter')send('pc')">
-      <button class="stt-sb" onclick="send('pc')">➤</button>
-    </div>
+    <div class="idle-title">AI 금융집사 머니야와<br>연결 중입니다...</div>
+    <div class="idle-sub">잠시 후 음성 진단이 시작됩니다.<br>크롬 브라우저를 권장합니다.</div>
   </div>
 
-  <!-- 모바일 채팅 -->
-  <div id="mob-shell">
-    <div class="mob-pb">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <div class="mob-pbl">AI 음성재무진단</div>
-        <button id="tts-toggle" onclick="toggleTTS()"
-          style="font-size:10px;font-weight:700;background:rgba(232,184,48,.15);border:1px solid rgba(232,184,48,.3);color:var(--gold2);padding:3px 9px;border-radius:12px;cursor:pointer;font-family:inherit;">
-          🔊 음성 ON
-        </button>
-      </div>
-      <div class="mob-ptr" id="mob-pb"></div>
-      <div class="mob-nms" id="mob-nms"></div>
-    </div>
-    <div class="mob-chat" id="mob-chat"></div>
+  <div class="chat-area" id="chat-area" style="display:none;"></div>
+  <div class="quick-btns" id="quick-btns"></div>
+
+  <div class="edit-bar" id="edit-bar" style="display:none;">
+    <button class="eb-btn" onclick="editStep()">✏️ 내용 수정</button>
+    <button class="eb-btn" onclick="replayAI()">🔁 다시 듣기</button>
+    <button class="eb-btn" onclick="pauseAI()">⏸ 잠깐 멈춤</button>
+    <button class="eb-btn" onclick="showHint()">💡 힌트</button>
   </div>
-  <div id="qmob"></div>
-  <div id="imob">
-    <textarea class="mob-inp" id="mob-inp" placeholder="메시지를 입력하세요..." rows="1"
-      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,78)+'px'"
-      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send('mob');}"></textarea>
-    <button class="mob-sb" onclick="send('mob')">➤</button>
+
+  <div class="mic-bar" id="mic-bar" style="display:none;">
+    <div class="mic-ind">
+      <div class="ldot"></div>
+      <span class="mic-label">🎤 음성 인식 중 — 말씀해주세요</span>
+    </div>
+    <button class="mic-end" onclick="endSession()">종료</button>
+  </div>
+
+  <div class="input-bar" id="input-bar" style="display:none;">
+    <input class="inp-field" id="inp" placeholder="텍스트로도 답변하실 수 있습니다..." onkeydown="if(event.key==='Enter')sendText()">
+    <button class="inp-send" onclick="sendText()">➤</button>
   </div>
 </div>
 
-<!-- 결과 오버레이 -->
+<!-- 결과 -->
 <div id="result">
   <div class="rc">
-    <div class="rc-hero"><span class="rc-em" id="rc-em">🎯</span><div class="rc-t" id="rc-t">DESIRE 진단 완료!</div><div class="rc-s">고객님의 재무 현재 위치를 확인했습니다.</div></div>
+    <div class="rc-hero">
+      <span class="rc-em" id="rc-em">🎯</span>
+      <div class="rc-t" id="rc-t">DESIRE 진단 완료!</div>
+      <div class="rc-s">고객님의 재무 현재 위치를 AI 음성으로 확인했습니다.</div>
+    </div>
     <div class="rc-stages" id="rc-stages"></div>
-    <div class="rc-msg"><div class="rc-mt">💬 AI 머니야의 한마디</div><div class="rc-mb" id="rc-mb"></div></div>
+    <div class="rc-msg">
+      <div class="rc-mt">💬 AI 금융집사 머니야의 한마디</div>
+      <div class="rc-mb" id="rc-mb"></div>
+    </div>
     <div class="rc-ben">
       <div class="rc-bt">📋 60분 본상담에서 받으시는 것</div>
       <div class="rc-bi2"><span class="rc-chk">✓</span>DESIRE 로드맵 월별 실행 플랜 완성</div>
@@ -485,1236 +396,653 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
   </div>
 </div>
 
-<!-- 피드백 폼 오버레이 -->
-<div id="feedback-overlay" style="display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.78);backdrop-filter:blur(10px);overflow-y:auto;padding:20px;">
-  <div style="max-width:460px;margin:0 auto;background:var(--navy);border-radius:18px;overflow:hidden;box-shadow:0 20px 56px rgba(0,0,0,.5);">
-    <!-- 헤더 -->
-    <div style="background:linear-gradient(135deg,var(--navy),var(--navy2));padding:24px 22px;text-align:center;">
-      <div style="font-size:36px;margin-bottom:8px;">📋</div>
-      <div style="font-size:18px;font-weight:900;color:#fff;margin-bottom:5px;">AI 음성재무진단 평가</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.6;">소중한 피드백을 주시면<br><strong style="color:var(--gold2)">60분 AI재무상담을 무료로 드립니다 🎁</strong></div>
-    </div>
-    <!-- 폼 바디 -->
-    <div style="padding:20px 18px;display:flex;flex-direction:column;gap:16px;">
-
-      <!-- 별점 -->
-      <div>
-        <div style="font-size:12px;font-weight:900;color:var(--gold2);margin-bottom:8px;">⭐ AI 음성재무진단 만족도</div>
-        <div id="star-row" style="display:flex;gap:8px;justify-content:center;">
-          <span class="star" data-v="1" onclick="setStar(1)" style="font-size:32px;cursor:pointer;opacity:.35;">★</span>
-          <span class="star" data-v="2" onclick="setStar(2)" style="font-size:32px;cursor:pointer;opacity:.35;">★</span>
-          <span class="star" data-v="3" onclick="setStar(3)" style="font-size:32px;cursor:pointer;opacity:.35;">★</span>
-          <span class="star" data-v="4" onclick="setStar(4)" style="font-size:32px;cursor:pointer;opacity:.35;">★</span>
-          <span class="star" data-v="5" onclick="setStar(5)" style="font-size:32px;cursor:pointer;opacity:.35;">★</span>
-        </div>
-        <div id="star-label" style="text-align:center;font-size:11px;color:rgba(255,255,255,.45);margin-top:5px;">별을 눌러 평가해 주세요</div>
-      </div>
-
-      <!-- 후기 -->
-      <div>
-        <div style="font-size:12px;font-weight:900;color:rgba(255,255,255,.7);margin-bottom:6px;">✍️ 솔직한 후기를 남겨주세요</div>
-        <textarea id="fb-review" rows="3" placeholder="음성 안내, 진단 내용, 사용 경험 등 자유롭게 적어주세요"
-          style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:11px 13px;font-size:13px;color:#fff;font-family:inherit;resize:none;outline:none;line-height:1.6;"></textarea>
-      </div>
-
-      <!-- 본상담 결제의향 -->
-      <div>
-        <div style="font-size:12px;font-weight:900;color:rgba(255,255,255,.7);margin-bottom:8px;">💳 60분 AI재무상담 유료 구독 의향이 있으신가요?</div>
-        <div style="display:flex;gap:8px;">
-          <button id="intent-y" onclick="setIntent('Y')" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.65);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;">✅ 네, 있습니다</button>
-          <button id="intent-n" onclick="setIntent('N')" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.65);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;">🤔 아직 모르겠어요</button>
-        </div>
-      </div>
-
-      <!-- 자유 의견 -->
-      <div>
-        <div style="font-size:12px;font-weight:900;color:rgba(255,255,255,.7);margin-bottom:6px;">💡 개선 아이디어 또는 추가 의견</div>
-        <textarea id="fb-idea" rows="2" placeholder="이런 기능이 있으면 좋겠다, 이런 점이 불편했다 등"
-          style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:11px 13px;font-size:13px;color:#fff;font-family:inherit;resize:none;outline:none;line-height:1.6;"></textarea>
-      </div>
-
-      <!-- 이름/연락처 -->
-      <div style="display:flex;gap:8px;">
-        <div style="flex:1;">
-          <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.55);margin-bottom:5px;">성함 (선택)</div>
-          <input id="fb-name" type="text" placeholder="홍길동"
-            style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;font-size:13px;color:#fff;font-family:inherit;outline:none;">
-        </div>
-        <div style="flex:1;">
-          <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.55);margin-bottom:5px;">연락처 (선택)</div>
-          <input id="fb-phone" type="tel" placeholder="010-0000-0000"
-            style="width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;font-size:13px;color:#fff;font-family:inherit;outline:none;">
-        </div>
-      </div>
-
-      <!-- 개인정보 동의 -->
-      <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:11px 13px;">
-        <input type="checkbox" id="fb-agree" style="margin-top:2px;accent-color:var(--green2);width:15px;height:15px;flex-shrink:0;">
-        <span style="font-size:11px;color:rgba(255,255,255,.55);line-height:1.6;">수집된 정보는 서비스 개선 및 상담 안내 목적으로만 사용되며, 제3자에게 제공되지 않습니다. <strong style="color:rgba(255,255,255,.75)">개인정보 수집·이용에 동의합니다.</strong></span>
-      </label>
-
-      <!-- 제출 버튼 -->
-      <button onclick="submitFeedback()"
-        style="width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border:none;padding:15px;border-radius:13px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 5px 18px rgba(200,148,26,.38);">
-        🎁 평가 제출하고 60분 무료상담 받기
-      </button>
-      <div style="text-align:center;font-size:11px;color:rgba(255,255,255,.3);">별점과 동의 체크 후 제출 가능합니다</div>
-    </div>
-  </div>
-</div>
-
-<!-- 감사 페이지 오버레이 -->
-<div id="thanks-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.85);backdrop-filter:blur(12px);overflow-y:auto;padding:20px;">
-  <div style="max-width:460px;margin:0 auto;background:var(--navy);border-radius:18px;overflow:hidden;box-shadow:0 20px 56px rgba(0,0,0,.6);">
-    <div style="background:linear-gradient(135deg,#0F2A5C,#1A3A6E);padding:30px 22px;text-align:center;">
-      <div style="font-size:48px;margin-bottom:10px;">🎉</div>
-      <div style="font-size:20px;font-weight:900;color:#fff;margin-bottom:8px;">감사합니다!</div>
-      <div style="font-size:13px;color:rgba(255,255,255,.65);line-height:1.7;">소중한 피드백 덕분에<br>AI 머니야가 더 좋아집니다</div>
-    </div>
-    <div style="padding:22px 18px;display:flex;flex-direction:column;gap:14px;">
-      <!-- 무료 이용권 카드 -->
-      <div style="background:linear-gradient(135deg,rgba(200,148,26,.18),rgba(232,184,48,.12));border:1.5px solid rgba(232,184,48,.4);border-radius:13px;padding:16px;text-align:center;">
-        <div style="font-size:13px;font-weight:900;color:var(--gold2);margin-bottom:5px;">🎁 감사 선물</div>
-        <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:4px;">60분 AI재무상담</div>
-        <div style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:10px;"><s style="color:rgba(255,255,255,.3);">정가 ₩99,000</s> → <strong style="color:var(--gold2);font-size:16px;">무료 제공</strong></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.45);">오상열 CFP와 1:1 맞춤 재무설계 60분</div>
-      </div>
-      <!-- 분기 메시지 -->
-      <div id="thanks-msg" style="background:rgba(255,255,255,.05);border-radius:11px;padding:13px;font-size:12px;color:rgba(255,255,255,.72);line-height:1.7;"></div>
-      <!-- 상담 예약 CTA -->
-      <button onclick="alert('상담 예약 페이지로 연결됩니다. (추후 연동)')"
-        style="width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border:none;padding:15px;border-radius:13px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 5px 18px rgba(200,148,26,.38);">
-        📅 60분 무료 상담 예약하기
-      </button>
-      <!-- 정기구독 안내 (결제의향 Y인 경우에만 표시) -->
-      <div id="thanks-sub" style="display:none;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.22);border-radius:11px;padding:13px;">
-        <div style="font-size:12px;font-weight:900;color:var(--green2);margin-bottom:6px;">💚 정기구독 특별 안내</div>
-        <div style="font-size:11px;color:rgba(255,255,255,.62);line-height:1.7;margin-bottom:9px;">60분 상담 후 마음에 드시면<br>AI 머니야 정기구독으로 매달 함께하세요</div>
-        <div style="display:flex;gap:8px;">
-          <div style="flex:1;background:rgba(255,255,255,.06);border-radius:9px;padding:10px;text-align:center;">
-            <div style="font-size:10px;color:rgba(255,255,255,.45);margin-bottom:3px;">월간</div>
-            <div style="font-size:16px;font-weight:900;color:#fff;">₩9,900</div>
-            <div style="font-size:9px;color:rgba(255,255,255,.35);">/ 월</div>
-          </div>
-          <div style="flex:1;background:rgba(232,184,48,.12);border:1px solid rgba(232,184,48,.3);border-radius:9px;padding:10px;text-align:center;">
-            <div style="font-size:10px;color:var(--gold2);margin-bottom:3px;">연간 (2개월 무료)</div>
-            <div style="font-size:16px;font-weight:900;color:var(--gold2);">₩99,000</div>
-            <div style="font-size:9px;color:rgba(255,255,255,.35);">/ 년</div>
-          </div>
-        </div>
-        <button onclick="alert('구독 결제 페이지로 연결됩니다. (추후 연동)')"
-          style="width:100%;margin-top:9px;padding:11px;background:var(--green);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">
-          💚 정기구독 시작하기
-        </button>
-      </div>
-      <div style="text-align:center;font-size:10px;color:rgba(255,255,255,.25);line-height:1.6;">본 무료상담 이용권은 1인 1회 제공됩니다<br>연락처 입력 시 예약 안내 문자를 보내드립니다</div>
-    </div>
-  </div>
-</div>
-
 <script>
-/* ══ 카카오 인앱 브라우저 감지 ══ */
-(function(){
-  const ua=(navigator.userAgent||'').toLowerCase();
-  const isKakao=ua.includes('kakaotalk');
-  const isInapp=isKakao||ua.includes('naver')||ua.includes('instagram')||ua.includes('fb_iab')||ua.includes('fban')||ua.includes('fbav');
-  const isIOS=/iphone|ipad|ipod/.test(ua);
+/* DESIRE-001 | v2.0.0 | 시뮬레이터 v2 기준 */
+var LOGO='https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a';
+var WS_URL='wss://moneya-server.onrender.com';
+var isBeta=new URLSearchParams(location.search).get('mode')==='beta';
 
-  if(isInapp){
-    const goBtn=document.getElementById('go-btn');
-    if(goBtn) goBtn.style.display='none';
-    const kakaoBtn=document.getElementById('kakao-open-btn');
-    if(kakaoBtn) kakaoBtn.style.display='block';
-    if(isIOS){
-      const iosBtn=document.getElementById('chrome-ios-btn');
-      if(iosBtn) iosBtn.style.display='block';
-    } else {
-      const androidBtn=document.getElementById('chrome-android-btn');
-      if(androidBtn) androidBtn.style.display='block';
-    }
-  }
-})();
-
-function openInChrome(){
-  const url=location.href;
-  const chromeIntent='intent://'+url.replace(/^https?:\/\//,'')+'#Intent;scheme=https;package=com.android.chrome;end';
-  location.href=chromeIntent;
-}
-
-function copyLink(){
-  const url=location.href;
-  if(navigator.clipboard){
-    navigator.clipboard.writeText(url).then(()=>{ alert('링크가 복사됐습니다.\n크롬 주소창에 붙여넣기 해주세요.'); });
-  } else {
-    const t=document.createElement('textarea');
-    t.value=url; document.body.appendChild(t); t.select();
-    document.execCommand('copy'); document.body.removeChild(t);
-    alert('링크가 복사됐습니다.\n크롬 주소창에 붙여넣기 해주세요.');
-  }
-}
-
-/* ══ WebSocket 음성 (OpenAI Realtime mini) ══ */
-const WS_URL='wss://moneya-server.onrender.com';
-let ws=null, wsReady=false;
-let audioCtx=null, audioQueue=[], audioPlaying=false, nextPlayTime=0;
-let micStream=null, micProcessor=null;
-let ttsOn=true;
-
-function initAudioCtx(){
-  if(!audioCtx){
-    try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:24000}); }catch(e){}
-  }
-  if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume();
-}
-
-/* ── WebSocket 연결 (시작 시 1회) ── */
-let _wsConnected=false;
-let _gameStarted=false; // go() 버튼 클릭 전까지 음성 인식 처리 차단
-function connectWS(){
-  if(_wsConnected) return; // 절대 중복 연결 방지
-  if(ws&&(ws.readyState===0||ws.readyState===1))return;
-  _wsConnected=true;
-  setMicStatus('🔄 연결 중...');
-  ws=new WebSocket(WS_URL);
-  ws.onopen=()=>{ ws.send(JSON.stringify({type:'start_desire'})); };
-  ws.onmessage=(e)=>{
-    const msg=JSON.parse(e.data);
-    if(msg.type==='session_started'){
-      if(wsReady) return;
-      wsReady=true;
-      setMicStatus('🎤 대기 중...');
-      // STT는 첫 TTS 재생 완료 후 자동 시작됨
-    }
-    if(msg.type==='response.audio.delta'&&msg.delta){
-      const raw=atob(msg.delta);
-      const buf=new Int16Array(raw.length/2);
-      for(let i=0;i<buf.length;i++) buf[i]=(raw.charCodeAt(i*2))|(raw.charCodeAt(i*2+1)<<8);
-      enqueueAudio(buf);
-    }
-    if(msg.type==='input_audio_buffer.speech_started'){ stopWsAudio(); }
-    if(msg.type==='conversation.item.input_audio_transcription.completed'){
-      if(!_gameStarted) return; // 게임 시작 전 무시
-      const txt=(msg.transcript||'').trim();
-      if(txt){
-        setMicStatus('🎤 음성 ON');
-        addSTT('u',txt); addMob('u',txt);
-        if(!voiceToBtn(txt)) handleFree(txt);
-      }
-    }
-  };
-  ws.onerror=()=>{ wsReady=false; setMicStatus('🔊 음성'); };
-  ws.onclose=()=>{ wsReady=false; stopMic(); setMicStatus('🔊 음성'); };
-}
-
-function setMicStatus(txt){
-  const el=document.getElementById('tts-toggle');
-  if(el) el.textContent=txt;
-  // 모바일용
-  const el2=document.getElementById('mob-mic-status');
-  if(el2) el2.textContent=txt;
-}
-
-/* ── 마이크 + 클라이언트 VAD ── */
-let _silenceTimer=null, _speaking=false;
-let micAudioCtx=null;
-let _stt=null; // Web Speech API
-
-/* ── Web Speech API STT (브라우저 내장) ── */
-function startSTT(){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ return; } // 미지원 브라우저 - 조용히 클릭모드로
-  _stt=new SR();
-  _stt.lang='ko-KR';
-  _stt.continuous=true;
-  _stt.interimResults=true;
-
-  _stt.onstart=()=>{ setMicStatus('🎤 음성 ON'); };
-
-  _stt.onresult=(e)=>{
-    if(!_gameStarted) return;
-    let interim='', final='';
-    for(let i=e.resultIndex;i<e.results.length;i++){
-      if(e.results[i].isFinal) final+=e.results[i][0].transcript;
-      else interim+=e.results[i][0].transcript;
-    }
-    if(interim) setMicStatus('🎤 '+interim);
-    if(final){
-      final=final.trim();
-      setMicStatus('🎤 음성 ON');
-      addSTT('u',final); addMob('u',final);
-      if(!voiceToBtn(final)) handleFree(final);
-    }
-  };
-
-  _stt.onerror=(e)=>{
-    if(e.error==='not-allowed'||e.error==='service-not-allowed'){
-      _stt=null;
-      setMicStatus('🔇');
-      return; // wsReady는 건드리지 않음
-    }
-    // no-speech, aborted, network 등 나머지는 무시하고 재시작
-    _stt=null;
-    if(_gameStarted&&!ttsPlaying) setTimeout(startSTT, 500);
-  };
-
-  _stt.onend=()=>{
-    if(!_gameStarted||ttsPlaying){ _stt=null; return; } // 게임 시작 전 또는 TTS 중이면 재시작 금지
-    _stt=null;
-    setTimeout(()=>{ if(_gameStarted&&!ttsPlaying) startSTT(); }, 300);
-  };
-
-  try{ _stt.start(); }catch(e){ _stt=null; } // 실패해도 조용히
-}
-
-function stopSTT(){
-  if(_stt){ try{_stt.stop();}catch(e){} _stt=null; }
-}
-function pauseSTT(){
-  if(_stt){
-    try{_stt.onend=null; _stt.abort();}catch(e){}
-    _stt=null;
-  }
-}
-function resumeSTT(){
-  if(!_gameStarted) return; // 게임 시작 전 절대 STT 켜지 않음
-  if(_stt){
-    try{_stt.onend=null;_stt.onresult=null;_stt.abort();}catch(e){}
-    _stt=null;
-  }
-  startSTT();
-}
-
-async function startMic(){
-  // Web Speech API만 사용 - getUserMedia 충돌 방지
-  startSTT();
-}
-function stopMic(){
-  stopSTT();
-  if(micProcessor){micProcessor.disconnect();micProcessor=null;}
-  if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}
-}
-
-/* ── WebSocket 오디오 큐 재생 ── */
-function enqueueAudio(i16){
-  initAudioCtx();
-  const f32=new Float32Array(i16.length);
-  for(let i=0;i<i16.length;i++) f32[i]=i16[i]/32768;
-  const buf=audioCtx.createBuffer(1,f32.length,24000);
-  buf.getChannelData(0).set(f32);
-  audioQueue.push(buf);
-  if(!audioPlaying) playNextWs();
-}
-function playNextWs(){
-  if(audioQueue.length===0){audioPlaying=false;return;}
-  audioPlaying=true;
-  const buf=audioQueue.shift();
-  const src=audioCtx.createBufferSource();
-  src.buffer=buf; src.connect(audioCtx.destination);
-  const startAt=Math.max(audioCtx.currentTime,nextPlayTime);
-  src.start(startAt);
-  nextPlayTime=startAt+buf.duration;
-  src.onended=playNextWs;
-}
-function stopWsAudio(){
-  audioQueue=[];audioPlaying=false;nextPlayTime=0;
-  try{if(audioCtx){audioCtx.close();audioCtx=null;}}catch(e){}
-  initAudioCtx();
-}
-
-/* ══ TTS(nova) — 클릭/텍스트 답변 시 AI 응답 음성 ══ */
-const TTS_ENDPOINT='https://moneya-server.onrender.com/api/tts';
-let ttsQueue=[],ttsPlaying=false;
-let _greetingAudioCache=null; // 첫 인사말 TTS 미리 캐시
-
-// 페이지 로드 시 첫 인사말 TTS 미리 fetch
-async function prefetchGreeting(){
-  try{
-    const res=await fetch(TTS_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text:'안녕하세요! 저는 AI 머니야입니다. 오상열 CFP 20년의 재무설계 노하우를 담아 만들어진 AI 재무코치예요. 오늘 딱 5분, DESIRE 로드맵으로 고객님의 재무 현재 위치를 정확히 진단해 드릴게요. 상담 내용은 저장되지 않으며, 금융상품 판매에 사용되지 않습니다. 개인 재무정보 입력에 동의하시겠어요?',voice:'nova'})});
-    if(!res.ok)return;
-    const data=await res.json();
-    if(data.success&&data.audio) _greetingAudioCache=data.audio;
-  }catch(e){}
-}
-
-async function speak(text){
-  if(!ttsOn)return;
-  const clean=text.replace(/<[^>]+>/g,'').replace(/&nbsp;/g,' ').trim();
-  if(!clean)return;
-  ttsQueue.push(clean);
-  if(!ttsPlaying)processTTSQueue();
-}
-async function processTTSQueue(){
-  if(ttsQueue.length===0){
-    ttsPlaying=false;
-    // TTS 큐 완전히 비었을 때만 STT 재개 — 1.5초 딜레이로 잔향 완전 제거
-    if(ttsQueue.length===0){ setTimeout(()=>{ if(_gameStarted) resumeSTT(); },1500); }
-    return;
-  }
-  ttsPlaying=true; // pauseSTT 전에 먼저 true — onend에서 STT 재시작 차단
-  pauseSTT(); // STT 완전 중지 (머니야 목소리 인식 방지)
-  const txt=ttsQueue.shift();
-  try{
-    // 첫 인사말 캐시 사용 시 즉시 재생
-    let audioData=null;
-    if(_greetingAudioCache && txt.startsWith('안녕하세요! 저는 AI 머니야')){
-      audioData=_greetingAudioCache; _greetingAudioCache=null;
-    } else {
-      const res=await fetch(TTS_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt,voice:'nova'})});
-      if(!res.ok)throw new Error('TTS fail');
-      const data=await res.json();
-      if(!data.success||!data.audio)throw new Error('no audio');
-      audioData=data.audio;
-    }
-    const data={audio:audioData};
-    const binary=atob(data.audio);
-    const bytes=new Uint8Array(binary.length);
-    for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
-    initAudioCtx();
-    if(audioCtx){
-      const decoded=await audioCtx.decodeAudioData(bytes.buffer);
-      const src=audioCtx.createBufferSource();
-      src.buffer=decoded;src.connect(audioCtx.destination);
-      src.onended=()=>{ processTTSQueue(); };
-      src.start(0);
-    } else {
-      const blob=new Blob([bytes],{type:'audio/mpeg'});
-      const url=URL.createObjectURL(blob);
-      const audio=new Audio(url);
-      audio.onended=()=>{ URL.revokeObjectURL(url); processTTSQueue(); };
-      audio.onerror=()=>processTTSQueue();
-      await audio.play();
-    }
-  }catch(e){
-    if('speechSynthesis' in window){
-      const utt=new SpeechSynthesisUtterance(txt);
-      utt.lang='ko-KR';utt.rate=0.88;utt.pitch=1.05;
-      utt.onend=()=>{ processTTSQueue(); };
-      speechSynthesis.speak(utt);
-    } else { processTTSQueue(); }
-  }
-}
-function toggleTTS(){
-  ttsOn=!ttsOn;
-  const btn=document.getElementById('tts-toggle');
-  if(btn)btn.textContent=ttsOn?'🔊 음성 ON':'🔇 음성 OFF';
-  if(!ttsOn&&'speechSynthesis' in window)speechSynthesis.cancel();
-}
-
-/* ══ 피드백 상태 ══ */
-let fbStar=0, fbIntent='';
-
-function setStar(v){
-  fbStar=v;
-  document.querySelectorAll('.star').forEach(s=>{
-    s.style.color=parseInt(s.dataset.v)<=v?'#E8B830':'rgba(255,255,255,.25)';
-    s.style.opacity=parseInt(s.dataset.v)<=v?'1':'.3';
-  });
-  const labels=['','별로였어요','조금 아쉬워요','괜찮았어요','좋았어요','매우 좋았어요!'];
-  document.getElementById('star-label').textContent=labels[v];
-  document.getElementById('star-label').style.color='var(--gold2)';
-}
-
-function setIntent(v){
-  fbIntent=v;
-  const y=document.getElementById('intent-y');
-  const n=document.getElementById('intent-n');
-  if(v==='Y'){
-    y.style.background='rgba(22,163,74,.25)';y.style.borderColor='var(--green2)';y.style.color='var(--green2)';
-    n.style.background='transparent';n.style.borderColor='rgba(255,255,255,.2)';n.style.color='rgba(255,255,255,.65)';
-  } else {
-    n.style.background='rgba(59,130,246,.2)';n.style.borderColor='#60A5FA';n.style.color='#93C5FD';
-    y.style.background='transparent';y.style.borderColor='rgba(255,255,255,.2)';y.style.color='rgba(255,255,255,.65)';
-  }
-}
-
-async function submitFeedback(){
-  if(!fbStar){alert('별점을 선택해 주세요 ⭐');return;}
-  if(!document.getElementById('fb-agree').checked){alert('개인정보 수집·이용에 동의해 주세요');return;}
-  const payload={
-    timestamp:new Date().toLocaleString('ko-KR'),
-    name:document.getElementById('fb-name').value||'(미입력)',
-    phone:document.getElementById('fb-phone').value||'(미입력)',
-    star:fbStar,
-    review:document.getElementById('fb-review').value||'(없음)',
-    intent:fbIntent||'(미선택)',
-    idea:document.getElementById('fb-idea').value||'(없음)',
-    passCount:Object.values(ST.res).filter(v=>v==='pass').length,
-    curStage:SG.find(s=>ST.res[s.k]==='cur')?.nm||'완성',
-  };
-  // 구글시트 전송 (Apps Script 웹훅)
-  const SHEET_URL='https://script.google.com/macros/s/YOUR_APPS_SCRIPT_ID/exec';
-  try{
-    await fetch(SHEET_URL,{method:'POST',mode:'no-cors',body:JSON.stringify(payload),headers:{'Content-Type':'application/json'}});
-  }catch(e){console.warn('시트 전송 실패(무시)',e);}
-  // 감사 페이지 표시
-  showThanks(payload);
-}
-
-function showThanks(payload){
-  document.getElementById('feedback-overlay').style.display='none';
-  const to=document.getElementById('thanks-overlay');
-  to.style.display='block';
-  // 분기 메시지
-  const msg=document.getElementById('thanks-msg');
-  if(payload.intent==='Y'){
-    msg.innerHTML=`🙌 <strong style="color:var(--gold2)">구독 의향을 밝혀주셔서 감사합니다!</strong><br><br>60분 무료 상담을 마치신 후 월 ₩9,900 정기구독으로 AI 머니야와 계속 함께하세요.<br>오상열 CFP가 직접 재무 로드맵을 함께 완성해 드립니다.`;
-    document.getElementById('thanks-sub').style.display='block';
-  } else {
-    msg.innerHTML=`😊 <strong>60분 무료 상담을 먼저 경험해 보세요.</strong><br><br>부담 없이 받아보시고, 도움이 된다고 느끼실 때 정기구독을 결정하셔도 됩니다.<br>AI 머니야는 항상 여기 있습니다.`;
-    document.getElementById('thanks-sub').style.display='none';
-  }
-}
-
-function openFeedback(){
-  document.getElementById('result').classList.remove('show');
-  document.getElementById('feedback-overlay').style.display='block';
-  window.scrollTo(0,0);
-}
-
-/* ══ 상수 ══ */
-const LOGO='https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a';
-const isBeta=new URLSearchParams(location.search).get('mode')==='beta';
-
-const SG=[
+var SG=[
   {k:'D',l:'D',sh:'Debt Free',nm:'신용대출 상환'},
   {k:'E',l:'E',sh:'Emergency Fund',nm:'비상예비자금 마련'},
   {k:'S',l:'S',sh:'Save & Invest',nm:'적립식 저축투자'},
   {k:'I',l:'I',sh:'Investment',nm:'거치식 자산운용'},
   {k:'R',l:'R',sh:'Repay Mortgage',nm:'담보대출 상환'},
-  {k:'E2',l:'E',sh:'Early Retirement',nm:'경제적 조기은퇴'},
+  {k:'E2',l:'E',sh:'Early Retirement',nm:'경제적 조기은퇴'}
 ];
 
-/* ══ 상태 ══ */
-const ST={
-  step:'WAIT',
-  res:{},           // k→'pass'|'cur'
-  profile:{
-    hasLoan:null,loanCount:null,loanAmt:null,
-    hasEm:null,
-    income:null,children:null,
-    saving:null,hasAsset:null,
-    hasMtg:null,
-    retireAge:null,retireMon:null,
-  }
-};
+var ws=null,audioCtx=null,mediaStream=null,processor=null;
+var audioQueue=[],isPlaying=false,isPaused=false;
+var reconnectCount=0,sessionActive=false;
+var stageRes={},curStageKey='D';
+var timerSec=0,timerInt=null;
+var lastAiText='';
+var surveyData={star:0,helpful:'',voice:'',willPay:'',comment:''};
 
-/* ══ 타이머 ══ */
-let sec=0;
+/* 카카오 감지 */
+(function(){
+  var ua=navigator.userAgent||'';
+  if(ua.indexOf('KAKAOTALK')>-1||ua.indexOf('kakao')>-1){
+    document.getElementById('kakao-banner').classList.add('show');
+    document.getElementById('landing').style.paddingTop='130px';
+  }
+})();
+function openChrome(){
+  location.href='intent://'+location.href.replace(/^https?:\/\//,'')+'#Intent;scheme=https;package=com.android.chrome;end';
+  setTimeout(function(){showToast('주소를 복사해 크롬에서 열어주세요');},1000);
+}
+
+if(isBeta){document.getElementById('mvp-badge').classList.add('show');}
+
+/* 타이머 */
 function startTimer(){
-  setInterval(()=>{
-    sec++;
-    const t=fmtT(sec);
-    document.getElementById('tmr').textContent=t;
-    const r=document.getElementById('rp-tmr');if(r)r.textContent=t;
+  timerInt=setInterval(function(){
+    timerSec++;
+    var m=String(Math.floor(timerSec/60)).padStart(2,'0');
+    var s=String(timerSec%60).padStart(2,'0');
+    document.getElementById('tmr').textContent=m+':'+s;
   },1000);
 }
-function fmtT(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
 
-/* ══ 렌더 ══ */
-function renderAll(){renderPC();renderRP();renderMob();}
-
-function renderPC(){
-  // 진행바
-  const pb=document.getElementById('pc-pb');
-  if(!pb)return;
-  pb.innerHTML=SG.map(s=>{const r=ST.res[s.k];return`<div class="pb-s ${r==='pass'?'done':r==='cur'?'cur':''}"></div>`;}).join('');
-  // DSN
-  const dsn=document.getElementById('pc-dsn');
-  if(!dsn)return;
-  dsn.innerHTML=SG.map(s=>{
-    const r=ST.res[s.k];
-    const cls=r==='pass'?'dsn pass':r==='cur'?'dsn cur':'dsn lock';
-    const ic=r==='pass'?'✅':r==='cur'?'📍':'🔒';
-    return`<div class="${cls}"><div class="dsn-b">${s.l}</div><div class="dsn-i"><div class="dsn-lt">${s.l} — ${s.sh}</div><div class="dsn-nm">${s.nm}</div></div><div class="dsn-ic">${ic}</div></div>`;
+/* 진행바 */
+function renderBar(){
+  var bar=document.getElementById('desire-bar');
+  if(!bar)return;
+  bar.innerHTML=SG.map(function(s){
+    var r=stageRes[s.k]||'';
+    var cls='db-step';
+    if(r==='pass')cls+=' done';
+    else if(r==='cur')cls+=' cur-bad';
+    else if(curStageKey===s.k)cls+=' active';
+    return '<div class="'+cls+'"><div class="db-letter">'+s.l+'</div><div class="db-name">'+s.sh.split(' ')[0]+'</div></div>';
   }).join('');
 }
 
-function renderRP(){
-  const el=document.getElementById('rp-steps');if(!el)return;
-  el.innerHTML=SG.map(s=>{
-    const r=ST.res[s.k];
-    const cls=r==='pass'?'rp-st done':r==='cur'?'rp-st cur':'rp-st lock';
-    return`<div class="${cls}"><div class="rp-sn">${r==='pass'?'✓':s.l}</div><span class="rp-sl">${s.nm}</span>${!r?'<span class="rp-lk">🔒</span>':''}</div>`;
+/* ══ 단계별 안내배너 버튼 정의 (시뮬레이터 v2 기준) ══ */
+var STAGE_BUTTONS = {
+  OPENING: [
+    {label:'✅ 동의하고 시작합니다', text:'동의하고 시작합니다', gold:true}
+  ],
+  D: [
+    {label:'네, 있습니다', text:'네, 신용대출이 있습니다'},
+    {label:'없습니다', text:'신용대출이 없습니다'}
+  ],
+  D_NEXT: [
+    {label:'E단계 → 비상예비자금 확인 →', text:'E단계로 넘어가겠습니다', gold:true}
+  ],
+  E: [
+    {label:'네, 준비되어 있습니다', text:'네, 비상예비자금이 준비되어 있습니다'},
+    {label:'아직 없습니다', text:'비상예비자금이 아직 없습니다'}
+  ],
+  E_NEXT: [
+    {label:'S단계 → 저축투자 확인 →', text:'S단계로 넘어가겠습니다', gold:true}
+  ],
+  S_FAM: [
+    {label:'기혼 (자녀 있음)', text:'기혼이고 자녀가 있습니다'},
+    {label:'기혼 (자녀 없음)', text:'기혼이고 자녀가 없습니다'},
+    {label:'미혼', text:'미혼입니다'}
+  ],
+  S_INC: [
+    {label:'300만원 미만', text:'월 소득이 300만원 미만입니다'},
+    {label:'300~500만원', text:'월 소득이 300만원에서 500만원 사이입니다'},
+    {label:'500만원 이상', text:'월 소득이 500만원 이상입니다'}
+  ],
+  S: [
+    {label:'네, 하고 있습니다', text:'네, 목표 저축액을 달성하고 있습니다'},
+    {label:'아직 못 하고 있습니다', text:'아직 목표 저축액에 못 미치고 있습니다'}
+  ],
+  S_NEXT: [
+    {label:'I단계 → 자산운용 확인 →', text:'I단계로 넘어가겠습니다', gold:true}
+  ],
+  I: [
+    {label:'네, 10억 이상입니다', text:'네, 금융자산이 10억원 이상입니다'},
+    {label:'아직 그 이하입니다', text:'아직 10억원 이하입니다'}
+  ],
+  I_NEXT: [
+    {label:'R단계 → 담보대출 확인 →', text:'R단계로 넘어가겠습니다', gold:true}
+  ],
+  R: [
+    {label:'네, 남아 있습니다', text:'네, 주택담보대출이 남아 있습니다'},
+    {label:'없습니다', text:'주택담보대출이 없습니다'}
+  ],
+  R_NEXT: [
+    {label:'마지막 E단계 →', text:'마지막 E단계로 넘어가겠습니다', gold:true}
+  ],
+  E2: [
+    {label:'네, 준비되어 있습니다', text:'네, 상속 플랜이 준비되어 있습니다'},
+    {label:'아직 없습니다', text:'상속 플랜이 아직 없습니다'}
+  ],
+  RESULT: [
+    {label:'진단 결과 보기 →', text:'SHOW_RESULT', gold:true}
+  ]
+};
+
+/* ══ AI 메시지에서 단계 감지 → 자동 버튼 표시 ══ */
+function detectStageAndSetButtons(html){
+  /* 클로징 / 결과 */
+  if(html.indexOf('진단이 완료')>-1||html.indexOf('결과를 확인')>-1){
+    setQB(STAGE_BUTTONS.RESULT); return;
+  }
+  /* E2 단계 */
+  if(html.indexOf('상속 플랜')>-1||html.indexOf('마지막 질문')>-1||html.indexOf('경제적 조기은퇴')>-1){
+    curStageKey='E2'; if(!stageRes['E2'])stageRes['E2']='cur';
+    setQB(STAGE_BUTTONS.E2); return;
+  }
+  /* R 단계 — 통과/과제 후 다음버튼 */
+  if((html.indexOf('R단계 통과')>-1||html.indexOf('완납이 원칙')>-1)&&html.indexOf('E단계')>-1){
+    setQB(STAGE_BUTTONS.R_NEXT); return;
+  }
+  /* R 단계 질문 */
+  if(html.indexOf('주택담보대출')>-1&&html.indexOf('남아')>-1){
+    curStageKey='R'; if(!stageRes['R'])stageRes['R']='cur';
+    setQB(STAGE_BUTTONS.R); return;
+  }
+  /* I 단계 — 통과/과제 후 다음버튼 */
+  if((html.indexOf('I단계 통과')>-1||html.indexOf('10억원 포트폴리오')>-1)&&html.indexOf('R단계')>-1){
+    setQB(STAGE_BUTTONS.I_NEXT); return;
+  }
+  /* I 단계 질문 */
+  if(html.indexOf('10억원 이상')>-1||html.indexOf('거치식')>-1||html.indexOf('금융자산')>-1){
+    curStageKey='I'; if(!stageRes['I'])stageRes['I']='cur';
+    setQB(STAGE_BUTTONS.I); return;
+  }
+  /* S 단계 — 저축 달성여부 질문 */
+  if(html.indexOf('저축')>-1&&html.indexOf('하고 계신가요')>-1){
+    setQB(STAGE_BUTTONS.S); return;
+  }
+  /* S 단계 — 월 소득 질문 */
+  if(html.indexOf('월 소득')>-1&&html.indexOf('얼마')>-1){
+    setQB(STAGE_BUTTONS.S_INC); return;
+  }
+  /* S 단계 — 통과/과제 후 다음버튼 */
+  if((html.indexOf('S단계 통과')>-1||html.indexOf('앞으로 맞춰가면')>-1)&&html.indexOf('I단계')>-1){
+    setQB(STAGE_BUTTONS.S_NEXT); return;
+  }
+  /* S 단계 — 가족구성 질문 */
+  if(html.indexOf('가족')>-1&&(html.indexOf('결혼')>-1||html.indexOf('몇 명')>-1)){
+    curStageKey='S'; if(!stageRes['S'])stageRes['S']='cur';
+    setQB(STAGE_BUTTONS.S_FAM); return;
+  }
+  /* E 단계 — 통과/과제 후 다음버튼 */
+  if((html.indexOf('E단계 통과')>-1||html.indexOf('병행')>-1||html.indexOf('분리 계좌')>-1)&&html.indexOf('S단계')>-1){
+    setQB(STAGE_BUTTONS.E_NEXT); return;
+  }
+  /* E 단계 질문 */
+  if(html.indexOf('비상예비자금')>-1&&html.indexOf('준비')>-1){
+    curStageKey='E'; if(!stageRes['E'])stageRes['E']='cur';
+    setQB(STAGE_BUTTONS.E); return;
+  }
+  /* D 단계 — 통과/과제 후 다음버튼 */
+  if((html.indexOf('D단계 통과')>-1||html.indexOf('스노우볼')>-1)&&html.indexOf('E단계')>-1){
+    setQB(STAGE_BUTTONS.D_NEXT); return;
+  }
+  /* D 단계 질문 */
+  if(html.indexOf('신용대출')>-1&&(html.indexOf('있으신가요')>-1||html.indexOf('카드론')>-1)){
+    curStageKey='D'; if(!stageRes['D'])stageRes['D']='cur';
+    setQB(STAGE_BUTTONS.D); return;
+  }
+  /* 오프닝 — 동의 질문 */
+  if(html.indexOf('동의하시겠어요')>-1||html.indexOf('동의')>-1){
+    setQB(STAGE_BUTTONS.OPENING); return;
+  }
+}
+
+/* 채팅 */
+function addAI(html){
+  lastAiText=html;
+  var area=document.getElementById('chat-area');
+  var d=document.createElement('div');
+  d.className='msg ai fi';
+  d.innerHTML='<div class="msg-av"><img src="'+LOGO+'" alt="머니야" onerror="this.parentElement.textContent=\'💰\'"></div>'
+    +'<div class="msg-bubble">'+html+'</div>';
+  area.appendChild(d);area.scrollTop=area.scrollHeight;
+  /* [2번] 통과 표시 — 풀네임 포함 확장 */
+  if(html.indexOf('1단계 Debt Free 통과')>-1||html.indexOf('D단계 통과')>-1)stageRes['D']='pass';
+  if(html.indexOf('2단계 Emergency Fund 통과')>-1||html.indexOf('E단계 통과')>-1)stageRes['E']='pass';
+  if(html.indexOf('3단계 Savings 통과')>-1||html.indexOf('S단계 통과')>-1)stageRes['S']='pass';
+  if(html.indexOf('4단계 Investment 통과')>-1||html.indexOf('I단계 통과')>-1)stageRes['I']='pass';
+  if(html.indexOf('5단계 Repay Mortgage 통과')>-1||html.indexOf('R단계 통과')>-1)stageRes['R']='pass';
+  if(html.indexOf('6단계 완성')>-1||html.indexOf('Early Retirement')>-1&&html.indexOf('완성')>-1)stageRes['E2']='pass';
+  renderBar();
+  detectStageAndSetButtons(html);
+  var stage=SG.find(function(s){return s.k===curStageKey;});
+  if(stage)document.getElementById('mb-status').textContent=stage.nm+' 진행 중';
+  /* [6번] AI 발화 후 idleTimer 리셋 */
+  if(sessionActive)resetIdleTimer();
+}
+function addUser(text){
+  var area=document.getElementById('chat-area');
+  var d=document.createElement('div');
+  d.className='msg user fi';
+  d.innerHTML='<div class="msg-bubble">'+text+'</div>';
+  area.appendChild(d);area.scrollTop=area.scrollHeight;
+}
+function addSys(text){
+  var area=document.getElementById('chat-area');
+  var d=document.createElement('div');
+  d.className='msg sys fi';
+  d.innerHTML='<div class="msg-bubble">'+text+'</div>';
+  area.appendChild(d);area.scrollTop=area.scrollHeight;
+}
+
+/* 빠른 버튼 */
+function setQB(btns){
+  document.getElementById('quick-btns').innerHTML=btns.map(function(b){
+    var txt=b.text||b.label;
+    return '<button class="qb'+(b.gold?' gold':'')+'" onclick="clickAnswer(\''+txt.replace(/'/g,"\\'")+'\')">'
+      +b.label+'</button>';
   }).join('');
 }
-
-function renderMob(){
-  const pb=document.getElementById('mob-pb');const nms=document.getElementById('mob-nms');
-  if(!pb||!nms)return;
-  pb.innerHTML=SG.map(s=>{const r=ST.res[s.k];return`<div class="mob-ps ${r==='pass'?'done':r==='cur'?'cur':''}"></div>`;}).join('');
-  nms.innerHTML=SG.map(s=>{const r=ST.res[s.k];const cls=r==='pass'?'mob-nm done':r==='cur'?'mob-nm cur':'mob-nm';return`<div class="${cls}">${s.l}.${s.nm.substring(0,4)}</div>`;}).join('');
+function clearQB(){document.getElementById('quick-btns').innerHTML='';}
+function clickAnswer(text){
+  if(text==='SHOW_RESULT'){showResult();return;}
+  if(!ws||ws.readyState!==WebSocket.OPEN)return;
+  clearQB();addUser(text);
+  ws.send(JSON.stringify({type:'text_input',text:text}));
 }
 
-function setFinding(color,lbl,val,sub){
-  const el=document.getElementById('rp-fi');if(!el)return;
-  el.innerHTML=`<div class="fi-box ${color} fi"><div class="fi-l">${lbl}</div><div class="fi-v">${val}</div><div class="fi-s">${sub}</div></div>`;
+/* 오디오 */
+function enqueueAudio(b64){
+  if(isPaused)return;
+  audioQueue.push(b64);
+  if(!isPlaying)playNext();
+  document.getElementById('wave-bars').classList.remove('idle');
+}
+function playNext(){
+  if(isPaused||!audioQueue.length){isPlaying=false;document.getElementById('wave-bars').classList.add('idle');return;}
+  isPlaying=true;
+  var b64=audioQueue.shift();
+  try{
+    var bin=atob(b64),bytes=new Uint8Array(bin.length);
+    for(var i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+    var pcm=new Int16Array(bytes.buffer),f32=new Float32Array(pcm.length);
+    for(var j=0;j<pcm.length;j++)f32[j]=pcm[j]/32768;
+    var buf=audioCtx.createBuffer(1,f32.length,24000);
+    buf.copyToChannel(f32,0);
+    var src=audioCtx.createBufferSource();
+    src.buffer=buf;src.connect(audioCtx.destination);
+    src.onended=playNext;src.start();
+  }catch(e){playNext();}
 }
 
-function addPCData(items){
-  const el=document.getElementById('pc-data');if(!el)return;
-  const rows=items.map(i=>`<div class="dc-r"><span class="dc-rl">${i.l}</span><span class="dc-rv">${i.v}</span></div>`).join('');
-  el.innerHTML=`<div class="dc fi"><div class="dc-h"><span class="dc-ht">📋 스마트노트 — 자동 기록</span><span class="dc-hb">✓ 저장</span></div><div class="dc-b">${rows}</div></div>`;
+/* 마이크 */
+function startMicCapture(){
+  var source=audioCtx.createMediaStreamSource(mediaStream);
+  processor=audioCtx.createScriptProcessor(4096,1,1);
+  processor.onaudioprocess=function(e){
+    if(!ws||ws.readyState!==WebSocket.OPEN)return;
+    var inp=e.inputBuffer.getChannelData(0);
+    var pcm=new Int16Array(inp.length);
+    for(var i=0;i<inp.length;i++)pcm[i]=Math.max(-32768,Math.min(32767,inp[i]*32768));
+    ws.send(JSON.stringify({type:'audio',data:btoa(String.fromCharCode.apply(null,new Uint8Array(pcm.buffer)))}));
+  };
+  source.connect(processor);processor.connect(audioCtx.destination);
 }
 
-/* ══ 메시지 ══ */
-function now(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+/* WebSocket */
+function connectWS(){
+  ws=new WebSocket(WS_URL+'?mode=desire');
+  ws.onopen=function(){ws.send(JSON.stringify({type:'start_desire'}));};
+  ws.onmessage=function(e){
+    var msg;try{msg=JSON.parse(e.data);}catch(err){return;}
 
-let _locked=false;
-function aiSay(text,btns=[],mobCard=null){
-  if(_locked)return;_locked=true;
-  _currentBtns=btns; // 음성 매핑용으로 미리 저장
-  clearBtns();
-  showTyping();
-  const delay=300;
-  setTimeout(()=>{
-    _locked=false;
-    removeTyping();
-    document.getElementById('ai-tag').textContent='💬 상담 중';
-    document.getElementById('stt-bd').textContent='● 음성인식 중';
-    addSTT('ai',text);
-    addMob('ai',text,mobCard);
-    renderAll();
-    speak(text);
-    if(btns.length)showBtns(btns);
-  },delay);
-}
-
-function userSay(text){clearBtns();addSTT('u',text);addMob('u',text);}
-function sysSay(text){addSTTSys(text);addMobSys(text);}
-
-function addSTT(role,text){
-  const el=document.getElementById('stt-msgs');if(!el)return;
-  const isAI=role==='ai';
-  const d=document.createElement('div');d.className='stt-m fi';
-  const t=text.replace(/<[^>]+>/g,'').substring(0,95)+(text.length>95?'...':'');
-  d.innerHTML=isAI
-    ?`<div class="stt-av"><img src="${LOGO}" alt="M" onerror="this.outerHTML='M'"></div><div class="stt-bbl ai">${t}</div>`
-    :`<div class="stt-av u">나</div><div class="stt-bbl u">${t}</div>`;
-  el.appendChild(d);el.scrollLeft=el.scrollWidth;
-}
-function addSTTSys(text){
-  const el=document.getElementById('stt-msgs');if(!el)return;
-  const d=document.createElement('div');d.className='stt-m fi';
-  d.innerHTML=`<div class="stt-bbl sys">📍 ${text}</div>`;
-  el.appendChild(d);el.scrollLeft=el.scrollWidth;
-}
-
-function addMob(role,text,card=null){
-  const el=document.getElementById('mob-chat');if(!el)return;
-  const isAI=role==='ai';
-  const d=document.createElement('div');d.className=`mm ${isAI?'':'u'} fi`;
-  let cardHTML=card?buildCard(card):'';
-  d.innerHTML=isAI
-    ?`<div class="mm-av"><img src="${LOGO}" alt="💰" onerror="this.outerHTML='💰'"></div>
-       <div class="mm-bd"><div class="bbl ai">${text}</div>${cardHTML}<div class="mm-t">${now()}</div></div>`
-    :`<div class="mm-bd"><div class="bbl u">${text}</div><div class="mm-t">${now()}</div></div>`;
-  el.appendChild(d);el.scrollTop=el.scrollHeight;
-}
-function addMobSys(text){
-  const el=document.getElementById('mob-chat');if(!el)return;
-  const d=document.createElement('div');d.className='mm fi';d.style.justifyContent='center';
-  d.innerHTML=`<div class="bbl sys">📍 ${text}</div>`;
-  el.appendChild(d);el.scrollTop=el.scrollHeight;
-}
-
-function buildCard(card){
-  if(card.type==='stages'){
-    const rows=SG.map(s=>{
-      const r=ST.res[s.k];
-      const cls=r==='pass'?'mc-st pass':r==='cur'?'mc-st cur':'mc-st lock';
-      const ic=r==='pass'?'✅':r==='cur'?'📍':'🔒';
-      return`<div class="${cls}"><div class="mc-sb">${s.l}</div><div class="mc-si"><div class="mc-slt">${s.l} — ${s.sh}</div><div class="mc-sn">${s.nm}</div></div><span>${ic}</span></div>`;
-    }).join('');
-    return`<div class="mc"><div class="mc-h"><span class="mc-ht">🗺 DESIRE 로드맵</span><span class="mc-hb">실시간</span></div><div class="mc-b">${rows}</div></div>`;
-  }
-  if(card.type==='data'){
-    const rows=card.items.map(i=>`<div class="mc-r"><span class="mc-rl">${i.l}</span><span class="mc-rv">${i.v}</span></div>`).join('');
-    return`<div class="mc"><div class="mc-h"><span class="mc-ht">📋 스마트노트 — 자동 기록</span><span class="mc-hb">✓ 저장</span></div><div class="mc-b">${rows}</div></div>`;
-  }
-  return'';
-}
-
-/* ══ 타이핑 ══ */
-function showTyping(){
-  // STT
-  const sm=document.getElementById('stt-msgs');
-  if(sm){const d=document.createElement('div');d.id='stt-tp';d.className='stt-m fi';
-    d.innerHTML=`<div class="stt-av"><img src="${LOGO}" alt="M" onerror="this.outerHTML='M'"></div>
-      <div class="stt-bbl ai" style="display:flex;gap:4px;align-items:center;">
-        <span style="width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.45);display:inline-block;animation:typing 1.2s 0s infinite;"></span>
-        <span style="width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.45);display:inline-block;animation:typing 1.2s .2s infinite;"></span>
-        <span style="width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.45);display:inline-block;animation:typing 1.2s .4s infinite;"></span>
-      </div>`;
-    sm.appendChild(d);sm.scrollLeft=sm.scrollWidth;}
-  // Mob
-  const mc=document.getElementById('mob-chat');
-  if(mc){const d=document.createElement('div');d.id='mob-tp';d.className='tp-wrap fi';
-    d.innerHTML=`<div class="mm-av"><img src="${LOGO}" alt="💰" onerror="this.outerHTML='💰'"></div>
-      <div class="tp-bbl"><div class="td"></div><div class="td"></div><div class="td"></div></div>`;
-    mc.appendChild(d);mc.scrollTop=mc.scrollHeight;}
-}
-function removeTyping(){
-  ['stt-tp','mob-tp'].forEach(id=>{const e=document.getElementById(id);if(e)e.remove();});
-}
-
-/* ══ 버튼 ══ */
-let _currentBtns=[]; // 현재 화면에 표시된 버튼 목록 저장
-
-function showBtns(btns){
-  _currentBtns=btns; // 항상 최신 버튼 목록 저장
-  ['pc-qa','qmob'].forEach(id=>{
-    const el=document.getElementById(id);if(!el)return;
-    el.innerHTML='';
-    const isMob=id==='qmob';
-    btns.forEach(b=>{
-      const btn=document.createElement('button');
-      btn.className=(isMob?'mqb':'qb')+(b.gold?' gold':'');
-      btn.textContent=b.label;
-      btn.onclick=()=>{userSay(b.label);setTimeout(()=>step(b.next),280);};
-      el.appendChild(btn);
-    });
-  });
-}
-function clearBtns(){
-  // 화면 버튼만 지우고 _currentBtns는 유지 (음성 매핑에 계속 사용)
-  ['pc-qa','qmob'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML='';});
-}
-
-/* ══ 음성 → 버튼 자동 매핑 ══ */
-function voiceToBtn(text){
-  // 음성 인식 확인용 — 화면 상단에 잠깐 표시
-  const dbg=document.getElementById('ai-tag');
-  if(dbg) dbg.textContent='🎤 인식: '+text.substring(0,15);
-  setTimeout(()=>{ if(dbg) dbg.textContent='💬 상담 중'; },2000);
-
-  if(!_currentBtns||_currentBtns.length===0)return false;
-  const t=text.trim().toLowerCase();
-
-  // 숫자/금액이 포함된 경우 handleFree로 처리
-  const hasNumber=/\d/.test(text)||/만원|백만|천만|억/.test(text);
-  if(hasNumber&&(ST.step==='S_INCOME_WAIT'||ST.step==='D_WAIT')) return false;
-
-  // 결혼/미혼 키워드 (버튼 2개: 결혼/미혼)
-  if(t.includes('결혼')||t.includes('기혼')||t.includes('아내')||t.includes('남편')||t.includes('배우자')){ clickBtnByNext('S_MARRIED'); return true; }
-  if(t.includes('미혼')||t.includes('독신')||t.includes('싱글')){ clickBtnByNext('S_SINGLE'); return true; }
-
-  // 자녀 수 키워드 (버튼 4개)
-  // 자녀 수 — 버튼이 S_C0~S_C3일 때만 적용 (자녀/애/아이 키워드 불필요)
-  const isChildStep=_currentBtns.some(b=>b.next==='S_C0');
-  if(isChildStep){
-    if(t.includes('없')||t.includes('무자녀')){ clickBtnByNext('S_C0'); return true; }
-    if(t.includes('1명')||t.includes('한 명')||t.includes('한명')||t.includes('하나')){ clickBtnByNext('S_C1'); return true; }
-    if(t.includes('2명')||t.includes('두 명')||t.includes('두명')||t.includes('둘')){ clickBtnByNext('S_C2'); return true; }
-    if(t.includes('3명')||t.includes('세 명')||t.includes('세명')||t.includes('셋')||t.includes('이상')){ clickBtnByNext('S_C3'); return true; }
-  }
-
-  // 긍정 키워드
-  const YES=['있습니다','있어요','있어','네','예','맞아요','맞습니다','하고 있습니다','하고있습니다','하고있어요','이상입니다','됩니다','완료','통과','준비','했습니다','동의','시작'];
-  // 부정 키워드
-  const NO=['없습니다','없어요','없어','아니요','아니','못하고','못해요','안됩니다','안돼요','아직','모르겠어요','어렵습니다','안 하고','못 하고'];
-
-  const isYes=YES.some(k=>t.includes(k));
-  const isNo=NO.some(k=>t.includes(k));
-
-  // 버튼 1개: 무슨 말이든 진행
-  if(_currentBtns.length===1){ clickBtn(0); return true; }
-
-  // 버튼 2개: 긍정→첫번째, 부정→두번째
-  if(_currentBtns.length===2){
-    if(isYes&&!isNo){ clickBtn(0); return true; }
-    if(isNo&&!isYes){ clickBtn(1); return true; }
-    // 둘 다 감지되면 더 강한 쪽으로
-    if(isYes){ clickBtn(0); return true; }
-    if(isNo){ clickBtn(1); return true; }
-  }
-
-  return false;
-}
-
-function clickBtn(index){
-  if(!_currentBtns[index])return;
-  const b=_currentBtns[index];
-  _currentBtns=[]; // 즉시 초기화 — 중복 음성 인식 방지
-  pauseSTT();
-  userSay(b.label);
-  setTimeout(()=>step(b.next),280);
-}
-function clickBtnByNext(next){
-  const b=_currentBtns.find(btn=>btn.next===next);
-  if(!b)return;
-  _currentBtns=[]; // 즉시 초기화 — 중복 음성 인식 방지
-  pauseSTT();
-  userSay(b.label);
-  setTimeout(()=>step(b.next),280);
-}
-
-/* ══ 수지분석표 기준 (비정기지출 포함) ══
-   가족수: 1인/2인/3인/4인/5인
-   생활비:  20/30/40/50/60%
-   저축투자: 50/40/30/20/10%
-   노후연금: 10/10/10/10/10%
-   보장보험: 10/10/10/10/10%
-   대출원리금:10/10/10/10/10%
-*/
-function _sBudget(fam, type){
-  const sv  =[.50,.40,.30,.20,.10]; // 저축투자
-  const pen =[.10,.10,.10,.10,.10]; // 노후연금
-  const idx = Math.min(fam,5)-1;
-  if(type==='sv')  return sv[idx];
-  if(type==='pen') return pen[idx];
-  return sv[idx]+pen[idx];
-}
-
-/* ══ 자유 입력 ══ */
-function send(mode){
-  const inp=document.getElementById(mode==='pc'?'pc-inp':'mob-inp');
-  const t=inp.value.trim();if(!t)return;
-  inp.value='';if(mode==='mob')inp.style.height='auto';
-  userSay(t);
-  setTimeout(()=>handleFree(t),280);
-}
-
-function handleFree(text){
-  const p=ST.profile;
-  if(ST.step==='D_WAIT'){
-    const nums=text.match(/\d+/g);
-    if(nums){p.loanCount=nums[0]||'?';p.loanAmt=nums[1]||nums[0];}
-    const data=[{l:'신용대출 건수',v:(p.loanCount||'?')+'건'},{l:'대출 총액',v:(p.loanAmt||'?')+'만원(입력)'},{l:'진단 단계',v:'D단계 — 신용대출 상환 필요'}];
-    addPCData(data);
-    setFinding('red','💳 부채 위험','신용대출 상환 최우선','스노우볼 전략으로 해결');
-    ST.res['D']='cur';
-    aiSay(
-      `확인했습니다! 📋<br><br>신용대출이 있는 상태에서는 이자가 수익을 갉아먹습니다.<br><br><strong>스노우볼 전략</strong>으로 해결합니다. 금액이 가장 작은 대출부터 먼저 상환해 작은 성취감을 쌓고, 여유자금으로 다음 대출을 공략하는 방식입니다.<br><br>재원은 두 가지입니다. ① 매달 정기수입 중 저축 가능한 금액 ② 상여금·성과급 같은 비정기수입<br><br>D단계를 이겨내면 E→S→I→R→E 순서로 반드시 경제적 조기은퇴까지 갈 수 있습니다. AI 머니야와 함께 돈의 순서를 밟아가시죠! 다음 단계도 확인해 볼까요?`,
-      [{label:'E단계 → 비상예비자금 확인',next:'GO_E',gold:true}],
-      {type:'data',items:data}
-    );
-    ST.step='D_DONE';
-  }
-  if(ST.step==='S_INCOME_WAIT'){
-    // 소득 파싱 — "천만원", "600만원", "600", "6백만", "1억" 등 대응
-    let inc=0;
-    const t2=text.replace(/,/g,'');
-    // 억 단위
-    const eokmatch=t2.match(/(\d+)\s*억/);
-    if(eokmatch) inc=parseInt(eokmatch[1])*10000;
-    // 천만 단위: "천만", "1천만", "2천만"
-    const cheonman=t2.match(/(\d*)\s*천\s*만/);
-    if(cheonman) inc=(parseInt(cheonman[1])||1)*1000;
-    // 천 단위: "천만원" 제외한 순수 "천": "5천", "오천"
-    else {
-      const cheon=t2.match(/(\d+)\s*천(?!\s*만)/);
-      if(cheon) inc=parseInt(cheon[1])*1000;
+    if(msg.type==='session_started'){
+      if(sessionActive)return;
+      sessionActive=true;reconnectCount=0;
+      document.getElementById('reconnect-banner').classList.remove('show');
+      document.getElementById('idle-screen').style.display='none';
+      document.getElementById('chat-area').style.display='flex';
+      document.getElementById('edit-bar').style.display='flex';
+      document.getElementById('mic-bar').style.display='flex';
+      document.getElementById('input-bar').style.display='flex';
+      document.getElementById('live-pill').style.display='flex';
+      document.getElementById('tmr').style.display='block';
+      document.getElementById('mb-status').textContent='AI 음성 재무진단 진행 중...';
+      startTimer();startMicCapture();
+      /* 오프닝 버튼은 AI가 동의 멘트를 말하면 detectStageAndSetButtons가 자동 표시 */
+      /* 만약 10초 내 버튼이 안 나타나면 보조로 표시 */
+      setTimeout(function(){
+        var qb=document.getElementById('quick-btns');
+        if(!qb.innerHTML.trim())setQB(STAGE_BUTTONS.OPENING);
+      },10000);
     }
-    // 백만 단위: "5백만", "500만"
-    if(!inc){
-      const baekman=t2.match(/(\d+)\s*백\s*만/);
-      if(baekman) inc=parseInt(baekman[1])*100;
+
+    if(msg.type==='transcript'&&msg.text){
+      if(msg.role==='assistant')addAI(msg.text);
+      if(msg.role==='user'&&msg.source!=='text')addUser(msg.text);
     }
-    // 만 단위: "600만", "300만"
-    if(!inc){
-      const manmatch=t2.match(/(\d+)\s*만/);
-      if(manmatch) inc=parseInt(manmatch[1]);
+
+    if(msg.type==='audio'&&msg.data)enqueueAudio(msg.data);
+
+    if(msg.type==='interrupt'){
+      audioQueue=[];isPlaying=false;
+      document.getElementById('wave-bars').classList.add('idle');
     }
-    // 순수 숫자만 (만원 단위로 간주)
-    if(!inc){
-      const numonly=t2.match(/(\d+)/);
-      if(numonly){
-        inc=parseInt(numonly[1]);
-        if(inc>100000) inc=Math.round(inc/10000); // 원 단위 입력 방지
-      }
+
+    /* [10번] AI 응답 완전 종료 신호 — 이 시점부터 idleTimer 카운트 */
+    if(msg.type==='response_done'){
+      if(sessionActive)resetIdleTimer();
     }
-    p.income=inc;
-    const fam=p.family||2;
-    const svR=_sBudget(fam,'sv');   // 저축투자 비율
-    const penR=_sBudget(fam,'pen'); // 노후연금 비율
-    const sv=Math.round(inc*svR);
-    const pen=Math.round(inc*penR);
-    const living=Math.round(inc*[.20,.30,.40,.50,.60][Math.min(fam,5)-1]);
-    const data=[
-      {l:'월 소득',v:inc+'만원'},
-      {l:'권장 생활비',v:living+'만원 ('+Math.round([20,30,40,50,60][Math.min(fam,5)-1])+'%)'},
-      {l:'권장 저축·투자',v:sv+'만원/월 ('+Math.round(svR*100)+'%)'},
-      {l:'권장 노후연금',v:pen+'만원/월 (10%)'},
-      {l:'저축+연금 합계',v:(sv+pen)+'만원/월'}
-    ];
-    addPCData(data);
-    setFinding('yellow','💰 저축 진단',`목표 ${sv+pen}만원/월`,`저축투자 ${sv}만+연금 ${pen}만`);
-    ST.step='S_CHECK';
-    aiSay(
-      `확인했습니다! 😊<br><br>월 소득 <strong>${inc}만원</strong> 기준으로 가족 ${fam}인 권장 금액을 계산했어요.<br><br>📌 <strong>매달 저축·투자</strong>로 넣어야 할 금액: <strong>${sv}만원</strong><br>📌 <strong>노후연금</strong>(은퇴 준비)으로 넣어야 할 금액: <strong>${pen}만원</strong><br>📌 <strong>합계: 매달 ${sv+pen}만원</strong><br><br>쉽게 말씀드리면, 매달 월급 받으면 <strong>${sv+pen}만원은 먼저 저축·연금으로 빼놓으시면</strong> 됩니다.<br><br>지금 이 정도로 저축하고 계신가요?`,
-      [{label:'네, 하고 있습니다 ✅',next:'S_YES'},{label:'아직 못하고 있습니다 😅',next:'S_NO'}],
-      {type:'data',items:data}
-    );
-    return;
-  }
-  if(ST.step==='E2_WAIT'){
-    aiSay('버튼을 눌러 응답해 주세요.', [{label:'네, 준비되어 있습니다',next:'E2_YES'},{label:'아직 없습니다',next:'E2_NO'}]);
-    return;
-  }
-  // fallback — 현재 버튼이 있으면 버튼 다시 안내, 없으면 기다림
-  if(_currentBtns&&_currentBtns.length>0){
-    showBtns(_currentBtns);
-  }
-  // 아무것도 안함 — AGREE로 돌아가지 않음
+
+    if(msg.type==='result'){
+      if(msg.stages)stageRes=msg.stages;
+      showResult();
+    }
+  };
+  ws.onclose=function(){
+    if(sessionActive)return;
+    if(reconnectCount<3){
+      reconnectCount++;
+      document.getElementById('reconnect-txt').textContent='🔄 연결 최적화 중... ('+reconnectCount+'/3)';
+      document.getElementById('reconnect-banner').classList.add('show');
+      setTimeout(connectWS,2500);
+    }else{
+      document.getElementById('reconnect-banner').classList.remove('show');
+      showToast('⚠️ 연결이 종료되었습니다');
+    }
+  };
+  ws.onerror=function(err){console.error('[DESIRE-001] WS Error',err);};
 }
 
-/* ══ 플로우 — 완전한 체인 ══ */
-function step(next){
-  const p=ST.profile;
-
-  if(next==='AGREE'){
-    sysSay('D단계 진단 시작');
-    ST.res['D']='cur';
-    setFinding('yellow','📍 진단 위치','D단계 — 신용대출 상환','신용대출 여부 확인 중');
-    aiSay(
-      `감사합니다! 지금부터 <strong>DESIRE 로드맵 6단계</strong>를 순서대로 진단해 드릴게요.<br><br>재무 독립의 길 — 고객님이 지금 어느 단계에 계신지 함께 확인해 봅시다! 🗺<br><br>아래 <strong>첫 번째 질문</strong> 버튼을 클릭해 주시겠습니까?`,
-      [{label:'첫 번째 질문으로 →',next:'Q_D',gold:true}],
-      {type:'stages'}
-    );
-    return;
-  }
-
-  /* ── D단계 ── */
-  if(next==='Q_D'){
-    aiSay(`<strong>D단계 질문입니다.</strong><br><br>현재 <strong>신용대출</strong>(카드론 포함)이 있으신가요?`,
-      [{label:'있습니다',next:'D_YES'},{label:'없습니다',next:'D_NO'}]);
-    return;
-  }
-  if(next==='D_YES'){
-    p.hasLoan=true;
-    aiSay(`몇 건이나 되시나요? 총 잔액은 대략 얼마인가요?<br><br><span style="font-size:12px;opacity:.7">예) 2건, 총 3천만원</span>`,[]);
-    ST.step='D_WAIT';
-    return;
-  }
-  if(next==='D_NO'){
-    p.hasLoan=false;ST.res['D']='pass';
-    sysSay('✅ D단계 통과!');
-    aiSay(
-      `훌륭합니다! <strong>D단계(신용대출 상환) 통과!</strong> 👍<br><br>신용대출이 없으신 분은 이미 재무 독립의 첫걸음을 완료하셨습니다. E단계로 넘어갑니다.<br><br>아래 버튼을 클릭해 주시겠습니까?`,
-      [{label:'E단계 → 비상예비자금 확인',next:'GO_E',gold:true}]
-    );
-    return;
-  }
-
-  /* ── E단계 ── */
-  if(next==='GO_E'){
-    sysSay('E단계 진단');
-    if(!ST.res['E'])ST.res['E']='cur';
-    renderAll();
-    aiSay(
-      `<strong>E단계 질문입니다.</strong><br><br>🛡 <strong>비상예비자금</strong>이 준비되어 있으신가요?<br><br><span style="font-size:12px;opacity:.72">💡 맞벌이 → 월 생활비 3개월치 / 외벌이 → 6개월치</span>`,
-      [{label:'있습니다',next:'E_YES'},{label:'없습니다',next:'E_NO'}]
-    );
-    return;
-  }
-  if(next==='E_YES'){
-    ST.res['E']='pass';sysSay('✅ E단계 통과!');
-    aiSay(
-      `완벽합니다! <strong>E단계(비상예비자금) 통과!</strong> 👍<br><br>갑작스러운 일이 생겨도 신용대출 없이 버틸 수 있는 재무 안전망이 갖춰진 상태입니다. S단계로 넘어갑니다.<br><br>아래 버튼을 클릭해 주시겠습니까?`,
-      [{label:'S단계 → 저축투자 확인',next:'GO_S',gold:true}]
-    );
-    return;
-  }
-  if(next==='E_NO'){
-    ST.res['E']='cur';
-    aiSay(
-      `비상예비자금은 두 가지 방법으로 마련합니다.<br><br><strong>① 정기수입</strong>에서 매달 일정 금액을 분리 계좌에 적립<br><strong>② 상여금·성과급</strong> 같은 비정기수입이 들어올 때 우선 채우기<br><br>두 방법 병행이 가장 빠릅니다. 구체적인 금액과 일정은 본상담에서 설계해 드릴게요.<br><br>다음 단계도 확인해 볼까요? 아래 버튼을 클릭해 주시겠습니까?`,
-      [{label:'S단계 → 저축투자 확인',next:'GO_S',gold:true}]
-    );
-    return;
-  }
-
-  /* ── S단계 — 수지분석표 기반 3단계 대화 ── */
-  if(next==='GO_S'){
-    sysSay('S단계 진단');
-    if(!ST.res['S'])ST.res['S']='cur';
-    renderAll();
-    aiSay(
-      `<strong>S단계입니다 — 저축·투자 진단</strong> 💰<br><br>먼저 가족 구성을 여쭤볼게요.<br><br>결혼하셨나요?`,
-      [{label:'네, 결혼했습니다',next:'S_MARRIED'},{label:'아직 미혼입니다',next:'S_SINGLE'}]
-    );
-    return;
-  }
-  if(next==='S_MARRIED'){
-    p.married=true;
-    aiSay(
-      `자녀가 몇 명인가요?`,
-      [{label:'자녀 없음',next:'S_C0'},{label:'1명',next:'S_C1'},{label:'2명',next:'S_C2'},{label:'3명 이상',next:'S_C3'}]
-    );
-    return;
-  }
-  if(next==='S_SINGLE'){
-    p.married=false; p.family=1;
-    aiSay(
-      `알겠습니다! 그럼 한 가지만 더 여쭤볼게요.<br><br>매달 실제로 받으시는 월 소득이 얼마인가요?<br><br><span style="font-size:12px;opacity:.72">예) 300만원, 450만원 — 세금 빼고 실제 받는 금액으로 말씀해 주세요</span>`,
-      []
-    );
-    ST.step='S_INCOME_WAIT';
-    return;
-  }
-  if(next==='S_C0'){p.family=2; p.children=0;}
-  if(next==='S_C1'){p.family=3; p.children=1;}
-  if(next==='S_C2'){p.family=4; p.children=2;}
-  if(next==='S_C3'){p.family=5; p.children=3;}
-  if(['S_C0','S_C1','S_C2','S_C3'].includes(next)){
-    aiSay(
-      `알겠습니다! 그럼 한 가지만 더 여쭤볼게요.<br><br>부부 고객님이 매달 실제로 받으시는 <strong>합산 월 소득</strong>이 얼마인가요?<br><br><span style="font-size:12px;opacity:.72">예) 600만원, 800만원 — 세금 빼고 실제 받는 금액의 합산으로 말씀해 주세요</span>`,
-      []
-    );
-    ST.step='S_INCOME_WAIT';
-    return;
-  }
-  if(next==='S_YES'){
-    ST.res['S']='pass'; sysSay('✅ S단계 통과!');
-    const fam=p.family||2;
-    const inc=p.income||0;
-    const sv=Math.round(inc*_sBudget(fam,'sv'));
-    const pen=Math.round(inc*0.1);
-    aiSay(
-      `정말 잘하고 계십니다! 👏<br><br><strong>S단계(저축·투자) 통과!</strong><br><br>매달 꾸준히 저축·투자하시는 분들이 결국 부자가 됩니다. 복리의 힘은 시간이 지날수록 눈덩이처럼 불어납니다.<br><br>다음 I단계로 넘어갑니다! 아래 버튼을 클릭해 주시겠습니까?`,
-      [{label:'I단계 → 자산운용 확인',next:'GO_I',gold:true}]
-    );
-    return;
-  }
-  if(next==='S_NO'){
-    // 1차 탈락 → 비정기 수입으로 탈출 가능한지 2차 질문
-    const fam=p.family||2;
-    const inc=p.income||0;
-    const sv=Math.round(inc*_sBudget(fam,'sv'));
-    const pen=Math.round(inc*0.1);
-    const monthly=sv+pen;          // 월 목표 합계
-    const annual=monthly*10;       // 연간 목표 (10배)
-    p.s_monthly=monthly;
-    p.s_annual=annual;
-    aiSay(
-      `아, 매달 딱 맞추기가 쉽지 않으시죠. 충분히 이해합니다 😊<br><br>그런데 한 가지만 더 여쭤볼게요!<br><br>상여금, 성과급, 부업 수입처럼 <strong>비정기적으로 들어오는 돈</strong>을 모아서<br>1년에 <strong>${annual}만원</strong> 정도는 저축하고 계신가요?<br><br><span style="font-size:12px;opacity:.72">💡 ${annual}만원 = 매달 목표 ${monthly}만원의 10개월치<br>한꺼번에 목돈으로 저축하셔도 됩니다</span>`,
-      [{label:'네, 그 정도는 합니다 ✅',next:'S_IRREGULAR_YES'},{label:'그것도 쉽지 않습니다 😅',next:'S_IRREGULAR_NO'}]
-    );
-    return;
-  }
-  if(next==='S_IRREGULAR_YES'){
-    ST.res['S']='pass'; sysSay('✅ S단계 통과!');
-    const annual=p.s_annual||0;
-    aiSay(
-      `훌륭합니다! 👏<br><br>비정기 수입으로 연간 <strong>${annual}만원</strong> 저축하고 계시는군요.<br>이것도 훌륭한 저축·투자 습관입니다!<br><br>매달 정기적으로 하는 것만큼 좋은 방법입니다.<br><strong>S단계 통과!</strong> 다음 I단계로 넘어갑니다! 아래 버튼을 클릭해 주시겠습니까?`,
-      [{label:'I단계 → 자산운용 확인',next:'GO_I',gold:true}]
-    );
-    return;
-  }
-  if(next==='S_IRREGULAR_NO'){
-    ST.res['S']='cur';
-    const monthly=p.s_monthly||0;
-    aiSay(
-      `괜찮습니다! 지금 알았으니까 앞으로 맞춰가면 됩니다 😊<br><br>D단계(신용대출)와 E단계(비상예비자금)가 해결되면 자연스럽게 저축할 여유가 생깁니다.<br><br>목표는 매달 <strong>${monthly}만원</strong>, 또는 1년에 목돈으로 모으는 것!<br>어떤 상품에, 어떤 순서로 저축해야 하는지는 AI 머니야 본상담에서 하나하나 쉽게 안내해 드릴게요.<br><br>다음 I단계도 확인해 볼까요? 아래 버튼을 클릭해 주시겠습니까?`,
-      [{label:'I단계 → 자산운용 확인',next:'GO_I',gold:true}]
-    );
-    return;
-  }
-
-  /* ── I단계 ── */
-  if(next==='GO_I'){
-    sysSay('I단계 진단');
-    if(!ST.res['I'])ST.res['I']='cur';
-    renderAll();
-    aiSay(
-      `<strong>I단계 질문입니다.</strong><br><br>현재 금융자산(예금·펀드·주식·연금 등) 합산이 <strong>10억원 이상</strong>인가요?`,
-      [{label:'10억 이상입니다',next:'I_YES'},{label:'아직 아닙니다',next:'I_NO'}]
-    );
-    return;
-  }
-  if(next==='I_YES'){
-    ST.res['I']='pass';sysSay('✅ I단계 통과!');
-    aiSay(
-      `대단합니다! <strong>I단계(거치식 자산운용) 통과!</strong> 👍<br><br>금융자산 10억 포트폴리오는 자산 자체가 수익을 만들어내는 강력한 구조입니다. R단계로 넘어갑니다.<br><br>아래 버튼을 클릭해 주시겠습니까?`,
-      [{label:'R단계 → 담보대출 확인',next:'GO_R',gold:true}]
-    );
-    return;
-  }
-  if(next==='I_NO'){
-    ST.res['I']='cur';
-    aiSay(
-      `거치식 자산운용은 목돈을 다양한 자산군에 분산 투자하여 자산 자체가 수익을 만들도록 설계하는 것입니다. 목표는 <strong>금융자산 10억원 포트폴리오</strong>입니다.<br><br>S단계에서 꾸준히 적립한 자금이 쌓이면 자연스럽게 I단계의 재원이 됩니다. 어떤 자산군을 어떤 비율로 구성할지는 본상담에서 설계해 드릴게요.<br><br>R단계도 확인해 볼까요? 아래 버튼을 클릭해 주시겠습니까?`,
-      [{label:'R단계 → 담보대출 확인',next:'GO_R',gold:true}]
-    );
-    return;
-  }
-
-  /* ── R단계 ── */
-  if(next==='GO_R'){
-    sysSay('R단계 진단');
-    if(!ST.res['R'])ST.res['R']='cur';
-    renderAll();
-    aiSay(
-      `<strong>R단계 질문입니다.</strong><br><br>현재 <strong>주택담보대출</strong>이 남아 있으신가요?`,
-      [{label:'있습니다',next:'R_YES'},{label:'주택담보대출이 없습니다',next:'R_NO'}]
-    );
-    return;
-  }
-  if(next==='R_YES'){
-    p.hasMtg=true;ST.res['R']='cur';
-    aiSay(
-      `R단계 과제가 있습니다.<br><br>주택담보대출은 금리가 낮아 D단계처럼 최우선 상환 대상은 아닙니다. 하지만 <strong>은퇴 전까지 반드시 완납</strong>해야 합니다. 대출이 남은 채로 은퇴하면 고정 지출이 계속 발생하기 때문이에요.<br><br>상환 목표 시점과 전략은 본상담에서 함께 잡아드릴게요. 마지막 E단계로 넘어갑니다.<br><br>아래 버튼을 클릭해 주시겠습니까?`,
-      [{label:'마지막 단계 →',next:'GO_E2',gold:true}]
-    );
-    return;
-  }
-  if(next==='R_NO'){
-    p.hasMtg=false;ST.res['R']='pass';sysSay('✅ R단계 통과!');
-    aiSay(
-      `훌륭합니다! <strong>R단계(담보대출 상환) 통과!</strong> 👍<br><br>주택담보대출이 없으시군요. 부채 없이 자산만 쌓아가는 완벽한 구조입니다! 마지막 E단계로 넘어갑니다.<br><br>아래 버튼을 클릭해 주시겠습니까?`,
-      [{label:'마지막 단계 →',next:'GO_E2',gold:true}]
-    );
-    return;
-  }
-
-  /* ── E2단계 — 상속플랜 ── */
-  if(next==='GO_E2'){
-    sysSay('E2단계 — 상속 플랜');
-    if(!ST.res['E2'])ST.res['E2']='cur';
-    renderAll();
-    aiSay(
-      `<strong>마지막 질문입니다! 🎯</strong><br><br>D → E → S → I → R 단계를 모두 점검했습니다. 수고 많으셨습니다.<br><br>마지막으로 <strong>상속 플랜</strong>이 준비되어 있으신가요?<br><br><span style="font-size:12px;opacity:.72">💡 상속 플랜 = 가업승계, 상속·증여 설계, 유언장 등<br>평생 쌓은 자산을 다음 세대로 올바르게 이전하는 준비</span>`,
-      [{label:'네, 준비되어 있습니다',next:'E2_YES'},{label:'아직 없습니다',next:'E2_NO'}]
-    );
-    return;
-  }
-  if(next==='E2_YES'){
-    ST.res['E2']='pass';
-    sysSay('🏆 DESIRE 로드맵 완성!');
-    aiSay(
-      `🎉 <strong>축하드립니다!</strong><br><br>DESIRE 로드맵 <strong>6단계를 모두 완성</strong>하셨습니다!<br><br>D(신용대출 상환) → E(비상예비자금) → S(적립식 저축투자) → I(거치식 자산운용) → R(담보대출 상환) → <strong>E(상속플랜 완성)</strong><br><br>재무 독립의 완전한 여정을 완주하셨습니다.<br><strong>이제 행복한 조기은퇴를 누리십시오.</strong><br>AI 금융집사 머니야가 항상 함께하겠습니다! 🏆<br><br>아래 버튼을 클릭해 주시겠습니까?`,
-      [{label:'진단 결과 보기 →',next:'SHOW_RESULT',gold:true}]
-    );
-    return;
-  }
-  if(next==='E2_NO'){
-    ST.res['E2']='cur';
-    aiSay(
-      `상속 플랜이 아직 없으시군요.<br><br>평생 열심히 쌓아온 자산이 다음 세대로 온전히 이전되려면 <strong>가업승계 플랜</strong>과 <strong>상속·증여 설계</strong>가 반드시 필요합니다.<br><br>계획 없이 상속이 이루어지면 세금 부담이 크게 늘고 가족 간 분쟁이 생길 수 있습니다.<br><br><strong>지금 바로 AI 머니야 전문 CFP와 함께<br>상속·증여 플랜을 체계적으로 세우시기 바랍니다.</strong><br><br>아래 버튼을 클릭해 주시겠습니까?`,
-      [{label:'진단 결과 보기 →',next:'SHOW_RESULT',gold:true}]
-    );
-    return;
-  }
-
-  /* ── 결과 ── */
-  if(next==='SHOW_RESULT'){showResult();return;}
+/* 세션 시작 */
+function startSession(){
+  document.getElementById('landing').classList.add('gone');
+  setTimeout(function(){document.getElementById('landing').style.display='none';},500);
+  document.getElementById('app').style.display='flex';
+  audioCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:24000});
+  navigator.mediaDevices.getUserMedia({audio:{sampleRate:24000,channelCount:1,echoCancellation:true,noiseSuppression:true}})
+    .then(function(stream){mediaStream=stream;renderBar();connectWS();})
+    .catch(function(){alert('마이크 권한이 필요합니다.\n브라우저 주소창 왼쪽 자물쇠 → 마이크 허용');});
 }
 
-/* ══ 결과 ══ */
+/* #3 종료 버튼 → 안내배너로 선택 */
+function endSession(){
+  clearQB();
+  setQB([
+    {label:'진단 결과 보기 →',text:'SHOW_RESULT',gold:true},
+    {label:'계속 진행하기',text:'__CONTINUE__'}
+  ]);
+  showToast('결과 보기 또는 계속 진행을 선택해주세요');
+}
+
+function cleanupMedia(){
+  sessionActive=true;
+  if(idleTimer){clearTimeout(idleTimer);idleTimer=null;}
+  if(processor){processor.disconnect();processor=null;}
+  if(mediaStream){mediaStream.getTracks().forEach(function(t){t.stop();});mediaStream=null;}
+  if(ws){ws.close();ws=null;}
+  if(timerInt){clearInterval(timerInt);timerInt=null;}
+  audioQueue=[];isPlaying=false;isPaused=false;
+}
+
+/* [6번] 대기 모드 — 30초, AI발화 후 리셋, 결과화면 중단 */
+var idleTimer=null;var idleCount=0;
+function resetIdleTimer(){
+  if(idleTimer)clearTimeout(idleTimer);
+  idleTimer=setTimeout(function(){
+    if(document.getElementById('result').classList.contains('show'))return;
+    idleCount++;
+    if(idleCount===1)addSys('말씀하시거나 아래 버튼을 눌러주세요.');
+    var qb=document.getElementById('quick-btns');
+    if(!qb.innerHTML.trim()){var btns=STAGE_BUTTONS[curStageKey]||STAGE_BUTTONS.OPENING;setQB(btns);}
+  },30000);
+}
+
+/* #8 텍스트 입력 — 엔터키 전 구간 정상 */
+function sendText(){
+  var inp=document.getElementById('inp');
+  var text=(inp.value||'').trim();
+  if(!text)return;
+  if(text==='SHOW_RESULT'){showResult();return;}
+  inp.value='';
+  clearQB();addUser(text);
+  if(ws&&ws.readyState===WebSocket.OPEN){
+    ws.send(JSON.stringify({type:'text_input',text:text}));
+  }
+  resetIdleTimer();
+}
+
+/* #1 클릭답변 즉시처리 + #3 CONTINUE */
+function clickAnswer(text){
+  if(text==='SHOW_RESULT'){showResult();return;}
+  if(text==='__CONTINUE__'){clearQB();showToast('진단을 계속 진행합니다');return;}
+  clearQB();addUser(text);
+  if(ws&&ws.readyState===WebSocket.OPEN){
+    ws.send(JSON.stringify({type:'text_input',text:text}));
+  }
+  resetIdleTimer();
+}
+
+/* 보조 버튼 */
+function editStep(){document.getElementById('inp').focus();showToast('✏️ 수정 내용을 입력해주세요');}
+function replayAI(){
+  if(ws&&ws.readyState===WebSocket.OPEN){
+    ws.send(JSON.stringify({type:'text_input',text:'방금 말씀하신 내용을 다시 한 번 말씀해 주세요.'}));
+    showToast('🔁 다시 읽어드립니다');
+  }
+}
+function pauseAI(){
+  isPaused=!isPaused;audioQueue=[];isPlaying=false;
+  showToast(isPaused?'⏸ 음성을 멈췄습니다':'▶ 음성을 재개합니다');
+}
+function showHint(){
+  var h={D:'💡 카드론·마이너스통장·현금서비스 포함',E:'💡 분리 계좌에 3~6개월치 생활비 보관',S:'💡 저축률=(적금+투자+연금)÷월소득×100',I:'💡 ETF·펀드·주식 등 목돈 거치식 투자',R:'💡 은퇴 전 완납이 원칙',E2:'💡 유언장+가업승계+증여설계 포함'};
+  showToast(h[curStageKey]||'💡 진단을 계속 진행해주세요');
+}
+
+/* #11 결과화면 — 마지막 클로징 문구 포함 */
+/* DESIRE FULLNAME 정의 */
+var SG_FULLNAME=[
+  {k:'D',  num:1, full:'D — Debt Free',        desc:'신용대출이 있으면 이 단계',        color:'#DC2626'},
+  {k:'E',  num:2, full:'E — Emergency Fund',    desc:'비상예비자금이 없으면 이 단계',    color:'#D97706'},
+  {k:'S',  num:3, full:'S — Savings & Invest',  desc:'저축·투자·연금 마련 단계',        color:'#0369A1'},
+  {k:'I',  num:4, full:'I — Investment',        desc:'금융자산 10억원 달성 단계',        color:'#7C3AED'},
+  {k:'R',  num:5, full:'R — Repay Mortgage',    desc:'담보대출 상환 단계',              color:'#B45309'},
+  {k:'E2', num:6, full:'E — Early Retirement',  desc:'상속플랜 후 경제적 조기은퇴 단계',color:'#15803D'}
+];
+
 function showResult(){
-  const p=ST.profile;
-  const passCount=SG.filter(s=>ST.res[s.k]==='pass').length;
-  const curStage=SG.find(s=>ST.res[s.k]==='cur')||SG[0];
-  const allPass=passCount>=6;
-  const age=p.retireAge||55;
+  cleanupMedia();
+  /* [8번] TTS 중복 방지 — 결과화면 진입 시 기존 TTS 즉시 취소 */
+  if('speechSynthesis' in window)window.speechSynthesis.cancel();
+  var passCount=SG.filter(function(s){return stageRes[s.k]==='pass';}).length;
+  var curStage=SG.find(function(s){return stageRes[s.k]==='cur';})||null;
+  var curNum=curStage?SG_FULLNAME.find(function(x){return x.k===curStage.k;}).num:1;
+  var allPass=passCount>=6;
 
   document.getElementById('rc-em').textContent=allPass?'🏆':'🎯';
-  document.getElementById('rc-t').textContent=allPass?'DESIRE 로드맵 완성! 행복한 조기은퇴를 응원합니다!':'DESIRE 진단 완료!';
+  document.getElementById('rc-t').textContent=allPass?'DESIRE 완성! 행복한 조기은퇴를 응원합니다!':'DESIRE 진단 완료!';
 
-  // 단계 — 가로 띠 스택 (D→E→S→I→R→E)
-  // 태권도 색띠 순서: 흰→노랑→초록→파랑→빨강→검정
-  const BAND_COLORS=[
-    // D — 흰띠: 배경 밝은 흰/회, 배지 흰색, 텍스트 어둡게
-    {pass:'rgba(255,255,255,.18)', cur:'rgba(255,255,255,.32)', badge:'rgba(230,230,230,.95)', textDark:true},
-    // E — 노랑띠
-    {pass:'rgba(234,179,8,.38)',   cur:'rgba(234,179,8,.72)',   badge:'rgba(180,138,0,.95)',  textDark:false},
-    // S — 초록띠
-    {pass:'rgba(34,197,94,.38)',   cur:'rgba(34,197,94,.72)',   badge:'rgba(22,163,74,.95)',  textDark:false},
-    // I — 파랑띠
-    {pass:'rgba(59,130,246,.40)',  cur:'rgba(59,130,246,.75)',  badge:'rgba(37,99,235,.95)',  textDark:false},
-    // R — 빨강띠
-    {pass:'rgba(239,68,68,.42)',   cur:'rgba(239,68,68,.78)',   badge:'rgba(200,40,40,.95)',  textDark:false},
-    // E2 — 검정띠: 배경에 혼동 방지 → 밝은 테두리 + 흰 텍스트
-    {pass:'rgba(30,30,30,.80)',    cur:'rgba(15,15,15,.95)',    badge:'rgba(40,40,40,.98)',   textDark:false, blackBelt:true},
-  ];
-  document.getElementById('rc-stages').innerHTML=SG.map((s,i)=>{
-    const r=ST.res[s.k]||'lock';
-    const c=BAND_COLORS[i];
-    const ic=r==='pass'?'✅':r==='cur'?'📍':'🔒';
-    const bg=(r==='pass')?c.pass:(r==='cur')?c.cur:'';
-    const badgeBg=(r!=='lock')?c.badge:'';
-    // 흰띠: 배지 텍스트 어둡게
-    const badgeTxt=c.textDark?'color:#1A1A2E;':'';
-    // 흰띠: sh/nm 텍스트 밝게 유지(배경이 밝아도 오버레이가 어두우므로 기본OK)
-    // 검정띠: 배경과 구분을 위해 테두리 추가
-    const blackStyle=c.blackBelt&&r!=='lock'?'border:1.5px solid rgba(255,255,255,.28);':'';
-    // cur 상태 골드 테두리는 CSS에서 처리
-    return`<div class="rc-band ${r}" style="background:${bg};${blackStyle}">`+
-      `<div class="rc-band-badge" style="${badgeBg?'background:'+badgeBg+';':''} ${badgeTxt}">${s.l}</div>`+
-      `<div class="rc-band-info">`+
-        `<div class="rc-band-sh" style="${c.textDark&&r!=='lock'?'color:rgba(30,30,60,.65);':''}">${s.l} — ${s.sh}</div>`+
-        `<div class="rc-band-nm" style="${c.textDark&&r!=='lock'?'color:rgba(20,20,50,.90);':''}">${s.nm}</div>`+
-      `</div>`+
-      `<div class="rc-band-ic">${ic}</div>`+
-    `</div>`;
-  }).join('');
-
-  // AI 한마디
-  let msg='';
-  if(allPass){
-    msg=`🎉 축하드립니다! DESIRE 로드맵 <strong>6단계를 모두 완성</strong>하셨습니다!<br><br>신용대출 상환 → 비상예비자금 → 적립식 저축투자 → 거치식 자산운용 → 담보대출 상환 → <strong>상속플랜 완성</strong>까지, 재무 독립의 완전한 여정을 완주하셨습니다.<br><br>AI 머니야와 함께 이 자산을 더욱 효율적으로 운용하고 <strong>행복한 조기은퇴</strong>를 누리시기 바랍니다!`;
-  } else {
-    const cur=curStage;
-    msg=`오늘 진단에서 <strong>${passCount}단계를 통과</strong>하셨습니다.<br><br>현재 <strong>${cur.l}단계(${cur.nm})</strong>가 가장 중요한 과제입니다.<br><br>이 단계를 잘 이겨내시고 AI 머니야와 함께 <strong>돈의 순서</strong>를 올바르게 밟아가시면, D → E → S → I → R → E 순서로 반드시 <strong>경제적 조기은퇴</strong>에 도달하실 수 있습니다.<br><br>당신이 현재 <strong>${cur.l}단계</strong>에 계신다는 것을 정확히 파악하셨습니다. 이제부터가 시작입니다. 60분 본상담에서 월별 실행 플랜을 함께 완성해 드릴게요.`;
+  /* [2번] 최종단계 컬러 배너 */
+  var stageAnnounce='';
+  if(!allPass&&curStage){
+    var cf=SG_FULLNAME.find(function(x){return x.k===curStage.k;});
+    stageAnnounce='<div style="margin:0 0 12px;background:linear-gradient(135deg,'+cf.color+','+cf.color+'cc);border-radius:12px;padding:16px;text-align:center;">'
+      +'<div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:700;margin-bottom:4px;">고객님의 현재 DESIRE 단계</div>'
+      +'<div style="font-size:22px;font-weight:900;color:#fff;line-height:1.3;">'+cf.num+'단계 · '+cf.full+'</div>'
+      +'<div style="font-size:12px;color:rgba(255,255,255,.85);margin-top:6px;">'+cf.desc+'</div>'
+      +'</div>';
+  }else if(allPass){
+    stageAnnounce='<div style="margin:0 0 12px;background:linear-gradient(135deg,#15803D,#16a34a);border-radius:12px;padding:16px;text-align:center;">'
+      +'<div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:700;margin-bottom:4px;">고객님의 현재 DESIRE 단계</div>'
+      +'<div style="font-size:22px;font-weight:900;color:#fff;">6단계 완성! 🏆</div>'
+      +'<div style="font-size:12px;color:rgba(255,255,255,.85);margin-top:6px;">E — Early Retirement 달성</div>'
+      +'</div>';
   }
+
+  /* [2번] DESIRE FULLNAME 전체 단계 목록 */
+  var fnHtml='<div style="background:rgba(255,255,255,.04);border-radius:12px;padding:14px;margin-bottom:12px;">'
+    +'<div style="font-size:11px;font-weight:900;color:var(--gold);margin-bottom:10px;letter-spacing:.5px;">📖 DESIRE 로드맵 전체 단계</div>'
+    +SG_FULLNAME.map(function(x){
+      var isCur=curStage&&curStage.k===x.k;
+      var r=stageRes[x.k]||'lock';
+      var bgColor=isCur?'rgba(220,38,38,.12)':(r==='pass'?'rgba(22,163,74,.09)':'transparent');
+      var border=isCur?'1.5px solid rgba(220,38,38,.4)':(r==='pass'?'1px solid rgba(22,163,74,.3)':'1px solid rgba(255,255,255,.07)');
+      var icon=r==='pass'?'✅':isCur?'📍':'🔒';
+      var numBadge=isCur
+        ?'<span style="background:'+x.color+';color:#fff;font-size:10px;font-weight:900;padding:2px 7px;border-radius:10px;margin-right:6px;">'+x.num+'단계</span>'
+        :'<span style="background:rgba(255,255,255,.1);color:rgba(255,255,255,.4);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-right:6px;">'+x.num+'단계</span>';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:'+bgColor+';border:'+border+';margin-bottom:5px;">'
+        +numBadge
+        +'<div style="flex:1;">'
+        +'<div style="font-size:12px;font-weight:900;color:'+(isCur?x.color:(r==='pass'?'#34C759':'rgba(255,255,255,.7)'))+'">'+(isCur?'★ ':'')+x.full+'</div>'
+        +'<div style="font-size:10px;color:rgba(255,255,255,.45);margin-top:1px;">'+x.desc+'</div>'
+        +'</div>'
+        +'<span style="font-size:15px;">'+icon+'</span>'
+        +'</div>';
+    }).join('')
+    +'</div>';
+
+  document.getElementById('rc-stages').innerHTML=stageAnnounce+fnHtml;
+
+  /* [3번] 개선하실 수 있어요 */
+  var closing='<br><br><em>지금 알게 되셨으니 개선하실 수 있어요!</em><br>60분 본상담에서 각 단계별 월별 실행 플랜을 함께 완성해 드리겠습니다.';
+  var msg=allPass
+    ?'🎉 DESIRE 로드맵 <strong>6단계를 모두 완성</strong>하셨습니다!<br><br>AI 금융집사 머니야와 함께 더 탄탄한 재무 독립을 완성해 가시기 바랍니다!'+closing
+    :'오늘 진단에서 <strong>'+passCount+'단계를 통과</strong>하셨습니다.<br><br>현재 <strong>'+curNum+'단계('+( curStage?curStage.nm:'D단계')+')</strong>가 가장 중요한 과제입니다.<br><br>돈의 순서를 올바르게 밟아가시면 반드시 <strong>경제적 조기은퇴</strong>에 도달하실 수 있습니다.'+closing;
   document.getElementById('rc-mb').innerHTML=msg;
 
-  // CTA → 피드백 폼
-  const extra=document.getElementById('rc-extra');
-  const ctaW=document.getElementById('rc-cta');
-  extra.innerHTML='';
-  ctaW.innerHTML=`<div class="rc-cta-w">
-    <button class="rc-cta" onclick="openFeedback()">📋 진단 평가하고 60분 무료상담 받기 🎁</button>
-    <div class="rc-orig">소중한 피드백 → <strong style="color:var(--gold2)">60분 AI재무상담 무료 증정</strong></div>
-  </div>`;
-
+  var restartBtn='<div class="rc-restart"><button class="rc-restart-btn" onclick="restartDiag()">🔄 상담 다시하기</button></div>';
+  if(isBeta){
+    document.getElementById('rc-extra').innerHTML=restartBtn+buildSurveyHTML();
+    document.getElementById('rc-cta').innerHTML='';
+  }else{
+    document.getElementById('rc-extra').innerHTML=restartBtn;
+    document.getElementById('rc-cta').innerHTML='<div class="rc-cta-w"><button class="rc-cta" onclick="showPaidDetail()">🚀 60분 AI 음성 재무진단 신청하기</button><div class="rc-orig"><s>정가 330,000원</s> → <strong>오늘만 무료 🎁</strong></div></div>';
+  }
   document.getElementById('result').classList.add('show');
 
-  // 마지막 AI 멘트 — 끝나면 STT/WS 완전 종료
-  aiSay(allPass
-    ?'🏆 축하드립니다! 모든 단계 통과! AI 머니야와 함께 더 탄탄한 재무 독립을 완성해 가시기 바랍니다!'
-    :`진단 완료! 현재 ${curStage.l}단계(${curStage.nm})부터 AI 머니야와 함께 돈의 순서를 올바르게 밟아가시면 반드시 경제적 독립에 도달하실 수 있습니다.`
-  );
-
-  // 마지막 TTS 끝나면 STT/WS 완전 종료
-  const _endCheck=setInterval(()=>{
-    if(!ttsPlaying){
-      clearInterval(_endCheck);
-      stopSTT();
-      wsReady=false;
-      if(ws){ try{ws.close();}catch(e){} ws=null; }
-      setMicStatus('✅ 진단 완료');
+  /* TTS 결과 클로징 */
+  setTimeout(function(){
+    var ctxt=allPass
+      ?'고객님의 DESIRE 로드맵 6단계를 모두 완성하셨습니다! 진심으로 축하드립니다!'
+      :'고객님의 현재 단계는 '+curNum+'단계입니다. 지금 알게 되셨으니 개선하실 수 있어요! 60분 본상담에서 월별 실행 플랜을 함께 완성해 드리겠습니다.';
+    if('speechSynthesis' in window){
+      var utt=new SpeechSynthesisUtterance(ctxt);
+      utt.lang='ko-KR';utt.rate=1.0;utt.pitch=1.0;
+      window.speechSynthesis.speak(utt);
     }
-  },300);
+  },600);
 }
 
-/* ══ 시작 ══ */
-function go(){
-  _gameStarted=true; // 이 시점부터 음성 인식 처리 시작
-  initAudioCtx();
-  const lo=document.getElementById('landing');
-  lo.classList.add('gone');setTimeout(()=>lo.style.display='none',480);
-  startTimer();renderAll();
-  // wsReady 이미 완료됐으면 즉시, 아니면 최대 5초 대기 후 실행
-  _startGreeting();
+/* 상담 다시하기 */
+function restartDiag(){
+  /* [8번] TTS 중복 방지 */
+  if('speechSynthesis' in window)window.speechSynthesis.cancel();
+  document.getElementById('result').classList.remove('show');
+  stageRes={};curStageKey='D';timerSec=0;
+  sessionActive=false;reconnectCount=0;
+  audioQueue=[];isPlaying=false;isPaused=false;
+  lastAiText='';
+  if(idleTimer){clearTimeout(idleTimer);idleTimer=null;}
+  idleCount=0;
+  document.getElementById('chat-area').innerHTML='';
+  document.getElementById('quick-btns').innerHTML='';
+  document.getElementById('tmr').textContent='00:00';
+  document.getElementById('chat-area').style.display='none';
+  document.getElementById('edit-bar').style.display='none';
+  document.getElementById('mic-bar').style.display='none';
+  document.getElementById('input-bar').style.display='none';
+  document.getElementById('live-pill').style.display='none';
+  document.getElementById('idle-screen').style.display='flex';
+  renderBar();
+  startSession();
 }
 
-function _startGreeting(){
-  if(wsReady){
-    aiSay(
-      `안녕하세요! 😊<br><br>저는 <strong>AI 머니야</strong>입니다. 오상열 CFP 20년의 재무설계 노하우를 담아 만들어진 AI 재무코치예요.<br><br>오늘 딱 5분, <strong>DESIRE 로드맵</strong>으로 고객님의 재무 현재 위치를 정확히 진단해 드릴게요.<br><br>⚠️ 상담 내용은 저장되지 않으며, 금융상품 판매에 사용되지 않습니다.<br><br>개인 재무정보 입력에 동의하시겠어요?`,
-      [{label:'✅ 동의하고 시작합니다',next:'AGREE'}]
-    );
-  } else {
-    setTimeout(_startGreeting, 200); // 200ms마다 재확인
+/* #13 설문 — 이름/전화번호/이메일/개인정보동의 추가 */
+function buildSurveyHTML(){
+  return '<div class="survey-wrap"><div class="sv-title">📋 AI 음성 재무진단 피드백</div>'
+    +'<div class="sv-q"><div class="sv-ql">이름 <span class="sv-req">(필수)</span></div>'
+    +'<input class="sv-inp" id="sv-name" type="text" placeholder="홍길동"></div>'
+    +'<div class="sv-q"><div class="sv-ql">전화번호 <span class="sv-req">(필수)</span></div>'
+    +'<input class="sv-inp" id="sv-phone" type="tel" placeholder="010-0000-0000"></div>'
+    +'<div class="sv-q"><div class="sv-ql">이메일 (선택)</div>'
+    +'<input class="sv-inp" id="sv-email" type="email" placeholder="example@email.com"></div>'
+    +'<div class="sv-q"><div class="sv-ql">1. 전반적으로 어떠셨나요?</div><div class="star-row">'
+    +'<span class="star" onclick="setStar(1)">⭐</span><span class="star" onclick="setStar(2)">⭐</span>'
+    +'<span class="star" onclick="setStar(3)">⭐</span><span class="star" onclick="setStar(4)">⭐</span>'
+    +'<span class="star" onclick="setStar(5)">⭐</span></div></div>'
+    +'<div class="sv-q"><div class="sv-ql">2. 가장 도움이 된 부분은?</div><div class="sv-opts">'
+    +'<button class="sv-opt" onclick="selOpt(this,\'helpful\')">재무위치 파악</button>'
+    +'<button class="sv-opt" onclick="selOpt(this,\'helpful\')">단계별 진단</button>'
+    +'<button class="sv-opt" onclick="selOpt(this,\'helpful\')">AI 음성 설명</button>'
+    +'<button class="sv-opt" onclick="selOpt(this,\'helpful\')">빠른 진행속도</button></div></div>'
+    +'<div class="sv-q"><div class="sv-ql">3. AI 음성 상담, 자연스러우셨나요?</div><div class="sv-opts">'
+    +'<button class="sv-opt" onclick="selOpt(this,\'voice\')">매우 어색함</button>'
+    +'<button class="sv-opt" onclick="selOpt(this,\'voice\')">어색함</button>'
+    +'<button class="sv-opt" onclick="selOpt(this,\'voice\')">보통</button>'
+    +'<button class="sv-opt" onclick="selOpt(this,\'voice\')">자연스러움</button>'
+    +'<button class="sv-opt" onclick="selOpt(this,\'voice\')">매우 자연스러움</button></div></div>'
+    +'<div class="sv-q"><div class="sv-ql">4. 유료 재무진단 의향이 있으신가요?</div><div class="sv-opts">'
+    +'<button class="sv-opt" onclick="selOpt(this,\'willPay\')">전혀 없음</button>'
+    +'<button class="sv-opt" onclick="selOpt(this,\'willPay\')">조금 있음</button>'
+    +'<button class="sv-opt" onclick="selOpt(this,\'willPay\')">있음</button>'
+    +'<button class="sv-opt" onclick="selOpt(this,\'willPay\')">매우 있음</button>'
+    +'<button class="sv-opt" onclick="selOpt(this,\'willPay\')">바로 받고 싶음</button></div></div>'
+    +'<div class="sv-q"><div class="sv-ql">5. 한 줄 소감 (선택)</div>'
+    +'<textarea class="sv-textarea" id="sv-comment" placeholder="솔직한 피드백이 큰 도움이 됩니다..."></textarea></div>'
+    +'<div class="sv-agree">'
+    +'<label class="sv-agree-label"><input type="checkbox" id="sv-agree-chk">'
+    +' 개인정보 수집·이용에 동의합니다 <span class="sv-req">(필수)</span></label>'
+    +'<div class="sv-agree-detail">수집: 이름·전화번호·이메일 / 목적: 재무진단 피드백 분석·안내 / 보유: 1년</div>'
+    +'</div>'
+    +'<button class="sv-submit" onclick="submitSurvey()">📤 피드백 남기기</button></div>';
+}
+function setStar(n){surveyData.star=n;document.querySelectorAll('.star').forEach(function(s,i){s.classList.toggle('on',i<n);});}
+function selOpt(el,field){el.closest('.sv-opts').querySelectorAll('.sv-opt').forEach(function(s){s.classList.remove('sel');});el.classList.add('sel');surveyData[field]=el.textContent;}
+function submitSurvey(){
+  if(!surveyData.star){showToast('⭐ 별점을 선택해주세요');return;}
+  var nameVal=(document.getElementById('sv-name')||{}).value||'';
+  var phoneVal=(document.getElementById('sv-phone')||{}).value||'';
+  var emailVal=(document.getElementById('sv-email')||{}).value||'';
+  var agreeChk=document.getElementById('sv-agree-chk');
+  if(!nameVal.trim()){showToast('이름을 입력해주세요');return;}
+  if(!phoneVal.trim()){showToast('전화번호를 입력해주세요');return;}
+  if(!agreeChk||!agreeChk.checked){showToast('개인정보 수집·이용에 동의해주세요');return;}
+  surveyData.comment=(document.getElementById('sv-comment')||{}).value||'';
+  var payload={timestamp:new Date().toISOString(),name:nameVal,phone:phoneVal,email:emailVal,
+    passCount:SG.filter(function(s){return stageRes[s.k]==='pass';}).length,
+    curStage:(SG.find(function(s){return stageRes[s.k]==='cur';})||{}).nm||'전체통과',
+    star:surveyData.star,helpful:surveyData.helpful,voice:surveyData.voice,
+    willPay:surveyData.willPay,comment:surveyData.comment,ua:navigator.userAgent.slice(0,120)};
+  var SHEET_URL='https://script.google.com/macros/s/AKfycbwQ0lVhbuSEDLf8E8ILVZbCX2HU1NQgWW-G8yqRXMc3dmRpYbaYUvkBSlCuy9vf9yGTeA/exec';
+  if(SHEET_URL){
+    fetch(SHEET_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+      .then(function(){showToast('✅ 피드백 감사합니다!');setTimeout(showPaidDetail,1000);})
+      .catch(function(){showToast('⚠️ 저장 실패');});
+  }else{
+    console.log('[DESIRE-001] 설문:',payload);
+    showToast('✅ 피드백 감사합니다!');
+    setTimeout(showPaidDetail,1000);
   }
 }
+function showPaidDetail(){
+  document.getElementById('rc-extra').innerHTML=
+    '<div class="rc-restart"><button class="rc-restart-btn" onclick="restartDiag()">🔄 상담 다시하기</button></div>'
+    +'<div class="paid-detail"><div class="pd-gift">🎁</div>'
+    +'<div class="pd-title">AI 음성 재무진단 60분<br>무료 선물로 드립니다</div>'
+    +'<div class="pd-sub">DESIRE 진단을 완료하신 고객님께<br>오상열 CFP의 본상담을 무료로 제공합니다.</div>'
+    +'<div class="pd-checks">'
+    +'<div class="pd-ck"><span class="pd-ck-icon">✅</span>금융집짓기® 8단계 종합 재무설계</div>'
+    +'<div class="pd-ck"><span class="pd-ck-icon">✅</span>맞춤형 월별 실행 플랜 완성</div>'
+    +'<div class="pd-ck"><span class="pd-ck-icon">✅</span>상담 녹화영상 + 수료증 발급</div>'
+    +'<div class="pd-ck"><span class="pd-ck-icon">✅</span>CFP 팔로업 콜 1회 포함</div>'
+    +'</div>'
+    +'<div class="pd-price"><div class="pd-orig">정상가 330,000원</div><div class="pd-now">무료 🎁</div></div>'
+    +'<div class="pd-btns">'
+    +'<button class="pd-btn-now" onclick="bookNow(\'now\')">📅 지금 바로 예약하기</button>'
+    +'<button class="pd-btn-later" onclick="bookNow(\'later\')">⏰ 일주일 내 예약하기</button>'
+    +'</div></div>';
+  document.getElementById('rc-cta').innerHTML=
+    '<div class="monthly-cta"><div class="mc-t">💙 AI 금융집사 머니야 정기진단</div>'
+    +'<div class="mc-d">월 9,900원으로 매월 AI 음성 재무진단을<br>정기적으로 받으세요.</div>'
+    +'<button class="mc-btn" onclick="goApp(\'monthly\')">월 9,900원 정기진단 알아보기</button></div>';
+}
+function bookNow(mode){window.location.href='https://moneya-develop.vercel.app/consult?from=desire&coupon=FREE60&mode='+mode;}
+function goApp(page){window.location.href='https://moneya-develop.vercel.app/'+page+'?from=desire';}
+function showToast(msg,dur){dur=dur||2200;var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},dur);}
 
-renderAll();
-// 페이지 로드 즉시 WS 연결 + 첫 인사말 TTS 미리 준비 — 버튼 클릭 즉시 음성 출력
-connectWS();
-prefetchGreeting();
+renderBar();
 </script>
 </body>
 </html>
