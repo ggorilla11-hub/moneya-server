@@ -743,6 +743,19 @@ function connectWS(){
       if(sessionActive)resetIdleTimer();
     }
 
+    if(msg.type==='openai_disconnected'||msg.type==='openai_error'){
+      console.error('[DESIRE] OpenAI 연결 끊김:', msg);
+      addSys('⚡ AI 연결이 일시 중단됐습니다. 잠시 후 자동 재연결됩니다...');
+      showToast('🔄 AI 재연결 중...', 3000);
+      /* 3초 후 자동 재연결 시도 */
+      setTimeout(function(){
+        if(!document.getElementById('result').classList.contains('show')){
+          sessionActive=false;
+          connectWS();
+        }
+      }, 3000);
+    }
+
     if(msg.type==='result'){
       if(msg.stages)stageRes=msg.stages;
       showResult();
