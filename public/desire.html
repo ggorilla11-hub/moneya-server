@@ -795,6 +795,22 @@ function connectWS(){
     if(heartbeatInt){clearInterval(heartbeatInt);heartbeatInt=null;}
     /* 진단 완료 후 종료는 정상 — 결과화면이 열려있으면 무시 */
     if(document.getElementById('result').classList.contains('show'))return;
+    /* ★ 클로징 직후 끊김 — result 메시지 도달 대기 후 처리 */
+    if(sessionActive===false){
+      /* sessionActive=false는 result 수신 후 설정됨 — 정상 종료 */
+      return;
+    }
+    /* 클로징 감지 후 끊긴 경우 — 3초 대기 후 결과화면 강제 표시 */
+    var chatArea=document.getElementById('chat-area');
+    var lastMsg=chatArea?chatArea.innerText:'';
+    if(lastMsg.indexOf('안녕히 계세요')>-1||lastMsg.indexOf('진단이 완료')>-1||lastMsg.indexOf('DESIRE 로드맵')>-1){
+      setTimeout(function(){
+        if(!document.getElementById('result').classList.contains('show')){
+          showResult();
+        }
+      },1000);
+      return;
+    }
     if(reconnectCount<5){
       reconnectCount++;
       document.getElementById('reconnect-txt').textContent='🔄 재연결 중... ('+reconnectCount+'/5)';
