@@ -1005,7 +1005,7 @@ function submitSurvey(){
     curStage:(SG.find(function(s){return stageRes[s.k]==='cur';})||{}).nm||'전체통과',
     star:surveyData.star,helpful:surveyData.helpful,voice:surveyData.voice,
     willPay:surveyData.willPay,comment:surveyData.comment,ua:navigator.userAgent.slice(0,120)};
-  var SHEET_URL='';
+  var SHEET_URL='/api/desire-feedback';
   if(SHEET_URL){
     fetch(SHEET_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
       .then(function(){showToast('✅ 피드백 감사합니다!');setTimeout(showPaidDetail,1000);})
