@@ -444,6 +444,135 @@ function renderBar(){
   }).join('');
 }
 
+/* ══ 단계별 안내배너 버튼 정의 (시뮬레이터 v2 기준) ══ */
+var STAGE_BUTTONS = {
+  OPENING: [
+    {label:'✅ 동의하고 시작합니다', text:'동의하고 시작합니다', gold:true}
+  ],
+  D: [
+    {label:'네, 있습니다', text:'네, 신용대출이 있습니다'},
+    {label:'없습니다', text:'신용대출이 없습니다'}
+  ],
+  D_NEXT: [
+    {label:'E단계 → 비상예비자금 확인 →', text:'E단계로 넘어가겠습니다', gold:true}
+  ],
+  E: [
+    {label:'네, 준비되어 있습니다', text:'네, 비상예비자금이 준비되어 있습니다'},
+    {label:'아직 없습니다', text:'비상예비자금이 아직 없습니다'}
+  ],
+  E_NEXT: [
+    {label:'S단계 → 저축투자 확인 →', text:'S단계로 넘어가겠습니다', gold:true}
+  ],
+  S_FAM: [
+    {label:'기혼 (자녀 있음)', text:'기혼이고 자녀가 있습니다'},
+    {label:'기혼 (자녀 없음)', text:'기혼이고 자녀가 없습니다'},
+    {label:'미혼', text:'미혼입니다'}
+  ],
+  S_INC: [
+    {label:'300만원 미만', text:'월 소득이 300만원 미만입니다'},
+    {label:'300~500만원', text:'월 소득이 300만원에서 500만원 사이입니다'},
+    {label:'500만원 이상', text:'월 소득이 500만원 이상입니다'}
+  ],
+  S: [
+    {label:'네, 하고 있습니다', text:'네, 목표 저축액을 달성하고 있습니다'},
+    {label:'아직 못 하고 있습니다', text:'아직 목표 저축액에 못 미치고 있습니다'}
+  ],
+  S_NEXT: [
+    {label:'I단계 → 자산운용 확인 →', text:'I단계로 넘어가겠습니다', gold:true}
+  ],
+  I: [
+    {label:'네, 10억 이상입니다', text:'네, 금융자산이 10억원 이상입니다'},
+    {label:'아직 그 이하입니다', text:'아직 10억원 이하입니다'}
+  ],
+  I_NEXT: [
+    {label:'R단계 → 담보대출 확인 →', text:'R단계로 넘어가겠습니다', gold:true}
+  ],
+  R: [
+    {label:'네, 남아 있습니다', text:'네, 주택담보대출이 남아 있습니다'},
+    {label:'없습니다', text:'주택담보대출이 없습니다'}
+  ],
+  R_NEXT: [
+    {label:'마지막 E단계 →', text:'마지막 E단계로 넘어가겠습니다', gold:true}
+  ],
+  E2: [
+    {label:'네, 준비되어 있습니다', text:'네, 상속 플랜이 준비되어 있습니다'},
+    {label:'아직 없습니다', text:'상속 플랜이 아직 없습니다'}
+  ],
+  RESULT: [
+    {label:'진단 결과 보기 →', text:'SHOW_RESULT', gold:true}
+  ]
+};
+
+/* ══ AI 메시지에서 단계 감지 → 자동 버튼 표시 ══ */
+function detectStageAndSetButtons(html){
+  /* 클로징 / 결과 */
+  if(html.indexOf('진단이 완료')>-1||html.indexOf('결과를 확인')>-1){
+    setQB(STAGE_BUTTONS.RESULT); return;
+  }
+  /* E2 단계 */
+  if(html.indexOf('상속 플랜')>-1||html.indexOf('마지막 질문')>-1||html.indexOf('경제적 조기은퇴')>-1){
+    curStageKey='E2'; if(!stageRes['E2'])stageRes['E2']='cur';
+    setQB(STAGE_BUTTONS.E2); return;
+  }
+  /* R 단계 — 통과/과제 후 다음버튼 */
+  if((html.indexOf('R단계 통과')>-1||html.indexOf('완납이 원칙')>-1)&&html.indexOf('E단계')>-1){
+    setQB(STAGE_BUTTONS.R_NEXT); return;
+  }
+  /* R 단계 질문 */
+  if(html.indexOf('주택담보대출')>-1&&html.indexOf('남아')>-1){
+    curStageKey='R'; if(!stageRes['R'])stageRes['R']='cur';
+    setQB(STAGE_BUTTONS.R); return;
+  }
+  /* I 단계 — 통과/과제 후 다음버튼 */
+  if((html.indexOf('I단계 통과')>-1||html.indexOf('10억원 포트폴리오')>-1)&&html.indexOf('R단계')>-1){
+    setQB(STAGE_BUTTONS.I_NEXT); return;
+  }
+  /* I 단계 질문 */
+  if(html.indexOf('10억원 이상')>-1||html.indexOf('거치식')>-1||html.indexOf('금융자산')>-1){
+    curStageKey='I'; if(!stageRes['I'])stageRes['I']='cur';
+    setQB(STAGE_BUTTONS.I); return;
+  }
+  /* S 단계 — 저축 달성여부 질문 */
+  if(html.indexOf('저축')>-1&&html.indexOf('하고 계신가요')>-1){
+    setQB(STAGE_BUTTONS.S); return;
+  }
+  /* S 단계 — 월 소득 질문 */
+  if(html.indexOf('월 소득')>-1&&html.indexOf('얼마')>-1){
+    setQB(STAGE_BUTTONS.S_INC); return;
+  }
+  /* S 단계 — 통과/과제 후 다음버튼 */
+  if((html.indexOf('S단계 통과')>-1||html.indexOf('앞으로 맞춰가면')>-1)&&html.indexOf('I단계')>-1){
+    setQB(STAGE_BUTTONS.S_NEXT); return;
+  }
+  /* S 단계 — 가족구성 질문 */
+  if(html.indexOf('가족')>-1&&(html.indexOf('결혼')>-1||html.indexOf('몇 명')>-1)){
+    curStageKey='S'; if(!stageRes['S'])stageRes['S']='cur';
+    setQB(STAGE_BUTTONS.S_FAM); return;
+  }
+  /* E 단계 — 통과/과제 후 다음버튼 */
+  if((html.indexOf('E단계 통과')>-1||html.indexOf('병행')>-1||html.indexOf('분리 계좌')>-1)&&html.indexOf('S단계')>-1){
+    setQB(STAGE_BUTTONS.E_NEXT); return;
+  }
+  /* E 단계 질문 */
+  if(html.indexOf('비상예비자금')>-1&&html.indexOf('준비')>-1){
+    curStageKey='E'; if(!stageRes['E'])stageRes['E']='cur';
+    setQB(STAGE_BUTTONS.E); return;
+  }
+  /* D 단계 — 통과/과제 후 다음버튼 */
+  if((html.indexOf('D단계 통과')>-1||html.indexOf('스노우볼')>-1)&&html.indexOf('E단계')>-1){
+    setQB(STAGE_BUTTONS.D_NEXT); return;
+  }
+  /* D 단계 질문 */
+  if(html.indexOf('신용대출')>-1&&(html.indexOf('있으신가요')>-1||html.indexOf('카드론')>-1)){
+    curStageKey='D'; if(!stageRes['D'])stageRes['D']='cur';
+    setQB(STAGE_BUTTONS.D); return;
+  }
+  /* 오프닝 — 동의 질문 */
+  if(html.indexOf('동의하시겠어요')>-1||html.indexOf('동의')>-1){
+    setQB(STAGE_BUTTONS.OPENING); return;
+  }
+}
+
 /* 채팅 */
 function addAI(html){
   lastAiText=html;
@@ -453,17 +582,16 @@ function addAI(html){
   d.innerHTML='<div class="msg-av"><img src="'+LOGO+'" alt="머니야" onerror="this.parentElement.textContent=\'💰\'"></div>'
     +'<div class="msg-bubble">'+html+'</div>';
   area.appendChild(d);area.scrollTop=area.scrollHeight;
-  /* 단계 감지 */
-  var sm={'D단계':'D','E단계':'E','S단계':'S','I단계':'I','R단계':'R','마지막 질문':'E2','상속 플랜':'E2','조기은퇴':'E2','담보대출':'R','거치식':'I','저축투자':'S','비상예비자금':'E'};
-  for(var kw in sm){
-    if(html.indexOf(kw)>-1){
-      var k=sm[kw];
-      if(!stageRes[k])stageRes[k]='cur';
-      curStageKey=k;break;
-    }
-  }
-  if(html.indexOf('통과')>-1||html.indexOf('완성!')>-1)stageRes[curStageKey]='pass';
+  /* 통과 표시 */
+  if(html.indexOf('D단계 통과')>-1)stageRes['D']='pass';
+  if(html.indexOf('E단계 통과')>-1)stageRes['E']='pass';
+  if(html.indexOf('S단계 통과')>-1)stageRes['S']='pass';
+  if(html.indexOf('I단계 통과')>-1)stageRes['I']='pass';
+  if(html.indexOf('R단계 통과')>-1)stageRes['R']='pass';
+  if(html.indexOf('6단계 완성')>-1)stageRes['E2']='pass';
   renderBar();
+  /* 단계별 안내배너 자동 표시 */
+  detectStageAndSetButtons(html);
   var stage=SG.find(function(s){return s.k===curStageKey;});
   if(stage)document.getElementById('mb-status').textContent=stage.nm+' 진행 중';
 }
@@ -492,6 +620,7 @@ function setQB(btns){
 }
 function clearQB(){document.getElementById('quick-btns').innerHTML='';}
 function clickAnswer(text){
+  if(text==='SHOW_RESULT'){showResult();return;}
   if(!ws||ws.readyState!==WebSocket.OPEN)return;
   clearQB();addUser(text);
   ws.send(JSON.stringify({type:'text_input',text:text}));
@@ -555,15 +684,16 @@ function connectWS(){
       document.getElementById('tmr').style.display='block';
       document.getElementById('mb-status').textContent='AI 음성 재무진단 진행 중...';
       startTimer();startMicCapture();
-      /* 오프닝 멘트 후 동의 버튼 표시 */
+      /* 오프닝 버튼은 AI가 동의 멘트를 말하면 detectStageAndSetButtons가 자동 표시 */
+      /* 만약 10초 내 버튼이 안 나타나면 보조로 표시 */
       setTimeout(function(){
-        setQB([{label:'✅ 동의하고 시작합니다',text:'동의하고 시작합니다',gold:true}]);
-      },4500);
+        var qb=document.getElementById('quick-btns');
+        if(!qb.innerHTML.trim())setQB(STAGE_BUTTONS.OPENING);
+      },10000);
     }
 
     if(msg.type==='transcript'&&msg.text){
       if(msg.role==='assistant')addAI(msg.text);
-      /* 사용자 STT는 음성 인식 결과만 표시 (clickAnswer 중복 방지) */
       if(msg.role==='user'&&msg.source!=='text')addUser(msg.text);
     }
 
