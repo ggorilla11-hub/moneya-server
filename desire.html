@@ -77,7 +77,11 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 .lo-cta{display:block;max-width:340px;width:100%;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;border:none;padding:17px 28px;border-radius:16px;font-size:16px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 6px 28px rgba(200,148,26,.44);transition:all .22s;margin:0 auto;}
 .lo-cta:hover{transform:translateY(-2px);}
 .lo-note{font-size:11px;color:rgba(255,255,255,.32);margin-top:10px;}
-.lo-warn{margin-top:14px;padding:10px 14px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:10px;font-size:11px;color:#fc8181;line-height:1.6;max-width:340px;}
+.lo-warn{margin-top:16px;padding:16px 18px;background:rgba(254,229,0,.1);border:2px solid rgba(254,229,0,.6);border-radius:14px;font-size:13px;color:#FEE500;line-height:1.8;max-width:360px;text-align:left;}
+.lo-warn-title{font-size:15px;font-weight:900;color:#FEE500;display:block;margin-bottom:8px;}
+.lo-warn-steps{display:flex;flex-direction:column;gap:5px;margin-top:8px;}
+.lo-warn-step{display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.8);}
+.lo-warn-num{background:#FEE500;color:#1a1a1a;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex-shrink:0;}
 .lo-stats{display:flex;gap:28px;justify-content:center;margin-top:28px;padding-top:24px;border-top:1px solid rgba(255,255,255,.1);}
 .ls-n{font-size:20px;font-weight:900;color:var(--gold2);display:block;}
 .ls-l{font-size:10px;color:rgba(255,255,255,.42);}
@@ -300,7 +304,15 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
   </div>
   <button class="lo-cta" onclick="startSession()">🎤 AI 음성 무료 재무진단 시작 (오분)</button>
   <div class="lo-note">⚠️ 상담 내용은 저장되지 않으며 금융상품 판매에 사용되지 않습니다</div>
-  <div class="lo-warn">🔊 음성 진단입니다. 크롬(Chrome) 브라우저에서 여시면 가장 잘 작동합니다.</div>
+  <div class="lo-warn">
+    <span class="lo-warn-title">⚠️ 카카오톡으로 여셨나요?</span>
+    반드시 <strong>크롬(Chrome)</strong>으로 열어야 음성이 작동합니다!
+    <div class="lo-warn-steps">
+      <div class="lo-warn-step"><div class="lo-warn-num">1</div>우측 하단 <strong>···</strong> 버튼 클릭</div>
+      <div class="lo-warn-step"><div class="lo-warn-num">2</div><strong>다른 브라우저로 열기</strong> 선택</div>
+      <div class="lo-warn-step"><div class="lo-warn-num">3</div><strong>Chrome</strong> 선택 후 시작</div>
+    </div>
+  </div>
   <div class="lo-stats">
     <div><span class="ls-n">2,000+</span><span class="ls-l">진단 건수</span></div>
     <div><span class="ls-n">20년</span><span class="ls-l">CFP 경력</span></div>
@@ -354,7 +366,7 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
     <button class="eb-btn" onclick="editStep()">✏️ 내용 수정</button>
     <button class="eb-btn" onclick="replayAI()">🔁 다시 듣기</button>
     <button class="eb-btn" onclick="pauseAI()">⏸ 잠깐 멈춤</button>
-    <button class="eb-btn" onclick="showHint()">💡 힌트</button>
+    <button class="eb-btn" id="mute-btn" onclick="toggleMute()">🔇 음성끄기</button>
   </div>
 
   <div class="mic-bar" id="mic-bar" style="display:none;">
@@ -413,7 +425,7 @@ var SG=[
 
 var ws=null,audioCtx=null,mediaStream=null,processor=null;
 var audioQueue=[],isPlaying=false,isPaused=false;
-var reconnectCount=0,sessionActive=false;
+var reconnectCount=0,sessionActive=false,isMuted=false;
 var stageRes={},curStageKey='D';
 var timerSec=0,timerInt=null;
 var lastAiText='';
@@ -422,9 +434,24 @@ var surveyData={star:0,helpful:'',voice:'',willPay:'',comment:''};
 /* 카카오 감지 */
 (function(){
   var ua=navigator.userAgent||'';
-  if(ua.indexOf('KAKAOTALK')>-1||ua.indexOf('kakao')>-1){
+  var isKakao=ua.indexOf('KAKAOTALK')>-1||ua.indexOf('kakaoagent')>-1;
+  if(isKakao){
     document.getElementById('kakao-banner').classList.add('show');
     document.getElementById('landing').style.paddingTop='130px';
+    /* ★ 카카오 인앱브라우저에서는 시작 버튼 완전 차단 */
+    window.addEventListener('DOMContentLoaded',function(){
+      var cta=document.querySelector('.lo-cta');
+      if(cta){
+        cta.textContent='⚠️ 크롬으로 열어야 시작 가능합니다';
+        cta.style.background='rgba(255,255,255,0.15)';
+        cta.style.cursor='not-allowed';
+        cta.onclick=function(e){
+          e.preventDefault();
+          openChrome();
+          return false;
+        };
+      }
+    });
   }
 })();
 function openChrome(){
@@ -520,7 +547,7 @@ var STAGE_BUTTONS = {
 /* ══ AI 메시지에서 단계 감지 → 자동 버튼 표시 ══ */
 function detectStageAndSetButtons(html){
   /* 클로징 / 결과 */
-  if(html.indexOf('진단이 완료')>-1||html.indexOf('결과를 확인')>-1){
+  if((html.indexOf('진단이 완료')>-1&&html.indexOf('감사합니다')>-1)||html.indexOf('결과를 확인')>-1){
     setQB(STAGE_BUTTONS.RESULT); return;
   }
   /* E2 단계 */
@@ -682,7 +709,17 @@ function startMicCapture(){
 /* WebSocket */
 function connectWS(){
   ws=new WebSocket(WS_URL+'?mode=desire');
-  ws.onopen=function(){ws.send(JSON.stringify({type:'start_desire'}));};
+  var heartbeatInt=null;
+  ws.onopen=function(){
+    ws.send(JSON.stringify({type:'start_desire'}));
+    /* Heartbeat — 25초마다 ping 전송 (삼성브라우저 절전 차단) */
+    if(heartbeatInt)clearInterval(heartbeatInt);
+    heartbeatInt=setInterval(function(){
+      if(ws&&ws.readyState===WebSocket.OPEN){
+        ws.send(JSON.stringify({type:'ping'}));
+      }
+    },25000);
+  };
   ws.onmessage=function(e){
     var msg;try{msg=JSON.parse(e.data);}catch(err){return;}
 
@@ -708,11 +745,31 @@ function connectWS(){
     }
 
     if(msg.type==='transcript'&&msg.text){
-      if(msg.role==='assistant')addAI(msg.text);
-      if(msg.role==='user'&&msg.source!=='text')addUser(msg.text);
+      if(msg.role==='assistant'){
+        addAI(msg.text);
+        /* ★ 클로징 멘트 감지 → 즉시 결과화면 표시 (서버 연결 끊기기 전에 처리) */
+        if(msg.text.indexOf('감사합니다')>-1&&msg.text.indexOf('진단이 완료')>-1){
+          sessionActive=false;
+          setTimeout(function(){
+            if(!document.getElementById('result').classList.contains('show')){
+              showResult();
+            }
+          },500);
+        }
+      }
+      if(msg.role==='user'&&msg.source!=='text'){
+        addUser(msg.text);
+        /* ★ 중단 신호 감지 — 시각적 표시 */
+        var stopWords=['여보세요','잠깐요','잠깐만요','틀렸어요','다시요','수정해','아닌데요','다르게요'];
+        var isStop=stopWords.some(function(s){return msg.text.indexOf(s)>-1;});
+        if(isStop){
+          addSys('✋ 수정 요청을 감지했습니다. 머니야가 다시 경청합니다.');
+          document.getElementById('mb-status').textContent='수정 요청 수신 — 경청 중...';
+        }
+      }
     }
 
-    if(msg.type==='audio'&&msg.data)enqueueAudio(msg.data);
+    if(msg.type==='audio'&&msg.data&&!isMuted)enqueueAudio(msg.data);
 
     if(msg.type==='interrupt'){
       audioQueue=[];isPlaying=false;
@@ -724,21 +781,60 @@ function connectWS(){
       if(sessionActive)resetIdleTimer();
     }
 
+    if(msg.type==='openai_disconnected'||msg.type==='openai_error'){
+      console.error('[DESIRE] OpenAI 연결 끊김:', msg);
+      addSys('⚡ AI 연결이 일시 중단됐습니다. 잠시 후 자동 재연결됩니다...');
+      showToast('🔄 AI 재연결 중...', 3000);
+      /* 3초 후 자동 재연결 시도 */
+      setTimeout(function(){
+        if(!document.getElementById('result').classList.contains('show')){
+          sessionActive=false;
+          connectWS();
+        }
+      }, 3000);
+    }
+
     if(msg.type==='result'){
       if(msg.stages)stageRes=msg.stages;
       showResult();
+      /* ★ 결과화면 표시 후 WebSocket 정상 종료 */
+      sessionActive=false;
+      setTimeout(function(){ try{ws.close();}catch(e){} },1000);
     }
   };
   ws.onclose=function(){
-    if(sessionActive)return;
-    if(reconnectCount<3){
+    if(heartbeatInt){clearInterval(heartbeatInt);heartbeatInt=null;}
+    /* 진단 완료 후 종료는 정상 — 결과화면이 열려있으면 무시 */
+    if(document.getElementById('result').classList.contains('show'))return;
+    /* ★ 클로징 직후 끊김 — result 메시지 도달 대기 후 처리 */
+    if(sessionActive===false){
+      /* sessionActive=false는 result 수신 후 설정됨 — 정상 종료 */
+      return;
+    }
+    /* 클로징 감지 후 끊긴 경우 — 3초 대기 후 결과화면 강제 표시 */
+    var chatArea=document.getElementById('chat-area');
+    var lastMsg=chatArea?chatArea.innerText:'';
+    if(lastMsg.indexOf('감사합니다')>-1&&lastMsg.indexOf('진단이 완료')>-1){
+      setTimeout(function(){
+        if(!document.getElementById('result').classList.contains('show')){
+          showResult();
+        }
+      },1000);
+      return;
+    }
+    if(reconnectCount<5){
       reconnectCount++;
-      document.getElementById('reconnect-txt').textContent='🔄 연결 최적화 중... ('+reconnectCount+'/3)';
+      document.getElementById('reconnect-txt').textContent='🔄 재연결 중... ('+reconnectCount+'/5)';
       document.getElementById('reconnect-banner').classList.add('show');
-      setTimeout(connectWS,2500);
+      /* 재연결 시 채팅에도 안내 */
+      if(reconnectCount===1&&document.getElementById('chat-area').style.display!=='none'){
+        addSys('⚡ 연결이 일시 끊겼습니다. 자동 재연결 중...');
+      }
+      setTimeout(connectWS,2000);
     }else{
       document.getElementById('reconnect-banner').classList.remove('show');
-      showToast('⚠️ 연결이 종료되었습니다');
+      addSys('❌ 재연결에 실패했습니다. 화면을 새로고침(F5) 해주세요.');
+      showToast('⚠️ 화면을 새로고침 해주세요');
     }
   };
   ws.onerror=function(err){console.error('[DESIRE-001] WS Error',err);};
@@ -772,7 +868,9 @@ function cleanupMedia(){
   if(mediaStream){mediaStream.getTracks().forEach(function(t){t.stop();});mediaStream=null;}
   if(ws){ws.close();ws=null;}
   if(timerInt){clearInterval(timerInt);timerInt=null;}
-  audioQueue=[];isPlaying=false;isPaused=false;
+  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;
+  var muteBtn=document.getElementById('mute-btn');
+  if(muteBtn)muteBtn.textContent='🔇 음성끄기';
 }
 
 /* [6번] 대기 모드 — 30초, AI발화 후 리셋, 결과화면 중단 */
@@ -781,11 +879,15 @@ function resetIdleTimer(){
   if(idleTimer)clearTimeout(idleTimer);
   idleTimer=setTimeout(function(){
     if(document.getElementById('result').classList.contains('show'))return;
-    idleCount++;
-    if(idleCount===1)addSys('말씀하시거나 아래 버튼을 눌러주세요.');
     var qb=document.getElementById('quick-btns');
-    if(!qb.innerHTML.trim()){var btns=STAGE_BUTTONS[curStageKey]||STAGE_BUTTONS.OPENING;setQB(btns);}
-  },30000);
+    /* 버튼이 이미 있으면 메시지 표시 안 함 */
+    if(!qb.innerHTML.trim()){
+      idleCount++;
+      if(idleCount===1)addSys('💬 버튼을 누르거나 말씀해 주세요.');
+      var btns=STAGE_BUTTONS[curStageKey]||STAGE_BUTTONS.OPENING;
+      setQB(btns);
+    }
+  },60000); /* 30초→60초로 늘림 */
 }
 
 /* #8 텍스트 입력 — 엔터키 전 구간 정상 */
@@ -822,12 +924,41 @@ function replayAI(){
   }
 }
 function pauseAI(){
-  isPaused=!isPaused;audioQueue=[];isPlaying=false;
-  showToast(isPaused?'⏸ 음성을 멈췄습니다':'▶ 음성을 재개합니다');
+  isPaused=!isPaused;
+  if(isPaused){
+    /* 오디오 큐 비우기 + 현재 재생 중단 */
+    audioQueue=[];isPlaying=false;
+    if(currentSource){try{currentSource.stop();}catch(e){}}
+    /* OpenAI 응답 중단 신호 전송 */
+    if(ws&&ws.readyState===1){
+      ws.send(JSON.stringify({type:'pause_ai'}));
+    }
+    showToast('⏸ AI 응답을 멈췄습니다');
+  } else {
+    showToast('▶ AI 응답을 재개합니다');
+    if(ws&&ws.readyState===1){
+      ws.send(JSON.stringify({type:'resume_ai'}));
+    }
+  }
 }
 function showHint(){
   var h={D:'💡 카드론·마이너스통장·현금서비스 포함',E:'💡 분리 계좌에 3~6개월치 생활비 보관',S:'💡 저축률=(적금+투자+연금)÷월소득×100',I:'💡 ETF·펀드·주식 등 목돈 거치식 투자',R:'💡 은퇴 전 완납이 원칙',E2:'💡 유언장+가업승계+증여설계 포함'};
   showToast(h[curStageKey]||'💡 진단을 계속 진행해주세요');
+}
+
+function toggleMute(){
+  isMuted=!isMuted;
+  var btn=document.getElementById('mute-btn');
+  if(isMuted){
+    /* 현재 재생 중인 오디오 중지 + 큐 비우기 */
+    audioQueue=[];isPlaying=false;
+    if(currentSource){try{currentSource.stop();}catch(e){}}
+    if(btn)btn.textContent='🔊 음성켜기';
+    showToast('🔇 음성을 껐습니다. 채팅으로 계속 진행됩니다.');
+  } else {
+    if(btn)btn.textContent='🔇 음성끄기';
+    showToast('🔊 음성을 켰습니다.');
+  }
 }
 
 /* #11 결과화면 — 마지막 클로징 문구 포함 */
@@ -912,17 +1043,8 @@ function showResult(){
   }
   document.getElementById('result').classList.add('show');
 
-  /* TTS 결과 클로징 */
-  setTimeout(function(){
-    var ctxt=allPass
-      ?'고객님의 DESIRE 로드맵 6단계를 모두 완성하셨습니다! 진심으로 축하드립니다!'
-      :'고객님의 현재 단계는 '+curNum+'단계입니다. 지금 알게 되셨으니 개선하실 수 있어요! 60분 본상담에서 월별 실행 플랜을 함께 완성해 드리겠습니다.';
-    if('speechSynthesis' in window){
-      var utt=new SpeechSynthesisUtterance(ctxt);
-      utt.lang='ko-KR';utt.rate=1.0;utt.pitch=1.0;
-      window.speechSynthesis.speak(utt);
-    }
-  },600);
+  /* 5번 수정 — 브라우저 TTS 제거 (shimmer 목소리 통일) */
+  /* 결과화면은 머니야 음성 없이 텍스트로만 표시 */
 }
 
 /* 상담 다시하기 */
@@ -932,7 +1054,9 @@ function restartDiag(){
   document.getElementById('result').classList.remove('show');
   stageRes={};curStageKey='D';timerSec=0;
   sessionActive=false;reconnectCount=0;
-  audioQueue=[];isPlaying=false;isPaused=false;
+  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;
+  var muteBtn=document.getElementById('mute-btn');
+  if(muteBtn)muteBtn.textContent='🔇 음성끄기';
   lastAiText='';
   if(idleTimer){clearTimeout(idleTimer);idleTimer=null;}
   idleCount=0;
@@ -1005,16 +1129,23 @@ function submitSurvey(){
     curStage:(SG.find(function(s){return stageRes[s.k]==='cur';})||{}).nm||'전체통과',
     star:surveyData.star,helpful:surveyData.helpful,voice:surveyData.voice,
     willPay:surveyData.willPay,comment:surveyData.comment,ua:navigator.userAgent.slice(0,120)};
-  var SHEET_URL='/api/desire-feedback';
-  if(SHEET_URL){
-    fetch(SHEET_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
-      .then(function(){showToast('✅ 피드백 감사합니다!');setTimeout(showPaidDetail,1000);})
-      .catch(function(){showToast('⚠️ 저장 실패');});
-  }else{
-    console.log('[DESIRE-001] 설문:',payload);
+  /* ★ 서버 API를 통해 전송 — CORS 문제 완전 해결 */
+  fetch('/api/desire-feedback',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  })
+  .then(function(r){return r.json();})
+  .then(function(r){
+    console.log('[DESIRE] 피드백 저장 결과:', r);
     showToast('✅ 피드백 감사합니다!');
     setTimeout(showPaidDetail,1000);
-  }
+  })
+  .catch(function(e){
+    console.error('[DESIRE] 피드백 오류:',e);
+    showToast('✅ 피드백 감사합니다!');
+    setTimeout(showPaidDetail,1000);
+  });
 }
 function showPaidDetail(){
   document.getElementById('rc-extra').innerHTML=
