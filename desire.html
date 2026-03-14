@@ -426,6 +426,7 @@ var SG=[
 var ws=null,audioCtx=null,mediaStream=null,processor=null;
 var audioQueue=[],isPlaying=false,isPaused=false;
 var reconnectCount=0,sessionActive=false,isMuted=false,closingDetected=false,pendingResult=false,e2Answered=false;
+var closingCompleteReceived=false; /* [BUG FIX 1·2] 서버 closing_complete 수신 여부 */
 var stageRes={},curStageKey='D';
 var timerSec=0,timerInt=null;
 var lastAiText='';
@@ -662,27 +663,6 @@ function setQB(btns){
   }).join('');
 }
 function clearQB(){document.getElementById('quick-btns').innerHTML='';}
-function clickAnswer(text){
-  if(text==='SHOW_RESULT'){
-    if(closingDetected){
-      /* 이미 클로징 감지됨 — 즉시 결과화면 전환 */
-      showResult();
-    } else {
-      /* 아직 머니야가 말하는 중 — closingDetected 대기 플래그 설정 */
-      pendingResult=true;
-      showToast('⏳ 머니야 마무리 후 자동으로 결과화면이 열립니다');
-    }
-    return;
-  }
-  if(!ws||ws.readyState!==WebSocket.OPEN)return;
-  clearQB();addUser(text);
-  ws.send(JSON.stringify({type:'text_input',text:text}));
-  /* ★ E2 YES/NO 답변 전송 직후 → 결과버튼 표시 (머니야 답변 나오면 클릭 가능) */
-  if(text.indexOf('상속 플랜이 준비되어 있습니다')>-1||text.indexOf('상속 플랜이 아직 없습니다')>-1){
-    e2Answered=true;
-    setTimeout(function(){ setQB(STAGE_BUTTONS.RESULT); }, 500);
-  }
-}
 
 /* 오디오 */
 function enqueueAudio(b64){
@@ -803,17 +783,26 @@ function connectWS(){
     }
 
     /* [10번] AI 응답 완전 종료 신호 — 이 시점부터 idleTimer 카운트 */
+    /* [10번] AI 응답 완전 종료 — idleTimer 담당. 결과전환은 closing_complete가 처리 */
     if(msg.type==='response_done'){
-      if(e2Answered){
-        /* ★ 머니야 발화 완전 종료 + E2 답변 완료 → 1초 후 결과화면 */
-        sessionActive=false;
-        setTimeout(function(){
-          if(!document.getElementById('result').classList.contains('show')){
-            showResult();
-          }
-        },1000);
+      if(sessionActive)resetIdleTimer();
+    }
+
+    /* [BUG FIX 1·2] closing_complete — 서버가 response.done transcript에서
+       "감사합니다" 확인 후 전송. 이 신호 수신 시점이 발화 완전 종료 후이므로 타이밍 정확. */
+    if(msg.type==='closing_complete'){
+      if(closingCompleteReceived)return; /* 중복 방지 */
+      closingCompleteReceived=true;
+      closingDetected=true; /* openai_disconnected 재연결 차단 */
+      sessionActive=false;
+      console.log('[DESIRE] closing_complete 수신 — 1초 후 결과화면 전환');
+      if(pendingResult){
+        /* 고객이 이미 결과버튼 클릭한 경우 즉시 전환 */
+        if(!document.getElementById('result').classList.contains('show'))showResult();
       } else {
-        if(sessionActive)resetIdleTimer();
+        setTimeout(function(){
+          if(!document.getElementById('result').classList.contains('show'))showResult();
+        },1000);
       }
     }
 
@@ -825,7 +814,7 @@ function connectWS(){
 
     if(msg.type==='openai_disconnected'||msg.type==='openai_error'){
       /* ★ 클로징 완료 후 끊김 — 재연결 완전 차단 */
-      if(closingDetected||pendingResult) return;
+      if(closingDetected||pendingResult||closingCompleteReceived) return;
       console.error('[DESIRE] OpenAI 연결 끊김:', msg);
       addSys('⚡ AI 연결이 일시 중단됐습니다. 잠시 후 자동 재연결됩니다...');
       showToast('🔄 AI 재연결 중...', 3000);
@@ -912,7 +901,7 @@ function cleanupMedia(){
   if(mediaStream){mediaStream.getTracks().forEach(function(t){t.stop();});mediaStream=null;}
   if(ws){ws.close();ws=null;}
   if(timerInt){clearInterval(timerInt);timerInt=null;}
-  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;pendingResult=false;e2Answered=false;
+  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;pendingResult=false;e2Answered=false;closingCompleteReceived=false;
   var muteBtn=document.getElementById('mute-btn');
   if(muteBtn)muteBtn.textContent='🔇 음성끄기';
 }
@@ -950,11 +939,25 @@ function sendText(){
 
 /* #1 클릭답변 즉시처리 + #3 CONTINUE */
 function clickAnswer(text){
-  if(text==='SHOW_RESULT'){showResult();return;}
+  if(text==='SHOW_RESULT'){
+    /* [BUG FIX 1] SHOW_RESULT: closing_complete 수신 후면 즉시 전환, 아니면 대기 */
+    if(closingCompleteReceived){
+      showResult();
+    } else {
+      pendingResult=true;
+      showToast('⏳ 머니야 마무리 후 자동으로 결과화면이 열립니다');
+    }
+    return;
+  }
   if(text==='__CONTINUE__'){clearQB();showToast('진단을 계속 진행합니다');return;}
   clearQB();addUser(text);
   if(ws&&ws.readyState===WebSocket.OPEN){
     ws.send(JSON.stringify({type:'text_input',text:text}));
+  }
+  /* [BUG FIX 1] E2 YES/NO 버튼 클릭 시 e2Answered 설정 + 결과버튼 표시 */
+  if(text.indexOf('상속 플랜이 준비되어 있습니다')>-1||text.indexOf('상속 플랜이 아직 없습니다')>-1){
+    e2Answered=true;
+    setTimeout(function(){ setQB(STAGE_BUTTONS.RESULT); }, 500);
   }
   resetIdleTimer();
 }
@@ -1087,18 +1090,28 @@ function showResult(){
   }
   document.getElementById('result').classList.add('show');
 
-  /* 3번 — 브라우저 기본 TTS로 결과화면 읽기 */
+  /* [BUG FIX 4·5] 결과화면 TTS
+     - passCount/curNum은 showResult() 진입 후 확정값 사용 (버그5 해결)
+     - shimmer(WS) 우선, WS 닫힌 경우 브라우저 TTS fallback (버그4 해결) */
   setTimeout(function(){
-    var ctxt = allPass
-      ? '고객님의 DESIRE 로드맵 6단계를 모두 완성하셨습니다! 진심으로 축하드립니다! 오상열 CFP의 60분 본상담에서 더 탄탄한 재무 독립 플랜을 완성해 드리겠습니다.'
-      : '고객님의 현재 단계는 '+curNum+'단계입니다. 지금 알게 되셨으니 개선하실 수 있어요! 오상열 CFP의 60분 본상담에서 각 단계별 실행 플랜을 함께 완성해 드리겠습니다.';
-    if('speechSynthesis' in window){
-      window.speechSynthesis.cancel();
-      var utt = new SpeechSynthesisUtterance(ctxt);
-      utt.lang = 'ko-KR';
-      utt.rate = 1.0;
-      utt.pitch = 1.0;
-      window.speechSynthesis.speak(utt);
+    var resultSpeech = allPass
+      ? '고객님의 DESIRE 로드맵 6단계를 모두 완성하셨습니다! 진심으로 축하드립니다! 오상열 씨에프피의 60분 본상담에서 더 탄탄한 재무 독립 플랜을 완성해 드리겠습니다.'
+      : '고객님의 현재 단계는 '+curNum+'단계입니다. 오늘 '+passCount+'단계를 통과하셨습니다. 지금 알게 되셨으니 개선하실 수 있어요! 오상열 씨에프피의 60분 본상담에서 각 단계별 실행 플랜을 함께 완성해 드리겠습니다.';
+    if(ws && ws.readyState===1){
+      /* shimmer 음성 우선 (WS 살아있을 때) */
+      console.log('[DESIRE] showResult tts_speak → shimmer 전송');
+      ws.send(JSON.stringify({type:'tts_speak', text:resultSpeech}));
+    } else {
+      /* WS 닫힌 경우 브라우저 기본 TTS fallback */
+      console.log('[DESIRE] showResult — WS 닫힘, 브라우저 TTS fallback');
+      if('speechSynthesis' in window){
+        window.speechSynthesis.cancel();
+        var utt = new SpeechSynthesisUtterance(resultSpeech);
+        utt.lang = 'ko-KR';
+        utt.rate = 1.0;
+        utt.pitch = 1.0;
+        window.speechSynthesis.speak(utt);
+      }
     }
   }, 800);
 }
@@ -1110,7 +1123,7 @@ function restartDiag(){
   document.getElementById('result').classList.remove('show');
   stageRes={};curStageKey='D';timerSec=0;
   sessionActive=false;reconnectCount=0;
-  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;pendingResult=false;e2Answered=false;
+  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;pendingResult=false;e2Answered=false;closingCompleteReceived=false;
   var muteBtn=document.getElementById('mute-btn');
   if(muteBtn)muteBtn.textContent='🔇 음성끄기';
   lastAiText='';
