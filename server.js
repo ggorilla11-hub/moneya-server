@@ -526,7 +526,7 @@ app.post('/api/desire-feedback', async (req, res) => {
     const payload = req.body;
     console.log('[DESIRE-FB] 피드백 수신:', JSON.stringify(payload));
 
-    const SHEET_URL = 'https://script.google.com/macros/s/AKfycbzWuaLuARVwLYCeSrZkGVN1tmjSrsTtdNGdNTJcgR_MLQ7kj7YY1treilP-rViILb1mew/exec';
+    const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwQ0lVhbuSEDLf8E8ILVZbCX2HU1NQgWW-G8yqRXMc3dmRpYbaYUvkBSlCuy9vf9yGTeA/exec';
 
     const response = await fetch(SHEET_URL, {
       method: 'POST',
@@ -965,6 +965,7 @@ wss.on('connection', (ws, req) => {
 • 반드시 존댓말. 한국어로만 대화.
 • 이모지·특수문자 사용 금지. 음성으로 읽히는 멘트만 사용.
 • 금칙어: 재무상담사, 재무설계사, 특정 금융상품 추천, 수익 보장, 부부(반드시 '고객님'으로 대체).
+• 발음 원칙: "CFP"는 반드시 "씨에프피"로 발음하세요. 절대 "씨에프피" 이외의 발음 금지.
 
 【★ 고객 중단 신호 — 최우선 처리 원칙 ★】
 • 고객이 아래 중단 신호를 보내면 즉시 하던 말을 멈추고 "네, 고객님! 말씀하세요." 라고 짧게 답한 뒤 고객의 말을 경청하세요.
@@ -989,9 +990,9 @@ wss.on('connection', (ws, req) => {
   - 6단계 Early Retirement: 네/있습니다/없습니다/아니오/있어요/없어요
 
 【★ 클로징 후 완전 종료 원칙 ★】
-• 클로징 멘트("안녕히 계세요!")를 말한 후에는 완전히 대화를 종료하세요.
+• 클로징 멘트("감사합니다!")를 말한 후에는 완전히 대화를 종료하세요.
 • 클로징 이후 고객이 무슨 말을 해도 절대 새로운 대화를 시작하지 마세요.
-• "안녕히 계세요"를 한 번이라도 말했으면 그 이후로는 완전히 침묵을 유지하세요.
+• "감사합니다"를 클로징으로 한 번이라도 말했으면 그 이후로는 완전히 침묵을 유지하세요.
 
 ═══════════════════════════════════════
 【진단 흐름】
@@ -1082,7 +1083,7 @@ wss.on('connection', (ws, req) => {
 "평생 쌓아온 자산이 다음 세대로 온전히 이전되려면 상속과 증여 설계가 반드시 필요합니다."
 
 【클로징 — 6단계 Early Retirement 답변 직후 반드시 읽어주세요】
-"고객님의 DESIRE 로드맵 진단이 완료되었습니다. 지금 알게 되셨으니 개선하실 수 있어요! 60분 본상담에서 각 단계별 월별 실행 플랜을 함께 완성해 드리겠습니다. 안녕히 계세요!"
+"고객님의 DESIRE 로드맵 진단이 완료되었습니다. 지금 알게 되셨으니 개선하실 수 있어요! 60분 본상담에서 각 단계별 월별 실행 플랜을 함께 완성해 드리겠습니다. 감사합니다!"
 → 이 인사 이후 고객이 무슨 말을 해도 절대 응답하지 마세요. 완전히 침묵을 유지하세요.
 
 ═══════════════════════════════════════
@@ -1166,7 +1167,7 @@ wss.on('connection', (ws, req) => {
               for (const out of outputs) {
                 const textContent = out.content?.find(c => c.type === 'text' || c.type === 'audio');
                 const transcript = textContent?.transcript || textContent?.text || '';
-                if (transcript.includes('안녕히 계세요') || transcript.includes('진단이 완료')) {
+                if (transcript.includes('감사합니다') && transcript.includes('진단이 완료')) {
                   console.log('[DESIRE-WS] 클로징 감지 → 결과화면 전송');
                   setTimeout(() => {
                     try { ws.send(JSON.stringify({ type: 'result', stages: {} })); } catch(e) {}
