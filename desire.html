@@ -804,12 +804,11 @@ function connectWS(){
 
     /* [10번] AI 응답 완전 종료 신호 — 이 시점부터 idleTimer 카운트 */
     if(msg.type==='response_done'){
-      if(closingDetected||pendingResult){
-        /* ★ 머니야 발화 완전 종료 → 1초 후 결과화면 자동 전환 */
+      if(e2Answered){
+        /* ★ 머니야 발화 완전 종료 + E2 답변 완료 → 1초 후 결과화면 */
         sessionActive=false;
         setTimeout(function(){
           if(!document.getElementById('result').classList.contains('show')){
-            console.log('[DESIRE] response_done → 결과화면 전환');
             showResult();
           }
         },1000);
