@@ -1,14 +1,10 @@
 <!DOCTYPE html>
 <!--
-  파일명  : desire.html | DESIRE-001 | v2.0.0 | 2026-03-13
-  변경    : 시뮬레이터 v2 UI 기준 전면 재작성
-            · 클릭 버튼 (동의/네/아니오 등) 유지
-            · 잠깐 멈춤 / 다시 듣기 / 힌트 버튼 추가
-            · 성함 질문 제거 (오프닝 후 바로 동의)
-            · S단계 가족수 기반 저축률 계산
-            · 진단 결과 후 재시작 오류 수정 (sessionActive 플래그)
-            · VAD + 클릭 이중 입력 구조
-            · MVP BETA 배지 유지
+  파일명  : desire.html | DESIRE-001 | v2.0.1 | 2026-03-15
+  변경    : v2.0.0 → v2.0.1 타이밍 버그 수정
+            · [FIX-1] 중복 clickAnswer 제거 — pendingResult 로직 보존
+            · [FIX-2] response_done에 closingDetected 조건 추가
+            · [FIX-3] transcript 감지 시 pendingResult 즉시 처리 추가
 -->
 <html lang="ko">
 <head>
@@ -97,7 +93,6 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 .tb-sub{font-size:10px;color:var(--txt2);}
 .live-pill{display:flex;align-items:center;gap:5px;background:rgba(52,199,89,.11);border:1px solid rgba(52,199,89,.3);padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;color:var(--green2);}
 .ldot{width:6px;height:6px;border-radius:50%;background:var(--green2);animation:blink 1.8s infinite;}
-/* #12 타이머 강조 표시 */
 .tmr{font-size:13px;color:var(--gold2);font-weight:900;margin-left:6px;background:rgba(201,165,62,.12);border:1px solid rgba(201,165,62,.3);padding:3px 9px;border-radius:12px;letter-spacing:.5px;}
 
 /* 머니야 배너 */
@@ -143,7 +138,6 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 .msg.sys .msg-bubble{background:rgba(201,165,62,.1);border:1px solid rgba(201,165,62,.25);color:var(--gold2);font-size:11px;font-weight:700;padding:5px 14px;border-radius:20px;}
 
 /* 빠른 버튼 */
-/* #7 안내배너 상하 여백 확대 — TTS/STT 오입력 방지 */
 .quick-btns{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px 12px;border-top:1px solid var(--border);margin-top:4px;}
 .qb{padding:8px 14px;border-radius:20px;border:1px solid rgba(201,165,62,.4);background:rgba(201,165,62,.08);color:var(--gold2);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;}
 .qb:active{transform:scale(.97);}
@@ -208,16 +202,13 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 .rc-bi2:last-child{border-bottom:none;}
 .rc-chk{color:var(--green2);font-weight:900;flex-shrink:0;}
 .survey-wrap{margin:0 18px 14px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:14px;}
-/* #13 설문 입력 필드 */
 .sv-inp{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--txt);font-size:13px;font-family:inherit;outline:none;}
 .sv-inp:focus{border-color:rgba(201,165,62,.4);}
 .sv-req{color:#f87171;font-size:10px;margin-left:3px;}
-/* #13 개인정보동의 */
 .sv-agree{margin:10px 0 6px;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(201,165,62,.2);border-radius:8px;}
 .sv-agree-label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt);cursor:pointer;}
 .sv-agree-label input{accent-color:var(--gold2);width:16px;height:16px;cursor:pointer;}
 .sv-agree-detail{font-size:10px;color:var(--txt2);margin-top:5px;line-height:1.5;padding-left:22px;}
-/* #4 상담 다시하기 버튼 */
 .rc-restart{padding:14px 18px 4px;text-align:center;}
 .rc-restart-btn{background:rgba(255,255,255,.08);border:1px solid var(--border);color:var(--txt2);padding:11px 28px;border-radius:24px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
 .sv-title{font-size:12px;font-weight:900;color:var(--gold2);margin-bottom:12px;}
@@ -409,7 +400,7 @@ html,body{height:100%;font-family:'Noto Sans KR',sans-serif;background:var(--bg)
 </div>
 
 <script>
-/* DESIRE-001 | v2.0.0 | 시뮬레이터 v2 기준 */
+/* DESIRE-001 | v2.0.1 | 타이밍 버그 수정 */
 var LOGO='https://firebasestorage.googleapis.com/v0/b/moneya-72fe6.firebasestorage.app/o/AI%EB%A8%B8%EB%8B%88%EC%95%BC%20%ED%99%95%EC%A0%95%EC%9D%B4%EB%AF%B8%EC%A7%80%EC%95%88.png?alt=media&token=c250863d-7cda-424a-800d-884b20e30b1a';
 var WS_URL='wss://moneya-server.onrender.com';
 var isBeta=new URLSearchParams(location.search).get('mode')==='beta';
@@ -438,7 +429,6 @@ var surveyData={star:0,helpful:'',voice:'',willPay:'',comment:''};
   if(isKakao){
     document.getElementById('kakao-banner').classList.add('show');
     document.getElementById('landing').style.paddingTop='130px';
-    /* ★ 카카오 인앱브라우저에서는 시작 버튼 완전 차단 */
     window.addEventListener('DOMContentLoaded',function(){
       var cta=document.querySelector('.lo-cta');
       if(cta){
@@ -485,7 +475,7 @@ function renderBar(){
   }).join('');
 }
 
-/* ══ 단계별 안내배너 버튼 정의 (시뮬레이터 v2 기준) ══ */
+/* ══ 단계별 안내배너 버튼 정의 ══ */
 var STAGE_BUTTONS = {
   OPENING: [
     {label:'✅ 동의하고 시작합니다', text:'동의하고 시작합니다', gold:true}
@@ -546,70 +536,54 @@ var STAGE_BUTTONS = {
 
 /* ══ AI 메시지에서 단계 감지 → 자동 버튼 표시 ══ */
 function detectStageAndSetButtons(html){
-  /* 클로징 / 결과 — 버튼만 표시, showResult() 직접 호출 안 함 */
-  /* ★ 결과버튼은 E2 YES/NO 답변 전송 시점에만 표시 (sendUserText에서 처리) */
   if(html.indexOf('결과를 확인')>-1){
     setQB(STAGE_BUTTONS.RESULT); return;
   }
-  /* E2 단계 */
   if(html.indexOf('상속 플랜')>-1||html.indexOf('마지막 질문')>-1||html.indexOf('경제적 조기은퇴')>-1){
     curStageKey='E2'; if(!stageRes['E2'])stageRes['E2']='cur';
     setQB(STAGE_BUTTONS.E2); return;
   }
-  /* R 단계 — 통과/과제 후 다음버튼 */
   if((html.indexOf('R단계 통과')>-1||html.indexOf('완납이 원칙')>-1)&&html.indexOf('E단계')>-1){
     setQB(STAGE_BUTTONS.R_NEXT); return;
   }
-  /* R 단계 질문 */
   if(html.indexOf('주택담보대출')>-1&&html.indexOf('남아')>-1){
     curStageKey='R'; if(!stageRes['R'])stageRes['R']='cur';
     setQB(STAGE_BUTTONS.R); return;
   }
-  /* I 단계 — 통과/과제 후 다음버튼 */
   if((html.indexOf('I단계 통과')>-1||html.indexOf('10억원 포트폴리오')>-1)&&html.indexOf('R단계')>-1){
     setQB(STAGE_BUTTONS.I_NEXT); return;
   }
-  /* I 단계 질문 */
   if(html.indexOf('10억원 이상')>-1||html.indexOf('거치식')>-1||html.indexOf('금융자산')>-1){
     curStageKey='I'; if(!stageRes['I'])stageRes['I']='cur';
     setQB(STAGE_BUTTONS.I); return;
   }
-  /* S 단계 — 저축 달성여부 질문 */
   if(html.indexOf('저축')>-1&&html.indexOf('하고 계신가요')>-1){
     setQB(STAGE_BUTTONS.S); return;
   }
-  /* S 단계 — 월 소득 질문 */
   if(html.indexOf('월 소득')>-1&&html.indexOf('얼마')>-1){
     setQB(STAGE_BUTTONS.S_INC); return;
   }
-  /* S 단계 — 통과/과제 후 다음버튼 */
   if((html.indexOf('S단계 통과')>-1||html.indexOf('앞으로 맞춰가면')>-1)&&html.indexOf('I단계')>-1){
     setQB(STAGE_BUTTONS.S_NEXT); return;
   }
-  /* S 단계 — 가족구성 질문 */
   if(html.indexOf('가족')>-1&&(html.indexOf('결혼')>-1||html.indexOf('몇 명')>-1)){
     curStageKey='S'; if(!stageRes['S'])stageRes['S']='cur';
     setQB(STAGE_BUTTONS.S_FAM); return;
   }
-  /* E 단계 — 통과/과제 후 다음버튼 */
   if((html.indexOf('E단계 통과')>-1||html.indexOf('병행')>-1||html.indexOf('분리 계좌')>-1)&&html.indexOf('S단계')>-1){
     setQB(STAGE_BUTTONS.E_NEXT); return;
   }
-  /* E 단계 질문 */
   if(html.indexOf('비상예비자금')>-1&&html.indexOf('준비')>-1){
     curStageKey='E'; if(!stageRes['E'])stageRes['E']='cur';
     setQB(STAGE_BUTTONS.E); return;
   }
-  /* D 단계 — 통과/과제 후 다음버튼 */
   if((html.indexOf('D단계 통과')>-1||html.indexOf('스노우볼')>-1)&&html.indexOf('E단계')>-1){
     setQB(STAGE_BUTTONS.D_NEXT); return;
   }
-  /* D 단계 질문 */
   if(html.indexOf('신용대출')>-1&&(html.indexOf('있으신가요')>-1||html.indexOf('카드론')>-1)){
     curStageKey='D'; if(!stageRes['D'])stageRes['D']='cur';
     setQB(STAGE_BUTTONS.D); return;
   }
-  /* 오프닝 — 동의 질문 */
   if(html.indexOf('동의하시겠어요')>-1||html.indexOf('동의')>-1){
     setQB(STAGE_BUTTONS.OPENING); return;
   }
@@ -624,7 +598,6 @@ function addAI(html){
   d.innerHTML='<div class="msg-av"><img src="'+LOGO+'" alt="머니야" onerror="this.parentElement.textContent=\'💰\'"></div>'
     +'<div class="msg-bubble">'+html+'</div>';
   area.appendChild(d);area.scrollTop=area.scrollHeight;
-  /* [2번] 통과 표시 — 풀네임 포함 확장 */
   if(html.indexOf('1단계 Debt Free 통과')>-1||html.indexOf('D단계 통과')>-1)stageRes['D']='pass';
   if(html.indexOf('2단계 Emergency Fund 통과')>-1||html.indexOf('E단계 통과')>-1)stageRes['E']='pass';
   if(html.indexOf('3단계 Savings 통과')>-1||html.indexOf('S단계 통과')>-1)stageRes['S']='pass';
@@ -635,7 +608,6 @@ function addAI(html){
   detectStageAndSetButtons(html);
   var stage=SG.find(function(s){return s.k===curStageKey;});
   if(stage)document.getElementById('mb-status').textContent=stage.nm+' 진행 중';
-  /* [6번] AI 발화 후 idleTimer 리셋 */
   if(sessionActive)resetIdleTimer();
 }
 function addUser(text){
@@ -662,26 +634,34 @@ function setQB(btns){
   }).join('');
 }
 function clearQB(){document.getElementById('quick-btns').innerHTML='';}
+
+/* ══════════════════════════════════════════════════════
+   [FIX-1] clickAnswer — 단일 함수, pendingResult 로직 완전 보존
+   v2.0.0에서 두 번째 clickAnswer가 이 함수를 덮어써서
+   closingDetected 체크 없이 즉시 showResult()를 호출하는 버그 수정
+   ══════════════════════════════════════════════════════ */
 function clickAnswer(text){
   if(text==='SHOW_RESULT'){
     if(closingDetected){
-      /* 이미 클로징 감지됨 — 즉시 결과화면 전환 */
+      /* 이미 클로징 완료 — 즉시 결과화면 전환 */
       showResult();
     } else {
-      /* 아직 머니야가 말하는 중 — closingDetected 대기 플래그 설정 */
+      /* 머니야가 아직 발화 중 — response_done 후 자동 전환 대기 */
       pendingResult=true;
       showToast('⏳ 머니야 마무리 후 자동으로 결과화면이 열립니다');
     }
     return;
   }
+  if(text==='__CONTINUE__'){clearQB();showToast('진단을 계속 진행합니다');return;}
   if(!ws||ws.readyState!==WebSocket.OPEN)return;
   clearQB();addUser(text);
   ws.send(JSON.stringify({type:'text_input',text:text}));
-  /* ★ E2 YES/NO 답변 전송 직후 → 결과버튼 표시 (머니야 답변 나오면 클릭 가능) */
+  /* E2 YES/NO 답변 전송 직후 → 0.5초 후 결과버튼 표시 */
   if(text.indexOf('상속 플랜이 준비되어 있습니다')>-1||text.indexOf('상속 플랜이 아직 없습니다')>-1){
     e2Answered=true;
     setTimeout(function(){ setQB(STAGE_BUTTONS.RESULT); }, 500);
   }
+  resetIdleTimer();
 }
 
 /* 오디오 */
@@ -728,13 +708,12 @@ function connectWS(){
   var heartbeatInt=null;
   ws.onopen=function(){
     ws.send(JSON.stringify({type:'start_desire'}));
-    /* Heartbeat — 25초마다 ping 전송 (삼성브라우저 절전 차단) */
     if(heartbeatInt)clearInterval(heartbeatInt);
     heartbeatInt=setInterval(function(){
       if(ws&&ws.readyState===WebSocket.OPEN){
         ws.send(JSON.stringify({type:'ping'}));
       }
-    },15000); // ★ 15초마다 ping — Render 60초 타임아웃 방지
+    },15000);
   };
   ws.onmessage=function(e){
     var msg;try{msg=JSON.parse(e.data);}catch(err){return;}
@@ -752,8 +731,6 @@ function connectWS(){
       document.getElementById('tmr').style.display='block';
       document.getElementById('mb-status').textContent='AI 음성 재무진단 진행 중...';
       startTimer();startMicCapture();
-      /* 오프닝 버튼은 AI가 동의 멘트를 말하면 detectStageAndSetButtons가 자동 표시 */
-      /* 만약 10초 내 버튼이 안 나타나면 보조로 표시 */
       setTimeout(function(){
         var qb=document.getElementById('quick-btns');
         if(!qb.innerHTML.trim())setQB(STAGE_BUTTONS.OPENING);
@@ -763,29 +740,35 @@ function connectWS(){
     if(msg.type==='transcript'&&msg.text){
       if(msg.role==='assistant'){
         addAI(msg.text);
-        /* ★ 클로징 멘트 감지 → 즉시 결과화면 표시 (서버 연결 끊기기 전에 처리) */
-        /* ★ 클로징 감지 — E2단계 이후 "감사합니다" 단독 감지 */
-        if(msg.text.indexOf('감사합니다')>-1 && e2Answered){
-          if(!closingDetected){
-            closingDetected=true;
-            console.log('[DESIRE] 클로징 감지 — shimmer 전송 준비 (결과전환은 response_done 후)');
 
-            /* ① shimmer에게 결과 멘트 전송 (WS 살아있을 때) */
-            var passCount2=SG.filter(function(s){return stageRes[s.k]==='pass';}).length;
-            var allPass2=passCount2>=6;
-            var resultSpeech = allPass2
-              ? '고객님, DESIRE 로드맵 6단계를 모두 완성하셨습니다! 정말 대단하십니다! 오상열 CFP의 60분 본상담에서 더 탄탄한 재무 독립 플랜을 완성해 드리겠습니다.'
-              : '고객님의 DESIRE 진단 결과를 안내드립니다. 오늘 '+passCount2+'단계를 통과하셨습니다. 지금 알게 되셨으니 반드시 개선하실 수 있어요! 오상열 CFP의 60분 본상담에서 각 단계별 실행 플랜을 함께 완성해 드리겠습니다.';
-            if(ws && ws.readyState===1){
-              ws.send(JSON.stringify({type:'tts_speak', text: resultSpeech}));
-            }
-            /* ★ 결과화면 전환은 response_done 수신 후 처리 (머니야 발화 완전 종료 후) */
+        /* ══════════════════════════════════════════════════════
+           [FIX-3] 클로징 감지 — "감사합니다" + e2Answered
+           감지 즉시 closingDetected=true 설정
+           pendingResult=true인 경우 response_done을 기다리지 않고
+           오디오 큐 소진 후 즉시 전환 (transcript는 오디오보다 먼저 도착)
+           ══════════════════════════════════════════════════════ */
+        if(msg.text.indexOf('감사합니다')>-1 && e2Answered && !closingDetected){
+          closingDetected=true;
+          console.log('[DESIRE] 클로징 감지 (transcript) — response_done 대기 중');
+
+          /* shimmer에게 결과 멘트 전송 */
+          var passCount2=SG.filter(function(s){return stageRes[s.k]==='pass';}).length;
+          var allPass2=passCount2>=6;
+          var resultSpeech = allPass2
+            ? '고객님, DESIRE 로드맵 6단계를 모두 완성하셨습니다! 정말 대단하십니다! 오상열 CFP의 60분 본상담에서 더 탄탄한 재무 독립 플랜을 완성해 드리겠습니다.'
+            : '고객님의 DESIRE 진단 결과를 안내드립니다. 오늘 '+passCount2+'단계를 통과하셨습니다. 지금 알게 되셨으니 반드시 개선하실 수 있어요! 오상열 CFP의 60분 본상담에서 각 단계별 실행 플랜을 함께 완성해 드리겠습니다.';
+          if(ws && ws.readyState===1){
+            ws.send(JSON.stringify({type:'tts_speak', text: resultSpeech}));
+          }
+          /* [FIX-3] pendingResult가 이미 true면 결과화면 준비 상태 유지
+             — response_done 핸들러에서 최종 전환 처리 */
+          if(pendingResult){
+            console.log('[DESIRE] pendingResult=true — response_done 후 즉시 전환 예정');
           }
         }
       }
       if(msg.role==='user'&&msg.source!=='text'){
         addUser(msg.text);
-        /* ★ 중단 신호 감지 — 시각적 표시 */
         var stopWords=['여보세요','잠깐요','잠깐만요','틀렸어요','다시요','수정해','아닌데요','다르게요'];
         var isStop=stopWords.some(function(s){return msg.text.indexOf(s)>-1;});
         if(isStop){
@@ -802,34 +785,37 @@ function connectWS(){
       document.getElementById('wave-bars').classList.add('idle');
     }
 
-    /* [10번] AI 응답 완전 종료 신호 — 이 시점부터 idleTimer 카운트 */
+    /* ══════════════════════════════════════════════════════
+       [FIX-2] response_done — closingDetected AND e2Answered 둘 다 확인
+       v2.0.0 버그: e2Answered만 체크 → E2 첫 답변 response_done에서도 전환
+       수정: closingDetected가 true일 때만 결과화면으로 전환
+       ══════════════════════════════════════════════════════ */
     if(msg.type==='response_done'){
-      if(e2Answered){
-        /* ★ 머니야 발화 완전 종료 + E2 답변 완료 → 1초 후 결과화면 */
+      if(closingDetected && e2Answered){
+        /* 머니야 "감사합니다" 발화 완전 종료 확인됨 → 1초 후 결과화면 */
         sessionActive=false;
         setTimeout(function(){
           if(!document.getElementById('result').classList.contains('show')){
+            console.log('[DESIRE] response_done + closingDetected → 결과화면 전환');
             showResult();
           }
         },1000);
       } else {
+        /* 일반 response_done — idle 타이머만 리셋 */
         if(sessionActive)resetIdleTimer();
       }
     }
 
     if(msg.type==='duplicate_session'){
-      /* 중복 세션 — 재연결 시도 안 함, 현재 세션 유지 안내 */
       console.log('[DESIRE] 중복 세션 감지 — 현재 탭에서 계속 진행');
       return;
     }
 
     if(msg.type==='openai_disconnected'||msg.type==='openai_error'){
-      /* ★ 클로징 완료 후 끊김 — 재연결 완전 차단 */
       if(closingDetected||pendingResult) return;
       console.error('[DESIRE] OpenAI 연결 끊김:', msg);
       addSys('⚡ AI 연결이 일시 중단됐습니다. 잠시 후 자동 재연결됩니다...');
       showToast('🔄 AI 재연결 중...', 3000);
-      /* 3초 후 자동 재연결 시도 */
       setTimeout(function(){
         if(!document.getElementById('result').classList.contains('show')){
           sessionActive=false;
@@ -840,7 +826,6 @@ function connectWS(){
 
     if(msg.type==='result'){
       if(msg.stages)stageRes=msg.stages;
-      /* result 메시지는 closingDetected 타이머가 처리 — 중복 방지 */
       if(!closingDetected){
         showResult();
         sessionActive=false;
@@ -850,27 +835,22 @@ function connectWS(){
   };
   ws.onclose=function(){
     if(heartbeatInt){clearInterval(heartbeatInt);heartbeatInt=null;}
-    /* 진단 완료 후 종료는 정상 — 결과화면이 열려있으면 무시 */
     if(document.getElementById('result').classList.contains('show'))return;
-    /* ★ closingDetected 먼저 체크 — sessionActive보다 우선 */
     if(closingDetected){
-      /* 머니야가 감사합니다까지 완전히 읽을 시간 4초 확보 후 결과화면 전환 */
+      /* ws 종료 fallback — response_done이 안 왔을 경우 안전망 */
       setTimeout(function(){
         if(!document.getElementById('result').classList.contains('show')){
+          console.log('[DESIRE] ws.onclose fallback → 결과화면 전환');
           showResult();
         }
       },4000);
       return;
     }
-    /* 정상 종료 — sessionActive=false면 무시 */
-    if(sessionActive===false){
-      return;
-    }
+    if(sessionActive===false){return;}
     if(reconnectCount<5){
       reconnectCount++;
       document.getElementById('reconnect-txt').textContent='🔄 재연결 중... ('+reconnectCount+'/5)';
       document.getElementById('reconnect-banner').classList.add('show');
-      /* 재연결 시 채팅에도 안내 */
       if(reconnectCount===1&&document.getElementById('chat-area').style.display!=='none'){
         addSys('⚡ 연결이 일시 끊겼습니다. 자동 재연결 중...');
       }
@@ -895,7 +875,7 @@ function startSession(){
     .catch(function(){alert('마이크 권한이 필요합니다.\n브라우저 주소창 왼쪽 자물쇠 → 마이크 허용');});
 }
 
-/* #3 종료 버튼 → 안내배너로 선택 */
+/* 종료 버튼 */
 function endSession(){
   clearQB();
   setQB([
@@ -906,52 +886,40 @@ function endSession(){
 }
 
 function cleanupMedia(){
-  sessionActive=true;
+  sessionActive=false;
   if(idleTimer){clearTimeout(idleTimer);idleTimer=null;}
   if(processor){processor.disconnect();processor=null;}
   if(mediaStream){mediaStream.getTracks().forEach(function(t){t.stop();});mediaStream=null;}
   if(ws){ws.close();ws=null;}
   if(timerInt){clearInterval(timerInt);timerInt=null;}
-  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;pendingResult=false;e2Answered=false;
+  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;
   var muteBtn=document.getElementById('mute-btn');
   if(muteBtn)muteBtn.textContent='🔇 음성끄기';
 }
 
-/* [6번] 대기 모드 — 30초, AI발화 후 리셋, 결과화면 중단 */
+/* idle 타이머 */
 var idleTimer=null;var idleCount=0;
 function resetIdleTimer(){
   if(idleTimer)clearTimeout(idleTimer);
   idleTimer=setTimeout(function(){
     if(document.getElementById('result').classList.contains('show'))return;
     var qb=document.getElementById('quick-btns');
-    /* 버튼이 이미 있으면 메시지 표시 안 함 */
     if(!qb.innerHTML.trim()){
       idleCount++;
       if(idleCount===1)addSys('💬 버튼을 누르거나 말씀해 주세요.');
       var btns=STAGE_BUTTONS[curStageKey]||STAGE_BUTTONS.OPENING;
       setQB(btns);
     }
-  },60000); /* 30초→60초로 늘림 */
+  },60000);
 }
 
-/* #8 텍스트 입력 — 엔터키 전 구간 정상 */
+/* 텍스트 입력 */
 function sendText(){
   var inp=document.getElementById('inp');
   var text=(inp.value||'').trim();
   if(!text)return;
   if(text==='SHOW_RESULT'){showResult();return;}
   inp.value='';
-  clearQB();addUser(text);
-  if(ws&&ws.readyState===WebSocket.OPEN){
-    ws.send(JSON.stringify({type:'text_input',text:text}));
-  }
-  resetIdleTimer();
-}
-
-/* #1 클릭답변 즉시처리 + #3 CONTINUE */
-function clickAnswer(text){
-  if(text==='SHOW_RESULT'){showResult();return;}
-  if(text==='__CONTINUE__'){clearQB();showToast('진단을 계속 진행합니다');return;}
   clearQB();addUser(text);
   if(ws&&ws.readyState===WebSocket.OPEN){
     ws.send(JSON.stringify({type:'text_input',text:text}));
@@ -970,33 +938,19 @@ function replayAI(){
 function pauseAI(){
   isPaused=!isPaused;
   if(isPaused){
-    /* 오디오 큐 비우기 + 현재 재생 중단 */
     audioQueue=[];isPlaying=false;
-    if(currentSource){try{currentSource.stop();}catch(e){}}
-    /* OpenAI 응답 중단 신호 전송 */
-    if(ws&&ws.readyState===1){
-      ws.send(JSON.stringify({type:'pause_ai'}));
-    }
+    if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'pause_ai'}));}
     showToast('⏸ AI 응답을 멈췄습니다');
   } else {
     showToast('▶ AI 응답을 재개합니다');
-    if(ws&&ws.readyState===1){
-      ws.send(JSON.stringify({type:'resume_ai'}));
-    }
+    if(ws&&ws.readyState===1){ws.send(JSON.stringify({type:'resume_ai'}));}
   }
 }
-function showHint(){
-  var h={D:'💡 카드론·마이너스통장·현금서비스 포함',E:'💡 분리 계좌에 3~6개월치 생활비 보관',S:'💡 저축률=(적금+투자+연금)÷월소득×100',I:'💡 ETF·펀드·주식 등 목돈 거치식 투자',R:'💡 은퇴 전 완납이 원칙',E2:'💡 유언장+가업승계+증여설계 포함'};
-  showToast(h[curStageKey]||'💡 진단을 계속 진행해주세요');
-}
-
 function toggleMute(){
   isMuted=!isMuted;
   var btn=document.getElementById('mute-btn');
   if(isMuted){
-    /* 현재 재생 중인 오디오 중지 + 큐 비우기 */
     audioQueue=[];isPlaying=false;
-    if(currentSource){try{currentSource.stop();}catch(e){}}
     if(btn)btn.textContent='🔊 음성켜기';
     showToast('🔇 음성을 껐습니다. 채팅으로 계속 진행됩니다.');
   } else {
@@ -1005,8 +959,7 @@ function toggleMute(){
   }
 }
 
-/* #11 결과화면 — 마지막 클로징 문구 포함 */
-/* DESIRE FULLNAME 정의 */
+/* DESIRE FULLNAME */
 var SG_FULLNAME=[
   {k:'D',  num:1, full:'D — Debt Free',        desc:'신용대출이 있으면 이 단계',        color:'#DC2626'},
   {k:'E',  num:2, full:'E — Emergency Fund',    desc:'비상예비자금이 없으면 이 단계',    color:'#D97706'},
@@ -1018,7 +971,6 @@ var SG_FULLNAME=[
 
 function showResult(){
   cleanupMedia();
-  /* [8번] TTS 중복 방지 — 결과화면 진입 시 기존 TTS 즉시 취소 */
   if('speechSynthesis' in window)window.speechSynthesis.cancel();
   var passCount=SG.filter(function(s){return stageRes[s.k]==='pass';}).length;
   var curStage=SG.find(function(s){return stageRes[s.k]==='cur';})||null;
@@ -1028,7 +980,6 @@ function showResult(){
   document.getElementById('rc-em').textContent=allPass?'🏆':'🎯';
   document.getElementById('rc-t').textContent=allPass?'DESIRE 완성! 행복한 조기은퇴를 응원합니다!':'DESIRE 진단 완료!';
 
-  /* [2번] 최종단계 컬러 배너 */
   var stageAnnounce='';
   if(!allPass&&curStage){
     var cf=SG_FULLNAME.find(function(x){return x.k===curStage.k;});
@@ -1045,7 +996,6 @@ function showResult(){
       +'</div>';
   }
 
-  /* [2번] DESIRE FULLNAME 전체 단계 목록 */
   var fnHtml='<div style="background:rgba(255,255,255,.04);border-radius:12px;padding:14px;margin-bottom:12px;">'
     +'<div style="font-size:11px;font-weight:900;color:var(--gold);margin-bottom:10px;letter-spacing:.5px;">📖 DESIRE 로드맵 전체 단계</div>'
     +SG_FULLNAME.map(function(x){
@@ -1070,11 +1020,10 @@ function showResult(){
 
   document.getElementById('rc-stages').innerHTML=stageAnnounce+fnHtml;
 
-  /* [3번] 개선하실 수 있어요 */
   var closing='<br><br><em>지금 알게 되셨으니 개선하실 수 있어요!</em><br>60분 본상담에서 각 단계별 월별 실행 플랜을 함께 완성해 드리겠습니다.';
   var msg=allPass
     ?'🎉 DESIRE 로드맵 <strong>6단계를 모두 완성</strong>하셨습니다!<br><br>AI 금융집사 머니야와 함께 더 탄탄한 재무 독립을 완성해 가시기 바랍니다!'+closing
-    :'오늘 진단에서 <strong>'+passCount+'단계를 통과</strong>하셨습니다.<br><br>현재 <strong>'+curNum+'단계('+( curStage?curStage.nm:'D단계')+')</strong>가 가장 중요한 과제입니다.<br><br>돈의 순서를 올바르게 밟아가시면 반드시 <strong>경제적 조기은퇴</strong>에 도달하실 수 있습니다.'+closing;
+    :'오늘 진단에서 <strong>'+passCount+'단계를 통과</strong>하셨습니다.<br><br>현재 <strong>'+curNum+'단계('+( curStage?curStage.nm:'D단계')+')</strong>가 가장 중요한 과제입니다.<br><br>돈의 순서를 올바르게 밟아가시면 반드시 <strong>경제적 조기은퇴</strong>에 도달하실 수 있어요.'+closing;
   document.getElementById('rc-mb').innerHTML=msg;
 
   var restartBtn='<div class="rc-restart"><button class="rc-restart-btn" onclick="restartDiag()">🔄 상담 다시하기</button></div>';
@@ -1087,7 +1036,7 @@ function showResult(){
   }
   document.getElementById('result').classList.add('show');
 
-  /* 3번 — 브라우저 기본 TTS로 결과화면 읽기 */
+  /* 브라우저 기본 TTS로 결과화면 읽기 */
   setTimeout(function(){
     var ctxt = allPass
       ? '고객님의 DESIRE 로드맵 6단계를 모두 완성하셨습니다! 진심으로 축하드립니다! 오상열 CFP의 60분 본상담에서 더 탄탄한 재무 독립 플랜을 완성해 드리겠습니다.'
@@ -1105,7 +1054,6 @@ function showResult(){
 
 /* 상담 다시하기 */
 function restartDiag(){
-  /* [8번] TTS 중복 방지 */
   if('speechSynthesis' in window)window.speechSynthesis.cancel();
   document.getElementById('result').classList.remove('show');
   stageRes={};curStageKey='D';timerSec=0;
@@ -1129,7 +1077,7 @@ function restartDiag(){
   startSession();
 }
 
-/* #13 설문 — 이름/전화번호/이메일/개인정보동의 추가 */
+/* 설문 */
 function buildSurveyHTML(){
   return '<div class="survey-wrap"><div class="sv-title">📋 AI 음성 재무진단 피드백</div>'
     +'<div class="sv-q"><div class="sv-ql">이름 <span class="sv-req">(필수)</span></div>'
@@ -1185,7 +1133,6 @@ function submitSurvey(){
     curStage:(SG.find(function(s){return stageRes[s.k]==='cur';})||{}).nm||'전체통과',
     star:surveyData.star,helpful:surveyData.helpful,voice:surveyData.voice,
     willPay:surveyData.willPay,comment:surveyData.comment,ua:navigator.userAgent.slice(0,120)};
-  /* ★ 서버 API를 통해 전송 — CORS 문제 완전 해결 */
   fetch('/api/desire-feedback',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
