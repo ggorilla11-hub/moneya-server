@@ -425,7 +425,7 @@ var SG=[
 
 var ws=null,audioCtx=null,mediaStream=null,processor=null;
 var audioQueue=[],isPlaying=false,isPaused=false;
-var reconnectCount=0,sessionActive=false,isMuted=false,closingDetected=false,pendingResult=false;
+var reconnectCount=0,sessionActive=false,isMuted=false,closingDetected=false,pendingResult=false,e2Answered=false;
 var stageRes={},curStageKey='D';
 var timerSec=0,timerInt=null;
 var lastAiText='';
@@ -679,6 +679,7 @@ function clickAnswer(text){
   ws.send(JSON.stringify({type:'text_input',text:text}));
   /* ★ E2 YES/NO 답변 전송 직후 → 결과버튼 표시 (머니야 답변 나오면 클릭 가능) */
   if(text.indexOf('상속 플랜이 준비되어 있습니다')>-1||text.indexOf('상속 플랜이 아직 없습니다')>-1){
+    e2Answered=true;
     setTimeout(function(){ setQB(STAGE_BUTTONS.RESULT); }, 500);
   }
 }
@@ -764,9 +765,7 @@ function connectWS(){
         addAI(msg.text);
         /* ★ 클로징 멘트 감지 → 즉시 결과화면 표시 (서버 연결 끊기기 전에 처리) */
         /* ★ 클로징 감지 — E2단계 이후 "감사합니다" 단독 감지 */
-        if(msg.text.indexOf('감사합니다')>-1 && (stageRes['E2']||closingDetected||
-          msg.text.indexOf('DESIRE 로드맵')>-1||msg.text.indexOf('진단')>-1||
-          msg.text.indexOf('본상담')>-1||msg.text.indexOf('플랜')>-1)){
+        if(msg.text.indexOf('감사합니다')>-1 && e2Answered){
           if(!closingDetected){
             closingDetected=true;
             console.log('[DESIRE] 클로징 감지 — shimmer 전송 준비 (결과전환은 response_done 후)');
@@ -914,7 +913,7 @@ function cleanupMedia(){
   if(mediaStream){mediaStream.getTracks().forEach(function(t){t.stop();});mediaStream=null;}
   if(ws){ws.close();ws=null;}
   if(timerInt){clearInterval(timerInt);timerInt=null;}
-  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;pendingResult=false;
+  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;pendingResult=false;e2Answered=false;
   var muteBtn=document.getElementById('mute-btn');
   if(muteBtn)muteBtn.textContent='🔇 음성끄기';
 }
@@ -1112,7 +1111,7 @@ function restartDiag(){
   document.getElementById('result').classList.remove('show');
   stageRes={};curStageKey='D';timerSec=0;
   sessionActive=false;reconnectCount=0;
-  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;pendingResult=false;
+  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;pendingResult=false;e2Answered=false;
   var muteBtn=document.getElementById('mute-btn');
   if(muteBtn)muteBtn.textContent='🔇 음성끄기';
   lastAiText='';
