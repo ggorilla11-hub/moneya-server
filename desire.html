@@ -852,21 +852,18 @@ function connectWS(){
     if(heartbeatInt){clearInterval(heartbeatInt);heartbeatInt=null;}
     /* 진단 완료 후 종료는 정상 — 결과화면이 열려있으면 무시 */
     if(document.getElementById('result').classList.contains('show'))return;
-    /* ★ 클로징 직후 끊김 — result 메시지 도달 대기 후 처리 */
-    if(sessionActive===false){
-      /* sessionActive=false는 result 수신 후 설정됨 — 정상 종료 */
-      return;
-    }
-    /* 클로징 감지 후 끊긴 경우 — 3초 대기 후 결과화면 강제 표시 */
-    var chatArea=document.getElementById('chat-area');
-    var lastMsg=chatArea?chatArea.innerText:'';
+    /* ★ closingDetected 먼저 체크 — sessionActive보다 우선 */
     if(closingDetected){
-      /* 클로징 감지 후 WS 끊김 — 결과화면은 이미 5초 타이머로 예약됨, 추가 대기 없이 바로 */
+      /* 머니야가 감사합니다까지 완전히 읽을 시간 4초 확보 후 결과화면 전환 */
       setTimeout(function(){
         if(!document.getElementById('result').classList.contains('show')){
           showResult();
         }
-      },1000);
+      },4000);
+      return;
+    }
+    /* 정상 종료 — sessionActive=false면 무시 */
+    if(sessionActive===false){
       return;
     }
     if(reconnectCount<5){
