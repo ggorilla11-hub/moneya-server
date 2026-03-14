@@ -725,14 +725,9 @@ wss.on('connection', (ws, req) => {
   const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
   if (mode === 'desire') {
     const existingWs = activeDesiresessions.get(clientIP);
-    if (existingWs && existingWs.readyState === 1) { // OPEN
-      // ★ 기존 세션 강제종료 제거 — 새 연결에 안내 후 거부 (재연결 루프 방지)
-      console.log(`[DESIRE-WS] 중복 세션 감지 — IP: ${clientIP} (새 연결 거부)`);
-      try {
-        ws.send(JSON.stringify({ type: 'duplicate_session' }));
-        ws.close(1000, 'duplicate_session');
-      } catch(e) {}
-      return;
+    if (existingWs && existingWs.readyState === 1) {
+      console.log(`[DESIRE-WS] 중복 세션 차단 — IP: ${clientIP} (기존 세션 종료)`);
+      try { existingWs.close(1000, 'duplicate_session'); } catch(e) {}
     }
     activeDesiresessions.set(clientIP, ws);
     ws.on('close', () => {
