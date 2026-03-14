@@ -547,7 +547,8 @@ var STAGE_BUTTONS = {
 /* ══ AI 메시지에서 단계 감지 → 자동 버튼 표시 ══ */
 function detectStageAndSetButtons(html){
   /* 클로징 / 결과 — 버튼만 표시, showResult() 직접 호출 안 함 */
-  if(html.indexOf('결과를 확인')>-1||html.indexOf('평생 쌓아')>-1||html.indexOf('상속과 증여 설계')>-1){
+  /* ★ 결과버튼은 E2 YES/NO 답변 전송 시점에만 표시 (sendUserText에서 처리) */
+  if(html.indexOf('결과를 확인')>-1){
     setQB(STAGE_BUTTONS.RESULT); return;
   }
   /* E2 단계 */
@@ -666,6 +667,10 @@ function clickAnswer(text){
   if(!ws||ws.readyState!==WebSocket.OPEN)return;
   clearQB();addUser(text);
   ws.send(JSON.stringify({type:'text_input',text:text}));
+  /* ★ E2 YES/NO 답변 전송 직후 → 결과버튼 표시 */
+  if(text.indexOf('상속 플랜이 준비되어 있습니다')>-1||text.indexOf('상속 플랜이 아직 없습니다')>-1){
+    setTimeout(function(){ setQB(STAGE_BUTTONS.RESULT); }, 500);
+  }
 }
 
 /* 오디오 */
