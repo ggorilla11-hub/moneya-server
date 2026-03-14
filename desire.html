@@ -748,28 +748,35 @@ function connectWS(){
       if(msg.role==='assistant'){
         addAI(msg.text);
         /* ★ 클로징 멘트 감지 → 즉시 결과화면 표시 (서버 연결 끊기기 전에 처리) */
-        if(msg.text.indexOf('감사합니다')>-1&&msg.text.indexOf('진단이 완료되었습니다')>-1){
-          closingDetected=true;
-          console.log('[DESIRE] 클로징 감지 — WS 살아있는 동안 shimmer 결과 멘트 전송');
+        /* ★ 클로징 감지 — E2단계 이후 "감사합니다" 단독 감지 */
+        if(msg.text.indexOf('감사합니다')>-1 && (stageRes['E2']||closingDetected||
+          msg.text.indexOf('DESIRE 로드맵')>-1||msg.text.indexOf('진단')>-1||
+          msg.text.indexOf('본상담')>-1||msg.text.indexOf('플랜')>-1)){
+          if(!closingDetected){
+            closingDetected=true;
+            console.log('[DESIRE] 클로징 감지 — 결과버튼 표시 + 1초후 자동전환');
 
-          /* ★ 핵심: WS 살아있을 때 즉시 shimmer에게 결과 멘트 전송 */
-          var passCount2=SG.filter(function(s){return stageRes[s.k]==='pass';}).length;
-          var allPass2=passCount2>=6;
-          var resultSpeech = allPass2
-            ? '고객님, DESIRE 로드맵 6단계를 모두 완성하셨습니다! 정말 대단하십니다! 오상열 CFP의 60분 본상담에서 더 탄탄한 재무 독립 플랜을 완성해 드리겠습니다.'
-            : '고객님의 DESIRE 진단 결과를 안내드립니다. 오늘 '+passCount2+'단계를 통과하셨습니다. 지금 알게 되셨으니 반드시 개선하실 수 있어요! 오상열 CFP의 60분 본상담에서 각 단계별 실행 플랜을 함께 완성해 드리겠습니다.';
+            /* ① 결과버튼(노란색) 즉시 표시 */
+            setQB(STAGE_BUTTONS.RESULT);
 
-          if(ws && ws.readyState===1){
-            ws.send(JSON.stringify({type:'tts_speak', text: resultSpeech}));
-          }
-
-          /* shimmer 읽는 시간(약 8초) 후 결과화면 자동 전환 */
-          sessionActive=false;
-          setTimeout(function(){
-            if(!document.getElementById('result').classList.contains('show')){
-              showResult();
+            /* ② shimmer에게 결과 멘트 전송 (WS 살아있을 때) */
+            var passCount2=SG.filter(function(s){return stageRes[s.k]==='pass';}).length;
+            var allPass2=passCount2>=6;
+            var resultSpeech = allPass2
+              ? '고객님, DESIRE 로드맵 6단계를 모두 완성하셨습니다! 정말 대단하십니다! 오상열 CFP의 60분 본상담에서 더 탄탄한 재무 독립 플랜을 완성해 드리겠습니다.'
+              : '고객님의 DESIRE 진단 결과를 안내드립니다. 오늘 '+passCount2+'단계를 통과하셨습니다. 지금 알게 되셨으니 반드시 개선하실 수 있어요! 오상열 CFP의 60분 본상담에서 각 단계별 실행 플랜을 함께 완성해 드리겠습니다.';
+            if(ws && ws.readyState===1){
+              ws.send(JSON.stringify({type:'tts_speak', text: resultSpeech}));
             }
-          },8000);
+
+            /* ③ 1초 후 자동 결과화면 전환 */
+            sessionActive=false;
+            setTimeout(function(){
+              if(!document.getElementById('result').classList.contains('show')){
+                showResult();
+              }
+            },1000);
+          }
         }
       }
       if(msg.role==='user'&&msg.source!=='text'){
