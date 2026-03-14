@@ -965,7 +965,7 @@ wss.on('connection', (ws, req) => {
 • 반드시 존댓말. 한국어로만 대화.
 • 이모지·특수문자 사용 금지. 음성으로 읽히는 멘트만 사용.
 • 금칙어: 재무상담사, 재무설계사, 특정 금융상품 추천, 수익 보장, 부부(반드시 '고객님'으로 대체).
-• 발음 원칙: "CFP"는 반드시 "씨~에~프~피" 네 글자로 또박또박 발음하세요. "씨에피", "씨에프" 등 틀린 발음 절대 금지. 항상 "씨에프피" 4음절입니다.
+• 발음 원칙: 텍스트에는 반드시 영어 대문자 "CFP"로 표기하고, 발음할 때만 "씨에프피" 4음절로 읽으세요. 절대로 텍스트에 "씨에프피", "씨~에~프~피" 등 한글로 쓰지 마세요.
 • 발음 원칙: "5분"은 반드시 "오분"으로 발음하세요. "다섯분" 절대 금지.
 
 【★ 고객 중단 신호 — 최우선 처리 원칙 ★】
@@ -1186,8 +1186,10 @@ wss.on('connection', (ws, req) => {
         });
         openaiWs.on('close', (code, reason) => {
           console.log('[DESIRE-WS] OpenAI 연결 종료 — code:', code, 'reason:', reason?.toString()?.slice(0,100));
-          // 클라이언트에 재연결 신호 전송
-          try { ws.send(JSON.stringify({ type: 'openai_disconnected', code: code })); } catch(e) {}
+          // ★ 정상 종료(1000/1005)는 재연결 신호 차단 — 비정상 종료만 재연결
+          if(code !== 1000 && code !== 1005) {
+            try { ws.send(JSON.stringify({ type: 'openai_disconnected', code: code })); } catch(e) {}
+          }
         });
         return;
       }
@@ -1256,6 +1258,18 @@ wss.on('connection', (ws, req) => {
         }));
         openaiWs.send(JSON.stringify({ type: 'response.create' }));
       }
+      // ★ tts_speak — 결과화면 shimmer 음성 재생
+      if (msg.type === 'tts_speak' && msg.text && openaiWs && openaiWs.readyState === 1) {
+        openaiWs.send(JSON.stringify({
+          type: 'response.create',
+          response: {
+            modalities: ['audio', 'text'],
+            instructions: msg.text,
+          }
+        }));
+        console.log('[DESIRE-WS] 결과화면 TTS 전송:', msg.text.slice(0, 50));
+      }
+
       // DESIRE-004 끝
 
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
