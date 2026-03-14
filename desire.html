@@ -425,7 +425,7 @@ var SG=[
 
 var ws=null,audioCtx=null,mediaStream=null,processor=null;
 var audioQueue=[],isPlaying=false,isPaused=false;
-var reconnectCount=0,sessionActive=false,isMuted=false,closingDetected=false;
+var reconnectCount=0,sessionActive=false,isMuted=false,closingDetected=false,pendingResult=false;
 var stageRes={},curStageKey='D';
 var timerSec=0,timerInt=null;
 var lastAiText='';
@@ -663,11 +663,21 @@ function setQB(btns){
 }
 function clearQB(){document.getElementById('quick-btns').innerHTML='';}
 function clickAnswer(text){
-  if(text==='SHOW_RESULT'){showResult();return;}
+  if(text==='SHOW_RESULT'){
+    if(closingDetected){
+      /* 이미 클로징 감지됨 — 즉시 결과화면 전환 */
+      showResult();
+    } else {
+      /* 아직 머니야가 말하는 중 — closingDetected 대기 플래그 설정 */
+      pendingResult=true;
+      showToast('⏳ 머니야 마무리 후 자동으로 결과화면이 열립니다');
+    }
+    return;
+  }
   if(!ws||ws.readyState!==WebSocket.OPEN)return;
   clearQB();addUser(text);
   ws.send(JSON.stringify({type:'text_input',text:text}));
-  /* ★ E2 YES/NO 답변 전송 직후 → 결과버튼 표시 */
+  /* ★ E2 YES/NO 답변 전송 직후 → 결과버튼 표시 (머니야 답변 나오면 클릭 가능) */
   if(text.indexOf('상속 플랜이 준비되어 있습니다')>-1||text.indexOf('상속 플랜이 아직 없습니다')>-1){
     setTimeout(function(){ setQB(STAGE_BUTTONS.RESULT); }, 500);
   }
@@ -759,12 +769,9 @@ function connectWS(){
           msg.text.indexOf('본상담')>-1||msg.text.indexOf('플랜')>-1)){
           if(!closingDetected){
             closingDetected=true;
-            console.log('[DESIRE] 클로징 감지 — 결과버튼 표시 + 1초후 자동전환');
+            console.log('[DESIRE] 클로징 감지 — shimmer 전송 준비 (결과전환은 response_done 후)');
 
-            /* ① 결과버튼(노란색) 즉시 표시 */
-            setQB(STAGE_BUTTONS.RESULT);
-
-            /* ② shimmer에게 결과 멘트 전송 (WS 살아있을 때) */
+            /* ① shimmer에게 결과 멘트 전송 (WS 살아있을 때) */
             var passCount2=SG.filter(function(s){return stageRes[s.k]==='pass';}).length;
             var allPass2=passCount2>=6;
             var resultSpeech = allPass2
@@ -773,14 +780,7 @@ function connectWS(){
             if(ws && ws.readyState===1){
               ws.send(JSON.stringify({type:'tts_speak', text: resultSpeech}));
             }
-
-            /* ③ 1초 후 자동 결과화면 전환 */
-            sessionActive=false;
-            setTimeout(function(){
-              if(!document.getElementById('result').classList.contains('show')){
-                showResult();
-              }
-            },1000);
+            /* ★ 결과화면 전환은 response_done 수신 후 처리 (머니야 발화 완전 종료 후) */
           }
         }
       }
@@ -805,7 +805,18 @@ function connectWS(){
 
     /* [10번] AI 응답 완전 종료 신호 — 이 시점부터 idleTimer 카운트 */
     if(msg.type==='response_done'){
-      if(sessionActive)resetIdleTimer();
+      if(closingDetected||pendingResult){
+        /* ★ 머니야 발화 완전 종료 → 1초 후 결과화면 자동 전환 */
+        sessionActive=false;
+        setTimeout(function(){
+          if(!document.getElementById('result').classList.contains('show')){
+            console.log('[DESIRE] response_done → 결과화면 전환');
+            showResult();
+          }
+        },1000);
+      } else {
+        if(sessionActive)resetIdleTimer();
+      }
     }
 
     if(msg.type==='duplicate_session'){
@@ -904,7 +915,7 @@ function cleanupMedia(){
   if(mediaStream){mediaStream.getTracks().forEach(function(t){t.stop();});mediaStream=null;}
   if(ws){ws.close();ws=null;}
   if(timerInt){clearInterval(timerInt);timerInt=null;}
-  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;
+  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;pendingResult=false;
   var muteBtn=document.getElementById('mute-btn');
   if(muteBtn)muteBtn.textContent='🔇 음성끄기';
 }
@@ -1102,7 +1113,7 @@ function restartDiag(){
   document.getElementById('result').classList.remove('show');
   stageRes={};curStageKey='D';timerSec=0;
   sessionActive=false;reconnectCount=0;
-  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;
+  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;pendingResult=false;
   var muteBtn=document.getElementById('mute-btn');
   if(muteBtn)muteBtn.textContent='🔇 음성끄기';
   lastAiText='';
