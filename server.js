@@ -706,6 +706,10 @@ app.get('/video-consult/status/:roomId', (req, res) => {
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => console.log(`AI머니야 서버 v9.1 시작! 포트: ${PORT}`));
 
+// ★ WebSocket keep-alive — Render 60초 타임아웃 방지
+server.keepAliveTimeout = 120000;  // 120초
+server.headersTimeout = 125000;
+
 const wss = new WebSocket.Server({ server });
 
 // ★ DESIRE 중복 세션 차단 — IP당 1개 세션만 허용
@@ -722,8 +726,13 @@ wss.on('connection', (ws, req) => {
   if (mode === 'desire') {
     const existingWs = activeDesiresessions.get(clientIP);
     if (existingWs && existingWs.readyState === 1) { // OPEN
-      console.log(`[DESIRE-WS] 중복 세션 차단 — IP: ${clientIP} (기존 세션 종료)`);
-      try { existingWs.close(1000, 'duplicate_session'); } catch(e) {}
+      // ★ 기존 세션 강제종료 제거 — 새 연결에 안내 후 거부 (재연결 루프 방지)
+      console.log(`[DESIRE-WS] 중복 세션 감지 — IP: ${clientIP} (새 연결 거부)`);
+      try {
+        ws.send(JSON.stringify({ type: 'duplicate_session' }));
+        ws.close(1000, 'duplicate_session');
+      } catch(e) {}
+      return;
     }
     activeDesiresessions.set(clientIP, ws);
     ws.on('close', () => {
@@ -1162,19 +1171,11 @@ wss.on('connection', (ws, req) => {
             // [10번] response.done — AI 응답 완전 종료 신호 전달
             if (event.type === 'response.done') {
               ws.send(JSON.stringify({ type: 'response_done' }));
+            }
 
-              // ★ 클로징 멘트 감지 → 결과화면 자동 전환
-              const outputs = event.response?.output || [];
-              for (const out of outputs) {
-                const textContent = out.content?.find(c => c.type === 'text' || c.type === 'audio');
-                const transcript = textContent?.transcript || textContent?.text || '';
-                if (transcript.includes('감사합니다') && transcript.includes('진단이 완료')) {
-                  console.log('[DESIRE-WS] 클로징 감지 → 결과화면 전송');
-                  setTimeout(() => {
-                    try { ws.send(JSON.stringify({ type: 'result', stages: {} })); } catch(e) {}
-                  }, 4000); // TTS 재생 여유 4초 (PC 대응)
-                }
-              }
+            // ★ tts_speak — DESIRE-003 내부에서 처리 (openaiWs 접근 가능)
+            if (event.type === 'tts_speak_request') {
+              // 내부 이벤트용 (아래 ws.on message에서 직접 처리)
             }
             if (event.type === 'error') { console.error('[DESIRE-WS] OpenAI 에러:', event.error); ws.send(JSON.stringify({ type: 'error', error: event.error?.message })); }
           } catch (e) { console.error('[DESIRE-WS] 메시지 파싱 에러:', e); }
@@ -1258,18 +1259,16 @@ wss.on('connection', (ws, req) => {
         }));
         openaiWs.send(JSON.stringify({ type: 'response.create' }));
       }
-      // ★ tts_speak — 결과화면 shimmer 음성 재생
-      if (msg.type === 'tts_speak' && msg.text && openaiWs && openaiWs.readyState === 1) {
-        openaiWs.send(JSON.stringify({
-          type: 'response.create',
-          response: {
-            modalities: ['audio', 'text'],
-            instructions: msg.text,
-          }
-        }));
-        console.log('[DESIRE-WS] 결과화면 TTS 전송:', msg.text.slice(0, 50));
-      }
 
+      // ★ tts_speak — 결과화면 shimmer 음성 (메인 핸들러에서 통합 처리)
+      if (msg.type === 'tts_speak' && msg.text && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+        console.log('[DESIRE-WS] tts_speak 수신 → shimmer 전송:', msg.text.slice(0, 50));
+        openaiWs.send(JSON.stringify({
+          type: 'conversation.item.create',
+          item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: msg.text }] }
+        }));
+        openaiWs.send(JSON.stringify({ type: 'response.create' }));
+      }
       // DESIRE-004 끝
 
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
