@@ -425,7 +425,7 @@ var SG=[
 
 var ws=null,audioCtx=null,mediaStream=null,processor=null;
 var audioQueue=[],isPlaying=false,isPaused=false;
-var reconnectCount=0,sessionActive=false,isMuted=false;
+var reconnectCount=0,sessionActive=false,isMuted=false,closingDetected=false;
 var stageRes={},curStageKey='D';
 var timerSec=0,timerInt=null;
 var lastAiText='';
@@ -546,8 +546,8 @@ var STAGE_BUTTONS = {
 
 /* ══ AI 메시지에서 단계 감지 → 자동 버튼 표시 ══ */
 function detectStageAndSetButtons(html){
-  /* 클로징 / 결과 */
-  if((html.indexOf('진단이 완료')>-1&&html.indexOf('감사합니다')>-1)||html.indexOf('결과를 확인')>-1){
+  /* 클로징 / 결과 — 버튼만 표시, showResult() 직접 호출 안 함 */
+  if(html.indexOf('결과를 확인')>-1){
     setQB(STAGE_BUTTONS.RESULT); return;
   }
   /* E2 단계 */
@@ -750,12 +750,14 @@ function connectWS(){
         /* ★ 클로징 멘트 감지 → 즉시 결과화면 표시 (서버 연결 끊기기 전에 처리) */
         if(msg.text.indexOf('감사합니다')>-1&&msg.text.indexOf('진단이 완료되었습니다')>-1){
           sessionActive=false;
-          /* 클로징 멘트 TTS 재생 완료 후 결과화면 전환 (3초 대기) */
+          closingDetected=true;
+          console.log('[DESIRE] 클로징 감지 — shimmer 재생 후 결과화면 전환 예정');
+          /* shimmer가 "감사합니다" 말하는 시간 충분히 대기 후 결과화면 */
           setTimeout(function(){
             if(!document.getElementById('result').classList.contains('show')){
               showResult();
             }
-          },3000);
+          },5000);
         }
       }
       if(msg.role==='user'&&msg.source!=='text'){
@@ -797,10 +799,12 @@ function connectWS(){
 
     if(msg.type==='result'){
       if(msg.stages)stageRes=msg.stages;
-      showResult();
-      /* ★ 결과화면 표시 후 WebSocket 정상 종료 */
-      sessionActive=false;
-      setTimeout(function(){ try{ws.close();}catch(e){} },1000);
+      /* result 메시지는 closingDetected 타이머가 처리 — 중복 방지 */
+      if(!closingDetected){
+        showResult();
+        sessionActive=false;
+        setTimeout(function(){ try{ws.close();}catch(e){} },1000);
+      }
     }
   };
   ws.onclose=function(){
@@ -815,7 +819,8 @@ function connectWS(){
     /* 클로징 감지 후 끊긴 경우 — 3초 대기 후 결과화면 강제 표시 */
     var chatArea=document.getElementById('chat-area');
     var lastMsg=chatArea?chatArea.innerText:'';
-    if(lastMsg.indexOf('감사합니다')>-1&&lastMsg.indexOf('진단이 완료')>-1){
+    if(closingDetected){
+      /* 클로징 감지 후 WS 끊김 — 결과화면은 이미 5초 타이머로 예약됨, 추가 대기 없이 바로 */
       setTimeout(function(){
         if(!document.getElementById('result').classList.contains('show')){
           showResult();
@@ -869,7 +874,7 @@ function cleanupMedia(){
   if(mediaStream){mediaStream.getTracks().forEach(function(t){t.stop();});mediaStream=null;}
   if(ws){ws.close();ws=null;}
   if(timerInt){clearInterval(timerInt);timerInt=null;}
-  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;
+  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;
   var muteBtn=document.getElementById('mute-btn');
   if(muteBtn)muteBtn.textContent='🔇 음성끄기';
 }
@@ -1044,15 +1049,16 @@ function showResult(){
   }
   document.getElementById('result').classList.add('show');
 
-  /* 결과화면 — shimmer 음성으로 클로징 멘트 읽기 */
+  /* 결과화면 — shimmer 음성으로 결과 내용 읽기 */
   setTimeout(function(){
-    var closingText = allPass
+    var resultText = allPass
       ? '고객님, DESIRE 로드맵 6단계를 모두 완성하셨습니다! 진심으로 축하드립니다! 오상열 CFP의 60분 본상담에서 더 탄탄한 재무 독립을 완성해 가시기 바랍니다.'
-      : '고객님의 DESIRE 진단이 완료되었습니다. 지금 알게 되셨으니 개선하실 수 있어요! 60분 본상담에서 각 단계별 월별 실행 플랜을 함께 완성해 드리겠습니다. 감사합니다!';
+      : '고객님의 현재 단계는 '+curNum+'단계입니다. 지금 알게 되셨으니 개선하실 수 있어요! 60분 본상담에서 각 단계별 월별 실행 플랜을 함께 완성해 드리겠습니다.';
     if(ws && ws.readyState===1){
-      ws.send(JSON.stringify({type:'tts_speak', text: closingText}));
+      ws.send(JSON.stringify({type:'tts_speak', text: resultText}));
+      console.log('[DESIRE] 결과화면 shimmer 음성 전송');
     }
-  }, 500);
+  }, 800);
 }
 
 /* 상담 다시하기 */
@@ -1062,7 +1068,7 @@ function restartDiag(){
   document.getElementById('result').classList.remove('show');
   stageRes={};curStageKey='D';timerSec=0;
   sessionActive=false;reconnectCount=0;
-  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;
+  audioQueue=[];isPlaying=false;isPaused=false;isMuted=false;closingDetected=false;
   var muteBtn=document.getElementById('mute-btn');
   if(muteBtn)muteBtn.textContent='🔇 음성끄기';
   lastAiText='';
