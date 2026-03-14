@@ -1156,10 +1156,18 @@ wss.on('connection', (ws, req) => {
                 return;
               }
               // 2단계: 소음 블랙리스트 패턴 (뉴스/방송/잡음 STT 오인식)
+              // [BUG FIX 3] 유튜브/영상 자막 오인식 패턴 추가
               const noisePatterns = [
+                // 방송/뉴스 채널
                 /뉴스/, /기자/, /앵커/, /입니다\.$/, /MBC/, /KBS/, /SBS/, /YTN/,
-                /안녕하세요$/, /감사합니다$/, /수고하세요$/, /네\s*네$/, /안녕$/,
-                /네\s*맞습니다$/, /알겠습니다$/, /그렇습니다$/
+                // 단독 인사말 (앞뒤 문맥 없는 단독 발화)
+                /^안녕하세요/, /^감사합니다/, /^수고하세요/, /^네\s*네$/, /^안녕$/,
+                /^네\s*맞습니다$/, /^알겠습니다$/, /^그렇습니다$/,
+                // 유튜브/영상 자동자막 오인식 (가장 흔한 패턴)
+                /시청해\s*주셔서/, /함께\s*해\s*주셔서/, /구독/, /좋아요\s*눌러/,
+                /알림\s*설정/, /다음\s*영상/, /채널/,
+                // 단음절 감탄사 단독
+                /^네$/, /^예$/, /^아$/, /^어$/, /^음$/
               ];
               const isNoise = noisePatterns.some(p => p.test(userText));
               if (isNoise) {
@@ -1172,6 +1180,23 @@ wss.on('connection', (ws, req) => {
             // [10번] response.done — AI 응답 완전 종료 신호 전달
             if (event.type === 'response.done') {
               ws.send(JSON.stringify({ type: 'response_done' }));
+              // ★ [BUG FIX 1·2] closing_complete — response.done의 output transcript에서
+              //    "감사합니다" 포함 확인 후 클라이언트에 전송.
+              //    클라이언트의 e2Answered/transcript 타이밍 의존을 서버에서 보완.
+              try {
+                const outputs = (event.response && event.response.output) ? event.response.output : [];
+                const fullTranscript = outputs
+                  .flatMap(o => (o.content || []))
+                  .filter(c => c.type === 'audio' || c.type === 'text')
+                  .map(c => c.transcript || c.text || '')
+                  .join('');
+                if (fullTranscript.indexOf('감사합니다') > -1) {
+                  console.log('[DESIRE-WS] closing_complete 감지 — transcript 확인됨');
+                  ws.send(JSON.stringify({ type: 'closing_complete' }));
+                }
+              } catch (e) {
+                console.error('[DESIRE-WS] closing_complete 파싱 오류:', e.message);
+              }
             }
 
             // ★ tts_speak — DESIRE-003 내부에서 처리 (openaiWs 접근 가능)
