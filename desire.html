@@ -547,7 +547,7 @@ var STAGE_BUTTONS = {
 /* ══ AI 메시지에서 단계 감지 → 자동 버튼 표시 ══ */
 function detectStageAndSetButtons(html){
   /* 클로징 / 결과 — 버튼만 표시, showResult() 직접 호출 안 함 */
-  if(html.indexOf('결과를 확인')>-1){
+  if(html.indexOf('결과를 확인')>-1||html.indexOf('평생 쌓아')>-1||html.indexOf('상속과 증여 설계')>-1){
     setQB(STAGE_BUTTONS.RESULT); return;
   }
   /* E2 단계 */
@@ -1074,7 +1074,20 @@ function showResult(){
   }
   document.getElementById('result').classList.add('show');
 
-  /* shimmer 음성은 클로징 감지 시점에 이미 전송됨 */
+  /* 3번 — 브라우저 기본 TTS로 결과화면 읽기 */
+  setTimeout(function(){
+    var ctxt = allPass
+      ? '고객님의 DESIRE 로드맵 6단계를 모두 완성하셨습니다! 진심으로 축하드립니다! 오상열 CFP의 60분 본상담에서 더 탄탄한 재무 독립 플랜을 완성해 드리겠습니다.'
+      : '고객님의 현재 단계는 '+curNum+'단계입니다. 지금 알게 되셨으니 개선하실 수 있어요! 오상열 CFP의 60분 본상담에서 각 단계별 실행 플랜을 함께 완성해 드리겠습니다.';
+    if('speechSynthesis' in window){
+      window.speechSynthesis.cancel();
+      var utt = new SpeechSynthesisUtterance(ctxt);
+      utt.lang = 'ko-KR';
+      utt.rate = 1.0;
+      utt.pitch = 1.0;
+      window.speechSynthesis.speak(utt);
+    }
+  }, 800);
 }
 
 /* 상담 다시하기 */
