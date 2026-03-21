@@ -807,11 +807,11 @@ wss.on('connection', (ws, req) => {
               modalities: ['text', 'audio'],
               instructions: consultPrompt,
               voice: 'shimmer',
-              speed: 0.85,          // ★ 추가: 속도 0.85 (gpt-4o 체감 속도)
+              
               input_audio_format: 'pcm16',
               output_audio_format: 'pcm16',
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
-              turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 1800 },
+              turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 1200 },
               tools: [
                 {
                   type: 'function',
