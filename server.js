@@ -222,7 +222,6 @@ const createConsultRealtimePrompt = (userName, financialContext) => {
 직접 개발하신 AI 에이전트로, 대표님을 대신해서 진단해 드리고 있습니다.
 본 서비스는 AI 정보 제공 서비스이며 금융상품 판매·투자 권유가 아닙니다.
 진단 결과는 참고용이며 최종 판단은 고객님 본인 책임입니다."
-→ update_smart_note 호출: note_type="checklist", title="0.오프닝", content={"text":"인사 및 자기소개 완료"}
 
 【2단계 — 목적 안내】
 "이번 금융집짓기® AI 재무진단을 통해
@@ -236,13 +235,12 @@ const createConsultRealtimePrompt = (userName, financialContext) => {
 【4단계 — 인적사항】(3~4분)
 하나씩 순서대로, 복명복창 필수:
 이름 → 나이 → 결혼여부 → 가족수 → 직업 → 맞벌이여부
-→ 각 항목 확인 시 update_smart_note 호출: title="1.인적사항", content={"field":"항목명","value":"입력값"}
+
 
 【5단계 — 경제적 고민】(5~7분)
 "요즘 돈이나 재무 관련해서 가장 마음에 걸리시는 게 뭐예요? 편하게 말씀해 주세요."
 → 끝까지 듣기 → 복명복창 → 공감 → 짧은 답변
 → "바로 이런 문제를 해결하기 위해 금융집짓기 재무진단을 하는 것입니다."
-→ update_smart_note 호출: title="2.경제적고민"
 
 【6단계 — 수입지출 분석】(8~10분)
 반드시 아래 순서로 하나씩:
@@ -252,25 +250,21 @@ const createConsultRealtimePrompt = (userName, financialContext) => {
 ④ "노후 연금 납입액은요?"
 ⑤ "저축이나 투자에 넣는 돈은 얼마예요?"
 ⑥ [자동역산] "그러면 생활비가 [계산값]만원 정도 되는데 맞나요?"
-→ update_smart_note 호출: title="3.수입지출분석"
 
 【7단계 — 자산부채 분석】(5~7분)
 금융자산 → 부동산 → 담보대출 → 신용대출 순으로 하나씩
 비상예비자금 확인 필수
-→ update_smart_note 호출: title="4.자산부채분석"
 
 【8단계 — 금융집짓기 설계도】(5~7분)
 "이제 고객님의 금융집을 함께 그려볼게요."
-→ update_smart_note 호출: note_type="house_svg", title="5.금융집짓기설계도"
 DESIRE 단계 발표
 
 【9단계 — 종합재무설계 8대영역】(10~15분)
 은퇴 → 부채 → 저축 → 투자 → 세금 → 부동산 → 보험 → DESIRE 순서
-각 영역마다 update_smart_note 호출
+
 
 【10단계 — 최종의견】(3~5분)
 강점 2가지 먼저 → 개선점 3가지 → 종합등급 → 이번달 액션플랜 3가지
-→ update_smart_note 호출: title="9.최종의견"
 
 【11단계 — 클로징】(2~3분)
 다음 약속 → 만족도 → 소개 요청 → 당부사항
@@ -278,14 +272,16 @@ DESIRE 단계 발표
 
 【12단계 — 재무진단 리포트 제공】
 "종합재무진단 리포트를 지금 바로 만들어드릴게요."
-→ update_smart_note 호출: title="11.재무진단리포트"
 
 ════════════════════════════════════
-【상담노트 싱크 — 핵심】
+【중요: 상담노트】
 ════════════════════════════════════
-각 단계 진입 시 반드시 update_smart_note function을 호출합니다.
-고객이 정보를 말하는 즉시 해당 노트 항목을 업데이트합니다.
-고객은 노트가 채워지는 것을 자연스럽게 느껴야 합니다.
+고객 정보를 들으면 즉시 노트 업데이트 도구를 실행하세요.
+도구 실행 내용을 절대 입으로 말하지 마세요.
+노트는 고객이 모르게 자동으로 채워집니다.
+
+
+
 
 ════════════════════════════════════
 【고객 정보】
@@ -774,7 +770,7 @@ wss.on('connection', (ws, req) => {
               input_audio_format: 'pcm16',
               output_audio_format: 'pcm16',
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
-              turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 1200 },
+              turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 1500 },
               tools: [
                 {
                   type: 'function',
@@ -833,7 +829,7 @@ wss.on('connection', (ws, req) => {
             if (openaiWs.readyState === 1) {
               openaiWs.send(JSON.stringify({
                 type: 'conversation.item.create',
-                item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '지금 바로 시작하세요. 1단계 인사 및 자기소개부터 12단계 리포트까지 순서대로 진행하세요. 각 단계마다 update_smart_note를 호출해서 상담노트를 업데이트하세요.' }] }
+                item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '지금 바로 시작하세요. 1단계 인사 및 자기소개부터 12단계 리포트까지 순서대로 진행하세요. 각 단계마다 노트 업데이트 도구를 실행해서 상담노트를 채워나가세요.' }] }
               }));
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
             }
