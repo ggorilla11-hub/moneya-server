@@ -211,9 +211,22 @@ const createConsultRealtimePrompt = (userName, financialContext) => {
 ③ 고객 이름 뒤에 항상 "님"을 붙입니다.
    이름을 모르면 "고객님"으로 호칭합니다.
 
-④ 고객이 정정하면 즉시 인정합니다:
-   "아, 죄송합니다. [정정내용]이시군요, 맞습니까?"
-   틀린 정보로 절대 다음 질문으로 넘어가지 않습니다.
+④ 정정 상황 — 가장 중요합니다:
+
+   [머니야가 틀렸을 때]
+   고객이 "아니요", "아닌데요", "틀렸어요", "다시" 등을 말하면
+   → 즉시 모든 진행을 멈춥니다.
+   → "죄송합니다, 제가 잘못 이해했네요."
+   → 고객이 말한 정정 내용을 확인합니다: "[정정내용]이 맞으시죠?"
+   → 고객이 확인하면: "감사합니다, 정확히 기록했습니다."
+   → 그 다음 원래 단계로 돌아갑니다.
+
+   [고객이 텍스트로 정정할 때]
+   텍스트 입력도 음성과 동일하게 처리합니다.
+   정정 내용을 파악 → 확인 → 동의 → 재진행.
+
+   절대 틀린 정보를 그대로 두고 다음으로 넘어가지 않습니다.
+   고객의 정정을 무시하거나 흘려듣지 않습니다.
 
 ⑤ 질문은 반드시 하나씩만 합니다.
 
@@ -474,6 +487,60 @@ app.get('/', (req, res) => {
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+/* ━━━ 신청서 파싱 API ━━━ */
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10*1024*1024 } });
+
+app.post('/api/parse-application', upload.single('file'), async (req, res) => {
+  try {
+    if(!req.file) return res.json({ success: false, error: '파일 없음' });
+
+    const fname = req.file.originalname.toLowerCase();
+    let rawText = '';
+
+    /* xlsx/xls → Claude API로 파싱 */
+    const base64 = req.file.buffer.toString('base64');
+    const mediaType = fname.endsWith('.xlsx')
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : 'application/vnd.ms-excel';
+
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1000,
+      messages: [{
+        role: 'user',
+        content: [{
+          type: 'document',
+          source: { type: 'base64', media_type: 'text/plain', data: base64 }
+        }, {
+          type: 'text',
+          text: `이 재무상담 신청서에서 다음 정보를 추출해서 JSON으로만 응답하세요:
+{"name":"이름","age":나이숫자,"job":"직업","spouseName":"배우자이름","spouseAge":배우자나이,"spouseJob":"배우자직업","children":"자녀정보","familySize":가족수,"retireAge":은퇴나이,"worry":"경제적고민","dualIncome":true/false,"monthlyIncome":본인월소득만원단위숫자,"spouseIncome":배우자월소득,"totalIncome":합산소득,"totalAsset":총자산만원단위,"totalDebt":총부채만원단위,"netAsset":순자산,"fixedExpense":고정지출,"insurance":보험료,"deposit":예적금}
+숫자는 천원단위를 만원단위로 변환하세요. 없는 항목은 0 또는 빈문자열.`
+        }]
+      }]
+    });
+
+    let clientData = {};
+    try {
+      const txt = response.content[0].text;
+      clientData = JSON.parse(txt.replace(/```json|```/g,'').trim());
+    } catch(e) {
+      /* 파싱 실패 시 기본값 */
+      clientData = { name:'고객', age:0, monthlyIncome:0 };
+    }
+
+    console.log('[신청서] 파싱 완료:', clientData.name, clientData.age+'세');
+    res.json({ success: true, clientData });
+  } catch(e) {
+    console.error('[신청서] 파싱 에러:', e.message);
+    res.json({ success: false, error: e.message });
+  }
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
