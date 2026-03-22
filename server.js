@@ -1032,6 +1032,7 @@ wss.on('connection', (ws, req) => {
           console.log('[상담WS] OpenAI Realtime 연결 (mini)');
           const name = financialContext?.name || userName || '고객';
           const consultPrompt = createConsultRealtimePrompt(name, financialContext);
+          console.log('[상담WS] 프롬프트 전송 시작 — 길이:', consultPrompt.length, '자');
 
           openaiWs.send(JSON.stringify({
             type: 'session.update',
@@ -1039,14 +1040,13 @@ wss.on('connection', (ws, req) => {
               modalities: ['text', 'audio'],
               instructions: consultPrompt,
               voice: 'shimmer',
-              
               input_audio_format: 'pcm16',
               output_audio_format: 'pcm16',
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
               turn_detection: {
-                type: 'semantic_vad',      // 말 끝을 의미론적으로 판단 — 중간에 끊지 않음
-                eagerness: 'low',          // 낮을수록 더 기다림 (고객이 생각할 시간 확보)
-                silence_duration_ms: 2500, // 2.5초 침묵 후 응답 — 고객 생각 시간 확보
+                type: 'semantic_vad',
+                eagerness: 'low',
+                // ★ silence_duration_ms는 semantic_vad에서 지원 안 됨 — 제거
                 create_response: true,
                 interrupt_response: true,
               },
@@ -1078,24 +1078,25 @@ wss.on('connection', (ws, req) => {
                   }
                 },
                 {
+                  // ★ 프롬프트의 update_smart_note 호출 형식과 완전 일치시킴
                   type: 'function',
                   name: 'update_smart_note',
-                  description: '화상상담 중 스마트 노트에 콘텐츠를 표시합니다.',
+                  description: '고객 답변을 복명복창으로 확인한 직후 상담노트에 기록합니다. 반드시 머니야가 복명복창한 직후에만 호출합니다. 고객이 말한 값이 아닌 머니야가 재확인한 정확한 값을 fields에 넣습니다.',
                   parameters: {
                     type: 'object',
                     properties: {
-                      note_type: { type: 'string', enum: ['house_svg', 'chart', 'calculation', 'video', 'web', 'image', 'checklist'] },
-                      title: { type: 'string' },
-                      content: { type: 'string' },
-                      highlight_floor: { type: 'string', enum: ['basement', 'pillar_debt', 'pillar_savings', 'pillar_retirement', 'eaves', 'roof_investment', 'roof_tax', 'chimney', 'none'] }
+                      note_page: { type: 'number', description: '노트 번호 (0=오프닝, 1=인적사항, 2=고민, 3=수입지출, 4=자산부채, 5=설계도, 6=저축투자, 7=자산배분, 8=8대영역, 9=최종의견, 10=클로징)' },
+                      sub_page:  { type: 'number', description: '8대영역 세부 번호 1~8 (note_page=8일 때만 사용)' },
+                      title:     { type: 'string', description: '노트 섹션 제목' },
+                      fields:    { type: 'object', description: '기록할 필드명과 값의 객체. 예: {"name":"홍길동","age":"45세"}' }
                     },
-                    required: ['note_type', 'title', 'content']
+                    required: ['note_page', 'title', 'fields']
                   }
                 },
                 {
                   type: 'function',
                   name: 'clear_smart_note',
-                  description: '스마트 노트를 초기 상태로 되돌립니다.',
+                  description: '상담 종료 시 스마트 노트를 초기 상태로 되돌립니다.',
                   parameters: { type: 'object', properties: { message: { type: 'string' } } }
                 }
               ],
@@ -1103,6 +1104,7 @@ wss.on('connection', (ws, req) => {
             }
           }));
           ws.send(JSON.stringify({ type: 'session_started' }));
+          console.log('[상담WS] session.update 전송 완료 — 프롬프트 적용됨');
 
           setTimeout(() => {
             if (openaiWs.readyState === 1) {
@@ -1111,6 +1113,7 @@ wss.on('connection', (ws, req) => {
                 item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '지금 바로 첫 인사를 시작하세요.' }] }
               }));
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
+              console.log('[상담WS] 시작 트리거 전송 완료');
             }
           }, 500);
         });
@@ -1185,7 +1188,14 @@ wss.on('connection', (ws, req) => {
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
             }
 
-            if (event.type === 'error') { console.error('[상담WS] OpenAI 에러:', event.error); ws.send(JSON.stringify({ type: 'error', error: event.error?.message })); }
+            if (event.type === 'error') {
+              console.error('[상담WS] OpenAI 에러 상세:', JSON.stringify(event.error, null, 2));
+              // session.update 파라미터 오류 시 즉시 알림
+              if (event.error?.code === 'unknown_parameter') {
+                console.error('[상담WS] ★★★ session.update 파라미터 오류 — 프롬프트 미전달 가능성 있음 ★★★');
+              }
+              ws.send(JSON.stringify({ type: 'error', error: event.error?.message }));
+            }
           } catch (e) { console.error('[상담WS] 메시지 파싱 에러:', e); }
         });
 
