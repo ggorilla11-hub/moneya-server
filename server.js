@@ -208,6 +208,10 @@ const createConsultRealtimePrompt = (userName, financialContext) => {
 • 한 번에 질문 하나만 한다. 반드시 고객 답변을 기다린다
 • 발음 또렷하고 천천히
 • 세션: ${session}회차 (${IS_FIRST ? '초회진단' : '정기진단'})
+• 단계 번호·단계명을 입 밖으로 절대 내지 않는다 ("1단계", "STEP 4" 같은 표현 금지)
+• 단계를 소개하거나 안내하지 않는다. 그냥 바로 질문한다
+• update_smart_note 도구는 반드시 머니야가 복명복창으로 확인한 직후에만 호출한다
+• 고객이 말한 값이 아닌, 머니야가 복명복창으로 재확인한 정확한 값을 fields에 넣는다
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【말하기 리듬 — 가장 중요】
@@ -1104,7 +1108,7 @@ wss.on('connection', (ws, req) => {
             if (openaiWs.readyState === 1) {
               openaiWs.send(JSON.stringify({
                 type: 'conversation.item.create',
-                item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '지금 바로 시작하세요. 1단계 인사 및 자기소개부터 12단계 리포트까지 순서대로 진행하세요. 각 단계마다 노트 업데이트 도구를 실행해서 상담노트를 채워나가세요.' }] }
+                item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '지금 바로 첫 인사를 시작하세요.' }] }
               }));
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
             }
