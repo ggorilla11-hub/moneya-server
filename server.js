@@ -21,19 +21,11 @@ let ragData = {
 };
 
 function loadRAGData() {
+  // 상담 세션에 필요한 핵심 데이터만 로드 (메모리 절약)
   const files = [
-    { key: 'books',        file: 'rag_chunks.json',               field: null },
-    { key: 'afpk',         file: 'afpk_knowledge_base.json',      field: 'allChunks' },
-    { key: 'bantoe',       file: 'bantoe_cases_436.json',          field: null },
-    { key: 'quotes',       file: 'quotes_100.json',                field: null },
-    { key: 'keywords',     file: 'afpk_keywords_index.json',       field: 'index' },
-    { key: 'questions',    file: 'afpk_questions_bank.json',       field: 'allQuestions' },
-    { key: 'workbook',     file: 'workbook_chunks.json',            field: null },
-    { key: 'consultation', file: 'consultation_chunks.json',        field: null },
-    { key: 'lecture',      file: 'lecture_chunks.json',             field: null },
-    { key: 'cfha',         file: 'cfha_script_chunks.json',         field: null },
-    { key: 'custQ',        file: 'customer_questions_100.json',     field: null },
-    { key: 'nagging',      file: 'nagging_100.json',                field: null },
+    { key: 'consultation', file: 'consultation_chunks.json', field: null },
+    { key: 'quotes',       file: 'quotes_100.json',          field: null },
+    { key: 'cfha',         file: 'cfha_script_chunks.json',  field: null },
   ];
   let totalChunks = 0;
   for (const { key, file, field } of files) {
@@ -42,12 +34,12 @@ function loadRAGData() {
       if (!fs.existsSync(filePath)) { console.log(`[RAG] ⚠️  없음: ${file}`); continue; }
       const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
       ragData[key] = field ? (raw[field] || []) : raw;
-      const count = Array.isArray(ragData[key]) ? ragData[key].length : Object.keys(ragData[key]).length;
-      if (Array.isArray(ragData[key])) totalChunks += count;
+      const count = Array.isArray(ragData[key]) ? ragData[key].length : 0;
+      totalChunks += count;
       console.log(`[RAG] ✅ ${file}: ${count}개`);
     } catch (e) { console.error(`[RAG] ❌ ${file}:`, e.message); }
   }
-  console.log(`[RAG] ━━━ 총 ${totalChunks}개 청크 로드 완료 ━━━`);
+  console.log(`[RAG] ━━━ 상담 핵심 ${totalChunks}개 청크 로드 완료 (메모리 절약 모드) ━━━`);
 }
 
 function searchRAG(query, topK = 3) {
@@ -201,7 +193,8 @@ const createConsultRealtimePrompt = (userName, financialContext) => {
 • "(잠시)" 등 괄호 지시어 출력 금지
 • 단계번호·단계명 말하지 않기 ("1단계", "STEP" 금지)
 • 한 번에 질문 하나만
-• 고객이 답변하면 반드시 update_smart_note를 즉시 호출한다
+• 고객이 답변하면 반드시 update_smart_note 함수를 즉시 호출한다
+• "(update_smart_note...)" 같은 텍스트를 말로 출력하는 것은 절대 금지. 반드시 실제 함수를 호출해야 한다
 • 절대 멈추지 않음. 항상 다음 질문으로 이어감
 • 어려운 질문 → "오상열 CFP 대표님께 연결해 드릴까요?"
 • 반드시 고객의 실제 답변이 있을 때만 다음 질문으로 넘어간다
@@ -248,8 +241,8 @@ const createConsultRealtimePrompt = (userName, financialContext) => {
 → 확인 즉시: update_smart_note(note_page=1, title="인적사항", fields={"dual":"맞벌이또는외벌이"})
 
 [2단계 경제적 고민] ← 1단계 완료 직후 반드시 진행
-"지금 경제적으로 가장 걱정되시거나 관심 있으신 것이 무엇인가요?"
-→ 고민 청취 후 공감 2문장
+"지금 경제적으로 가장 큰 고민이나 관심이 무엇인가요?"
+→ 끝까지 듣기. 공감 2문장. 추가 질문 없음. 딱 이 한 마디만.
 → "바로 그 문제를 해결하기 위해 오늘 진단을 하는 것입니다."
 → update_smart_note(note_page=2, title="경제적고민", fields={"w1":"실제고민내용","goal":"해결목표"})
 
@@ -877,50 +870,17 @@ wss.on('connection', (ws, req) => {
               },
               tools: [
                 {
-                  type: 'function',
-                  name: 'search_financial_knowledge',
-                  description: '금융 지식을 검색합니다. 고객이 보험, 은퇴, 저축, 투자, 세금, 부동산, 부채, 금융집짓기, 예산, 연금 등 구체적인 재무 질문을 할 때 호출하세요. 단순 인사나 잡담에는 호출하지 마세요.',
-                  parameters: {
-                    type: 'object',
-                    properties: {
-                      query: { type: 'string', description: '검색할 핵심 키워드' },
-                      category: { type: 'string', enum: ['insurance', 'retirement', 'debt_savings', 'investment_tax', 'realestate', 'budget', 'general'], description: '질문 카테고리' }
-                    },
-                    required: ['query', 'category']
-                  }
-                },
-                {
-                  type: 'function',
-                  name: 'calculate_financial',
-                  description: '재무 수치를 정확하게 계산합니다. 부자지수, 저축률, 은퇴자금, DSR, 예산 진단, 보험 적정 보장 등 숫자 계산이 필요할 때 호출하세요.',
-                  parameters: {
-                    type: 'object',
-                    properties: {
-                      calculation_type: { type: 'string', enum: ['wealth_index', 'savings_rate', 'retirement_fund', 'dsr', 'budget_check', 'insurance_gap'], description: '계산 종류' },
-                      inputs: { type: 'object', description: '계산에 필요한 입력값' }
-                    },
-                    required: ['calculation_type', 'inputs']
-                  }
-                },
-                {
-                  // ★ 고객 답변 확인 즉시 호출 — 빈 값 절대 금지
+                  // 상담 노트 기록 — 고객 답변마다 반드시 호출
                   type: 'function',
                   name: 'update_smart_note',
-                  description: `상담 중 고객이 답변한 내용을 노트에 기록합니다.
-규칙:
-1. 고객이 하나라도 답하면 즉시 호출합니다. 절대 모아서 한 번에 하지 않습니다.
-2. fields에는 반드시 실제 값만 넣습니다. 빈 문자열, null, undefined, 플레이스홀더([이름] 등) 절대 금지.
-3. note_page는 현재 진단 단계 번호입니다: 0=오프닝 1=인적사항 2=고민 3=수입지출 4=자산부채 5=설계도 6=저축투자 7=자산배분 8=종합설계 9=최종의견 10=클로징
-예시: 고객이 "오상열"이라고 하면 → fields={"name":"오상열"}
-예시: 고객이 "55세"라고 하면 → fields={"age":"55세"}
-예시: 절대 금지 → fields={"name":"[이름]"} 또는 fields={"name":""}`,
+                  description: '고객이 답변할 때마다 즉시 이 함수를 호출하여 노트에 기록합니다. 텍스트로 설명하지 말고 반드시 함수를 호출하세요. 예: 고객이 "오상열"→ 즉시 호출. 고객이 "55세"→ 즉시 호출. 절대 텍스트로 "(update_smart_note...)"라고 말하지 마세요.',
                   parameters: {
                     type: 'object',
                     properties: {
-                      note_page: { type: 'number', description: '노트 번호 (0=오프닝, 1=인적사항, 2=고민, 3=수입지출, 4=자산부채, 5=설계도, 6=저축투자, 7=자산배분, 8=8대영역, 9=최종의견, 10=클로징)' },
-                      sub_page:  { type: 'number', description: '8대영역 세부 번호 1~8 (note_page=8일 때만 사용)' },
-                      title:     { type: 'string', description: '노트 섹션 제목' },
-                      fields:    { type: 'object', description: '기록할 필드명과 값의 객체. 예: {"name":"홍길동","age":"45세"}' }
+                      note_page: { type: 'number', description: '0=오프닝 1=인적사항 2=고민 3=수입지출 4=자산부채 5=설계도 6=저축투자 7=자산배분 8=종합설계 9=최종의견 10=클로징' },
+                      sub_page:  { type: 'number', description: '8단계 세부(1~7)' },
+                      title:     { type: 'string', description: '섹션 제목' },
+                      fields:    { type: 'object', description: '실제 값만. 예: {"name":"홍길동"} {"age":"45세"} {"income":"500만원"}. 빈값/플레이스홀더 금지.' }
                     },
                     required: ['note_page', 'title', 'fields']
                   }
@@ -928,7 +888,7 @@ wss.on('connection', (ws, req) => {
                 {
                   type: 'function',
                   name: 'clear_smart_note',
-                  description: '상담 종료 시 스마트 노트를 초기 상태로 되돌립니다.',
+                  description: '상담 종료 시 호출',
                   parameters: { type: 'object', properties: { message: { type: 'string' } } }
                 }
               ],
@@ -940,12 +900,17 @@ wss.on('connection', (ws, req) => {
 
           setTimeout(() => {
             if (openaiWs.readyState === 1) {
+              const isResume = financialContext?.isResume;
+              const currentStep = financialContext?.currentStep || 0;
+              const triggerText = isResume
+                ? `연결이 잠시 끊어졌다가 재연결됐습니다. 오프닝 없이 ${currentStep}단계부터 바로 이어서 진행하세요.`
+                : '지금 바로 첫 인사를 시작하세요.';
               openaiWs.send(JSON.stringify({
                 type: 'conversation.item.create',
-                item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '지금 바로 첫 인사를 시작하세요.' }] }
+                item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: triggerText }] }
               }));
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
-              console.log('[상담WS] 시작 트리거 전송 완료');
+              console.log('[상담WS] 시작 트리거 전송 완료' + (isResume ? ' (재개 모드)' : ''));
             }
           }, 500);
         });
