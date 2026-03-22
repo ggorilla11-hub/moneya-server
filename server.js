@@ -330,7 +330,30 @@ const createConsultRealtimePrompt = (userName, financialContext) => {
 계산 후: "정리해 드리면, 월 수입 [금액]에서 각 항목을 빼면 생활비가 [금액], 잉여자금이 [금액]이시네요. 맞는 것 같으세요?"
 → 생활비는 계산으로 확인하는 것이지 먼저 묻는 것이 아니다
 
-→ update_smart_note(note_page=3, fields={income, loan_cur, ins_cur, pension_cur, save_cur, living_cur, surplus})
+⑦ 예산표 기준 진단 (수입지출 수집 완료 후 반드시 실행):
+가족수에 따른 오상열 CFP 수입지출 예산 기준:
+  1인: 생활비20% 저축투자50% 노후연금10% 보험10% 대출10%
+  2인: 생활비30% 저축투자40% 노후연금10% 보험10% 대출10%
+  3인: 생활비40% 저축투자30% 노후연금10% 보험10% 대출10%
+  4인: 생활비50% 저축투자20% 노후연금10% 보험10% 대출10%
+  5인: 생활비60% 저축투자10% 노후연금10% 보험10% 대출10%
+
+각 항목 예산 = 월수입 × 해당 비율
+진단 = 현재금액 vs 예산 비교
+  초과 → "조금 많으시네요"
+  부족 → "조금 더 필요하시네요"
+  적정 → "딱 맞으시네요"
+
+예산표 설명 멘트:
+"정리가 됐으니 기준과 비교해 드릴게요.
+[가족수]인 가족 기준으로 보면 생활비 예산은 [금액], 지금 [금액]이시니 [진단]입니다.
+저축투자 예산은 [금액]인데 지금 [금액]이시니 [진단]입니다.
+노후연금과 보험도 각각 [예산] 기준에 지금 [금액]이십니다.
+이 표를 보시면 어디를 조정하면 좋을지 한눈에 보이시죠? 어떠세요?"
+
+→ update_smart_note(note_page=3, fields={income, loan_cur, ins_cur, pension_cur, save_cur, living_cur, surplus,
+  budget_living, budget_save, budget_pension, budget_ins, budget_loan,
+  diag_living, diag_save, diag_pension, diag_ins, diag_loan})
 
 【4. 자산부채 분석】
 예고: "지금까지 수입지출을 봤고, 이제 갖고 계신 자산과 부채를 정리해 보겠습니다."
