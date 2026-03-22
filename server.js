@@ -204,6 +204,9 @@ const createConsultRealtimePrompt = (userName, financialContext) => {
 • 고객 답변 후 반드시 update_smart_note 즉시 호출
 • 절대 멈추지 않음. 항상 다음 질문으로 이어감
 • 어려운 질문 → "오상열 CFP 대표님께 연결해 드릴까요?"
+• 반드시 고객의 실제 답변이 있을 때만 다음 질문으로 넘어간다
+• 고객이 답변하지 않으면 같은 질문을 한 번 더 한다. 절대 스스로 답을 만들지 않는다
+• 배경 소음, TV 소리, 뉴스 소리가 들려도 무시하고 대기한다
 
 ━━━ 말하기 공식 (모든 발화에 적용) ━━━
 공감 → 해석 → 질문 순서로 말한다.
@@ -1259,11 +1262,11 @@ wss.on('connection', (ws, req) => {
               output_audio_format: 'pcm16',
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
               turn_detection: {
-                type: 'semantic_vad',
-                eagerness: 'low',
-                // ★ silence_duration_ms는 semantic_vad에서 지원 안 됨 — 제거
-                create_response: true,
-                interrupt_response: true,
+                type: 'server_vad',
+                threshold: 0.85,           // 높을수록 확실한 음성만 인식 (TV소음 차단)
+                prefix_padding_ms: 300,
+                silence_duration_ms: 1200, // 1.2초 침묵 후 발화 종료 판단
+                create_response: true,     // 발화 종료 시 응답 생성 (침묵만이면 안 함)
               },
               tools: [
                 {
@@ -1342,10 +1345,22 @@ wss.on('connection', (ws, req) => {
             if (event.type === 'conversation.item.input_audio_transcription.completed') {
               const userText = (event.transcript || '').trim();
               console.log('[상담WS] 사용자:', userText);
-              // STT 소음 필터
+              // STT 소음 필터 강화
               if (userText.length <= 2) return;
-              const noisePatterns = [/뉴스/, /기자/, /앵커/, /MBC/, /KBS/, /SBS/, /YTN/, /안녕하세요$/, /감사합니다$/, /수고하세요$/, /^네\s*네$/];
-              if (noisePatterns.some(p => p.test(userText))) { console.log('[상담WS] STT 소음 차단:', userText); return; }
+              const noisePatterns = [
+                /뉴스/, /기자/, /앵커/, /MBC/, /KBS/, /SBS/, /YTN/, /JTBC/, /TV/, /채널/,
+                /안녕하세요$/, /감사합니다$/, /수고하세요$/, /^네\s*네$/, /^고맙습니다$/,
+                /이덕영/, /뉴스투데이/, /이브닝뉴스/, /아나운서/,
+                /^[ㄱ-ㅎㅏ-ㅣ\s]+$/,  // 자모음만
+              ];
+              if (noisePatterns.some(p => p.test(userText))) {
+                console.log('[상담WS] STT 소음 차단:', userText);
+                // 진행 중인 응답이 있으면 취소
+                if (openaiWs && openaiWs.readyState === 1) {
+                  try { openaiWs.send(JSON.stringify({ type: 'response.cancel' })); } catch(e) {}
+                }
+                return;
+              }
               ws.send(JSON.stringify({ type: 'transcript', text: userText, role: 'user' }));
             }
 
@@ -1405,9 +1420,13 @@ wss.on('connection', (ws, req) => {
 
             if (event.type === 'error') {
               console.error('[상담WS] OpenAI 에러 상세:', JSON.stringify(event.error, null, 2));
-              // session.update 파라미터 오류 시 즉시 알림
               if (event.error?.code === 'unknown_parameter') {
                 console.error('[상담WS] ★★★ session.update 파라미터 오류 — 프롬프트 미전달 가능성 있음 ★★★');
+              }
+              // active_response 충돌 — 현재 응답 취소 후 안정화
+              if (event.error?.code === 'conversation_already_has_active_response') {
+                console.log('[상담WS] active_response 충돌 — 자동 취소 처리');
+                try { openaiWs.send(JSON.stringify({ type: 'response.cancel' })); } catch(e) {}
               }
               ws.send(JSON.stringify({ type: 'error', error: event.error?.message }));
             }
@@ -1568,6 +1587,8 @@ wss.on('connection', (ws, req) => {
       }
 
       if (msg.type === 'text_input' && openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+        console.log('[상담WS] 텍스트입력:', msg.text);
+        ws.send(JSON.stringify({ type: 'transcript', text: msg.text, role: 'user' }));
         openaiWs.send(JSON.stringify({
           type: 'conversation.item.create',
           item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: msg.text }] }
