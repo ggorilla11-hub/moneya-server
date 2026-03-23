@@ -596,8 +596,9 @@ server.headersTimeout = 125000;
 
 const wss = new WebSocket.Server({ server });
 
-// ★ DESIRE 중복 세션 차단
+// ★ DESIRE + 상담 중복 세션 차단
 const activeDesiresessions = new Map();
+const activeConsultSessions = new Map(); // 상담 세션 전역 관리
 
 wss.on('connection', (ws, req) => {
   console.log('[WS] 연결됨');
@@ -606,6 +607,20 @@ wss.on('connection', (ws, req) => {
   console.log(`[WS] 모드: ${mode || 'default'}`);
 
   const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
+
+  // ★ 상담 모드 중복 세션 차단 — 이전 세션 강제 종료
+  if (mode === 'consult') {
+    const existingWs = activeConsultSessions.get(clientIP);
+    if (existingWs && existingWs.readyState === 1) {
+      console.log(`[상담WS] 중복 세션 차단 — 이전 세션 종료: ${clientIP}`);
+      try { existingWs.close(1000, 'duplicate_session'); } catch(e) {}
+    }
+    activeConsultSessions.set(clientIP, ws);
+    ws.on('close', () => {
+      if (activeConsultSessions.get(clientIP) === ws) activeConsultSessions.delete(clientIP);
+    });
+  }
+
   if (mode === 'desire') {
     const existingWs = activeDesiresessions.get(clientIP);
     if (existingWs && existingWs.readyState === 1) {
