@@ -739,6 +739,33 @@ wss.on('connection', (ws, req) => {
         // ★ QuestionController — 서버가 질문 직접 통제
         const qc = QuestionController ? new QuestionController() : null;
 
+        // ★ 응답 큐 — active_response 충돌 방지
+        let isResponding = false;
+        let pendingMessage = null;
+
+        function sendWhenReady(text, delay=200) {
+          if (isResponding) {
+            // 응답 중이면 대기
+            pendingMessage = text;
+            console.log('[QC] 응답 중 — 큐에 저장');
+            return;
+          }
+          setTimeout(() => {
+            if (openaiWs?.readyState === 1) {
+              isResponding = true;
+              openaiWs.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: { type: 'message', role: 'user', content: [{
+                  type: 'input_text',
+                  text: `이 말만 하세요: "${text}"`
+                }]}
+              }));
+              openaiWs.send(JSON.stringify({ type: 'response.create' }));
+              console.log(`[QC] 전달: "${text.slice(0,40)}..."`);
+            }
+          }, delay);
+        }
+
         openaiWs.on('open', () => {
           console.log('[상담WS] OpenAI Realtime 연결 (mini)');
           const name = financialContext?.name || userName || '고객';
@@ -818,6 +845,13 @@ wss.on('connection', (ws, req) => {
             if (event.type === 'response.audio_transcript.done') {
               console.log('[상담WS] 머니야:', event.transcript?.slice(0, 50));
               ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
+              // 응답 완료 → 큐 처리
+              isResponding = false;
+              if (pendingMessage) {
+                const msg = pendingMessage;
+                pendingMessage = null;
+                sendWhenReady(msg, 300);
+              }
               // ★ 머니야 첫 발화 완료 → 1단계 프롬프트만 주입 (QC는 고객 YES 후 활성화)
               if (currentConsultStep === 0) {
                 currentConsultStep = 1;
@@ -838,6 +872,20 @@ wss.on('connection', (ws, req) => {
               console.log('[상담WS] 사용자:', userText);
               // STT 소음 필터 강화
               if (userText.length <= 2) return;
+
+              // ★ STT 오인식 보정
+              const sttFix = {
+                '노준비':'노후준비','노줄비':'노후준비','노후비':'노후준비',
+                '직장애인':'직장인','직장에인':'직장인',
+                '오상렬':'오상열','고상렬':'오상열','고상열':'오상열',
+                '유료광고':'','본영상은':'','구독좋아요':'',
+              };
+              let fixedText = userText;
+              for(const [w,c] of Object.entries(sttFix)) fixedText = fixedText.split(w).join(c);
+              if(fixedText !== userText) console.log('[STT] 보정: "'+userText+'" → "'+fixedText+'"');
+              const userTextFinal = fixedText.trim();
+              if(userTextFinal.length <= 1) return;
+
               const noisePatterns = [
                 /뉴스/, /기자/, /앵커/, /MBC/, /KBS/, /SBS/, /YTN/, /JTBC/, /TV/, /채널/,
                 /안녕하세요$/, /감사합니다$/, /수고하세요$/, /^네\s*네$/, /^고맙습니다$/,
@@ -847,8 +895,8 @@ wss.on('connection', (ws, req) => {
                 /^여보세요/, /^잠깐만/, /^뭐라고/, /^다시/, /^취소/,
                 /이라고요\?$/, /라고요\?$/, /요\?\s*$/, /^아+$/, /^어+$/,
               ];
-              if (noisePatterns.some(p => p.test(userText))) {
-                console.log('[상담WS] STT 소음 차단:', userText);
+              if (noisePatterns.some(p => p.test(userTextFinal))) {
+                console.log('[상담WS] STT 소음 차단:', userTextFinal);
                 // 진행 중인 응답이 있으면 취소
                 if (openaiWs && openaiWs.readyState === 1) {
                   try { openaiWs.send(JSON.stringify({ type: 'response.cancel' })); } catch(e) {}
@@ -858,7 +906,7 @@ wss.on('connection', (ws, req) => {
               ws.send(JSON.stringify({ type: 'transcript', text: userText, role: 'user' }));
 
               // ★ 고객 YES 감지 → QC 활성화 + 첫 질문 전달
-              if (qc && !qc.active && currentConsultStep === 1) {
+              if (qc && !qc.active && currentConsultStep === 1 && !isResponding) {
                 const yesPatterns = /^(네|예|괜찮|좋아|응|어|됩니다|좋습니다|알겠|시작|부탁|해주세요)/;
                 if (yesPatterns.test(userText.trim())) {
                   qc.activate();
@@ -921,30 +969,21 @@ wss.on('connection', (ws, req) => {
                   const fieldVal = fields[fieldKey];
                   const qcResult = qc.processAnswer(fieldKey, fieldVal, notePage);
 
-                  if (qcResult && qcResult.text && openaiWs?.readyState === 1) {
-                    setTimeout(() => {
-                      // 다음 단계 프롬프트 주입 (단계 전환 시)
+                  if (qcResult && qcResult.text) {
+                      // 단계 전환 시 프롬프트 주입
                       if (qcResult.nextQ && qc.step !== currentConsultStep) {
                         currentConsultStep = qc.step;
-                        const np = createConsultRealtimePrompt(
-                          financialContext?.name||userName||'고객',
-                          financialContext, qc.step, null, collectedData
-                        );
-                        openaiWs.send(JSON.stringify({type:'session.update',session:{instructions:np}}));
-                        console.log(`[QC] → ${qc.step}단계 프롬프트 전환`);
+                        if (openaiWs?.readyState === 1) {
+                          const np = createConsultRealtimePrompt(
+                            financialContext?.name||userName||'고객',
+                            financialContext, qc.step, null, collectedData
+                          );
+                          openaiWs.send(JSON.stringify({type:'session.update',session:{instructions:np}}));
+                          console.log(`[QC] → ${qc.step}단계 프롬프트 전환`);
+                        }
                       }
-
-                      // 공감 + 다음 질문 전달
-                      openaiWs.send(JSON.stringify({
-                        type: 'conversation.item.create',
-                        item: { type: 'message', role: 'user', content: [{
-                          type: 'input_text',
-                          text: `지금 바로 이 말만 하세요: "${qcResult.text}"`
-                        }]}
-                      }));
-                      openaiWs.send(JSON.stringify({ type: 'response.create' }));
-                      console.log(`[QC] 다음 전달: "${qcResult.text.slice(0,40)}..."`);
-                    }, 300);
+                      // 공감 + 다음 질문 — 응답 큐로 전달 (충돌 방지)
+                      sendWhenReady(qcResult.text, 400);
                   }
                 }
 
