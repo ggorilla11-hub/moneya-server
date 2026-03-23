@@ -724,6 +724,7 @@ wss.on('connection', (ws, req) => {
 
         // ★ 고객 데이터 누적 저장소 — 단계 전환 시 맥락 유지용
         let collectedData = {};
+        let currentConsultStep = 0; // 현재 상담 단계 추적
 
         openaiWs.on('open', () => {
           console.log('[상담WS] OpenAI Realtime 연결 (mini)');
@@ -790,6 +791,26 @@ wss.on('connection', (ws, req) => {
               }));
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
               console.log('[상담WS] 시작 트리거 전송 완료' + (isResume ? ' (재개 모드)' : ''));
+
+              // ★ 오프닝 후 20초 뒤 자동으로 1단계 프롬프트 주입
+              // update_smart_note 호출 여부와 관계없이 보장
+              if (!isResume) {
+                setTimeout(() => {
+                  if (openaiWs && openaiWs.readyState === 1) {
+                    const step1Prompt = createConsultRealtimePrompt(
+                      financialContext?.name || userName || '고객',
+                      financialContext, 1, null, collectedData
+                    );
+                    openaiWs.send(JSON.stringify({ type: 'session.update', session: { instructions: step1Prompt } }));
+                    openaiWs.send(JSON.stringify({
+                      type: 'conversation.item.create',
+                      item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '이제 인적사항을 수집하세요. 반드시 성함부터 물어보세요.' }] }
+                    }));
+                    openaiWs.send(JSON.stringify({ type: 'response.create' }));
+                    console.log('[상담WS] 오프닝 완료 → 1단계 자동 전환');
+                  }
+                }, 20000); // 20초 후
+              }
             }
           }, 500);
         });
@@ -799,7 +820,24 @@ wss.on('connection', (ws, req) => {
             const event = JSON.parse(data.toString());
             if (event.type === 'response.audio.delta' && event.delta) ws.send(JSON.stringify({ type: 'audio', data: event.delta }));
             if (event.type === 'input_audio_buffer.speech_started') ws.send(JSON.stringify({ type: 'interrupt' }));
-            if (event.type === 'response.audio_transcript.done') { console.log('[상담WS] 머니야:', event.transcript?.slice(0, 50)); ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' })); }
+            if (event.type === 'response.audio_transcript.done') {
+              console.log('[상담WS] 머니야:', event.transcript?.slice(0, 50));
+              ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
+              // ★ 오프닝 완료 후 자동으로 1단계 프롬프트 주입
+              if (currentConsultStep === 0) {
+                currentConsultStep = 1;
+                setTimeout(() => {
+                  if (openaiWs?.readyState === 1) {
+                    const step1Prompt = createConsultRealtimePrompt(
+                      financialContext?.name || userName || '고객',
+                      financialContext, 1, null, collectedData
+                    );
+                    openaiWs.send(JSON.stringify({ type: 'session.update', session: { instructions: step1Prompt } }));
+                    console.log('[상담WS] 오프닝 완료 → 1단계(인적사항) 프롬프트 자동 주입');
+                  }
+                }, 2000);
+              }
+            }
             if (event.type === 'conversation.item.input_audio_transcription.completed') {
               const userText = (event.transcript || '').trim();
               console.log('[상담WS] 사용자:', userText);
@@ -859,11 +897,37 @@ wss.on('connection', (ws, req) => {
 
                 // 단계 완료 감지 → 다음 단계 프롬프트에 고객 데이터 포함해서 주입
                 const stepCompleteKeys = {
-                  0:['session'], 1:['dual'], 2:['goal','w1'],
-                  3:['surplus','living_cur'], 4:['wealth_index','net'],
-                  5:['retire_age'], 6:['net','source'], 7:['res','inv'],
-                  9:['score','grade'], 10:['closing']
+                  0:['session','disclaimer'],
+                  1:['dual','name','age','marry','family','job'], // 인적사항 중 어느 하나라도 오면 1단계 유지
+                  2:['goal','w1'],
+                  3:['surplus','living_cur'],
+                  4:['wealth_index','net'],
+                  5:['retire_age'],
+                  6:['net','source'],
+                  7:['res','inv'],
+                  9:['score','grade'],
+                  10:['closing']
                 };
+                // ★ 0단계에서 name이 들어오면 즉시 1단계로 전환
+                if (notePage === 0 && fields.name) {
+                  setTimeout(() => {
+                    if (openaiWs?.readyState === 1) {
+                      const p1 = createConsultRealtimePrompt(financialContext?.name||userName||'고객',financialContext,1,null,collectedData);
+                      openaiWs.send(JSON.stringify({type:'session.update',session:{instructions:p1}}));
+                      console.log('[상담WS] 이름 확인 → 1단계 즉시 전환');
+                    }
+                  }, 300);
+                }
+                // ★ 1단계에서 dual이 들어오면 2단계로 전환
+                if (notePage === 1 && fields.dual) {
+                  setTimeout(() => {
+                    if (openaiWs?.readyState === 1) {
+                      const p2 = createConsultRealtimePrompt(financialContext?.name||userName||'고객',financialContext,2,null,collectedData);
+                      openaiWs.send(JSON.stringify({type:'session.update',session:{instructions:p2}}));
+                      console.log('[상담WS] 맞벌이 확인 → 2단계 즉시 전환');
+                    }
+                  }, 300);
+                }
                 const isComplete = (stepCompleteKeys[notePage]||[]).some(k=>fields[k]);
                 if (isComplete && notePage < 10) {
                   const next = notePage + 1;
