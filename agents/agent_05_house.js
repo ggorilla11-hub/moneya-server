@@ -1,4 +1,4 @@
-module.exports = function agentHouse() {
+  module.exports = function agentHouse() {
   return `[지금 할 것: 금융집짓기 설계도 — 비유로 금융 순서 이해]
 
 예고: "이제 금융의 올바른 순서를 금융집짓기로 설명드리겠습니다."
