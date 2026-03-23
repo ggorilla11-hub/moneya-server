@@ -865,6 +865,12 @@ wss.on('connection', (ws, req) => {
                 pendingMessage = null;
                 sendWhenReady(msg, 300);
               }
+              // ★ Brain 활성화 중이면 머니야 발화 완료 후 답변 대기
+              if (brain && qc && qc.active && !waitingForAnswer) {
+                waitingForAnswer = true;
+                console.log('[Brain] 머니야 발화 완료 → 고객 답변 대기 중');
+              }
+
               // ★ 머니야 첫 발화 완료 → 1단계 프롬프트만 주입 (QC는 고객 YES 후 활성화)
               if (currentConsultStep === 0) {
                 currentConsultStep = 1;
