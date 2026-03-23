@@ -163,9 +163,27 @@ ${name}님의 든든한 지출관리 친구가 되어드릴게요!`;
 //  멀티에이전트 라우터 (v6.9)
 //  agents/ 폴더의 단계별 에이전트 스크립트를 동적 주입
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const AgentRouter = require('./agents/AgentRouter');
-const createConsultRealtimePrompt = (userName, financialContext, step = 0, subStep = null) => {
-  return AgentRouter.buildPrompt(step, subStep, financialContext?.sessionNo || 1);
+// AgentRouter — 실패 시 폴백으로 안전하게 처리
+let AgentRouter = null;
+try {
+  AgentRouter = require('./agents/AgentRouter');
+  console.log('[AgentRouter] ✅ 멀티에이전트 시스템 로드 완료');
+} catch(e) {
+  console.error('[AgentRouter] ⚠️ 로드 실패 — 기본 프롬프트 사용:', e.message);
+}
+
+const FALLBACK_PROMPT = `당신은 AI재무진단 "머니야"입니다. 오상열 CFP 대표님의 AI 수제자입니다.
+공감→복명복창→다음질문 순서로 말합니다. 쌩깝(질문만) 절대 금지.
+한국어 존댓말만. 금융상품명 금지. 질문 하나씩.
+고객 답변 즉시 update_smart_note 함수 호출.
+0=오프닝→1=인적사항(이름/나이/결혼/가족/직업/맞벌이)→2=고민→3=수입지출→4=자산부채→5=집짓기→6=저축투자→7=자산배분→8=종합설계→9=최종의견→10=클로징 순서로 진행.
+오원트금융연구소 | AI머니야 | 오상열 CFP`;
+
+const createConsultRealtimePrompt = (userName, financialContext, step = 0, subStep = null, clientData = null) => {
+  if (AgentRouter) {
+    return AgentRouter.buildPrompt(step, subStep, financialContext?.sessionNo || 1, clientData);
+  }
+  return FALLBACK_PROMPT;
 };
 
 
@@ -704,10 +722,13 @@ wss.on('connection', (ws, req) => {
           headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' }
         });
 
+        // ★ 고객 데이터 누적 저장소 — 단계 전환 시 맥락 유지용
+        let collectedData = {};
+
         openaiWs.on('open', () => {
           console.log('[상담WS] OpenAI Realtime 연결 (mini)');
           const name = financialContext?.name || userName || '고객';
-          const consultPrompt = createConsultRealtimePrompt(name, financialContext);
+          const consultPrompt = createConsultRealtimePrompt(name, financialContext, 0, null, collectedData);
           console.log('[상담WS] 프롬프트 전송 시작 — 길이:', consultPrompt.length, '자');
 
           openaiWs.send(JSON.stringify({
@@ -828,21 +849,39 @@ wss.on('connection', (ws, req) => {
                 else { result = '계산 완료.'; }
               }
               if (fnName === 'update_smart_note') {
-                let content = {};
-                // note_page + fields 기반으로 프론트에 전달
                 const notePage = args.note_page ?? 0;
                 const subPage  = args.sub_page  ?? null;
                 let fields = {};
                 try { fields = typeof args.fields === 'string' ? JSON.parse(args.fields) : (args.fields || {}); } catch(e) { fields = {}; }
 
+                // ★ 고객 데이터 누적 — 단계 전환 시 맥락 유지용
+                Object.assign(collectedData, fields);
+
+                // 단계 완료 감지 → 다음 단계 프롬프트에 고객 데이터 포함해서 주입
+                const stepCompleteKeys = {
+                  0:['session'], 1:['dual'], 2:['goal','w1'],
+                  3:['surplus','living_cur'], 4:['wealth_index','net'],
+                  5:['retire_age'], 6:['net','source'], 7:['res','inv'],
+                  9:['score','grade'], 10:['closing']
+                };
+                const isComplete = (stepCompleteKeys[notePage]||[]).some(k=>fields[k]);
+                if (isComplete && notePage < 10) {
+                  const next = notePage + 1;
+                  setTimeout(() => {
+                    if (openaiWs?.readyState === 1) {
+                      const nextPrompt = createConsultRealtimePrompt(
+                        financialContext?.name || userName || '고객',
+                        financialContext, next, null, collectedData
+                      );
+                      openaiWs.send(JSON.stringify({ type: 'session.update', session: { instructions: nextPrompt } }));
+                      console.log(`[상담WS] ${notePage}단계 완료 → ${next}단계 프롬프트 주입 (고객데이터 ${Object.keys(collectedData).length}개 포함)`);
+                    }
+                  }, 500);
+                }
+
                 ws.send(JSON.stringify({
                   type: 'smart_note_update',
-                  notePage,                           // 노트 번호 (0~10)
-                  subPage,                            // 8대영역 세부 번호 (1~8)
-                  title: args.title,
-                  fields,                             // {필드명: 값} 객체
-                  highlightFloor: args.highlight_floor || 'none',
-                  step: notePage                      // 단계 이동 신호
+                  notePage, subPage, title: args.title, fields, step: notePage
                 }));
                 result = `노트${notePage}${subPage ? '-'+subPage : ''} "${args.title}" 기입 완료.`;
               }
@@ -1067,3 +1106,17 @@ wss.on('connection', (ws, req) => {
 });
 
 console.log('AI머니야 서버 v9.2 초기화 완료!');
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  자동 핑 — Render 콜드 스타트 방지
+//  5분마다 자신에게 요청 → 서버 항상 깨어있음
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || 'https://moneya-server.onrender.com';
+setInterval(async () => {
+  try {
+    await fetch(`${SELF_URL}/api/health`);
+    console.log('[핑] 서버 활성 유지 완료');
+  } catch(e) {
+    console.log('[핑] 실패 (무시):', e.message);
+  }
+}, 4 * 60 * 1000); // 4분마다
+console.log('[핑] 자동 활성 유지 시작 — 콜드 스타트 방지');
