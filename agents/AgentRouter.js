@@ -28,7 +28,7 @@ const agentCache = {};
 
 function loadAgent(step, subStep) {
   const key = `${step}_${subStep||0}`;
-  if (agentCache[key]) return agentCache[key];
+  // 캐시 미사용 — 항상 최신 파일 로드
   const files = {
     0:'agent_00_opening', 1:'agent_01_personal', 2:'agent_02_worry',
     3:'agent_03_income',  4:'agent_04_asset',    5:'agent_05_house',
