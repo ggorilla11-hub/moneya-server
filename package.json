@@ -4,7 +4,7 @@
   "description": "AI머니야 서버 — Mega System Prompt v3.1",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+  "start": "node --max-old-space-size=400 server.js"
   },
   "dependencies": {
     "express": "latest",
