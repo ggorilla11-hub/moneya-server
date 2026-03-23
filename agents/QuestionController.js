@@ -11,8 +11,8 @@ const QUESTIONS = {
     { id:'name',    ask:'먼저 성함이 어떻게 되시나요?',        field:'name', noWait:true },
     { id:'age',     ask:'나이가 어떻게 되시나요?',              field:'age' },
     { id:'marry',   ask:'결혼은 하셨나요?',                     field:'marry' },
-    { id:'family',  ask:'가족이 몇 분이세요?',                  field:'family' },
-    { id:'job',     ask:'현재 어떤 일을 하고 계세요?',          field:'job' },
+    { id:'family',  ask:'가족이 몇 분이세요?',                  field:'family', noWait:true },
+    { id:'job',     ask:'현재 어떤 일을 하고 계세요?',          field:'job', noWait:true },
     { id:'dual',    ask:'맞벌이이신가요?',                      field:'dual' },
   ],
   // 2단계: 경제적 고민
@@ -59,10 +59,17 @@ const EMPATHY = {
   marry:       (v) => v.includes('기혼')||v.includes('결혼')||v.includes('네')
                       ? '기혼이시군요. 가정을 위해 더 체계적인 계획이 필요하시겠어요.'
                       : '미혼이시군요. 지금부터 준비하시면 정말 유리하세요.',
-  family:      (v) => `${v}이시군요. 가족을 위한 계획이 정말 중요하겠어요.`,
-  job:         (v) => `${v}이시군요. 안정적인 수입 기반이 있으시네요.`,
+  family:      (v) => `${v}이시군요. 가족을 위한 계획이 정말 중요하겠어요. 현재 어떤 일을 하고 계세요?`,
+  job:         (v) => {
+    const empathy = v.includes('직장')||v.includes('공무원')||v.includes('회사')
+      ? `${v}이시군요. 월급날 이후 잔고가 빠르게 줄어드는 경험 있으시죠.`
+      : v.includes('자영업')||v.includes('사업')
+      ? `${v}이시군요. 매출은 있는데 정작 내 소득이 얼마인지 불명확할 때 있으시죠.`
+      : `${v}이시군요.`;
+    return empathy + ' 맞벌이이신가요?';
+  },
   dual:        (v) => v.includes('맞벌이')||v.includes('네')
-                      ? '맞벌이시군요. 두 분 소득을 합산해서 분석해 드리겠습니다.'
+                      ? '맞벌이시군요. 두 분이 버시는데도 왜 모이지 않는지 답답하실 때 있으시죠.'
                       : '외벌이로 가계를 꾸려가시는군요. 더 체계적인 계획이 필요하시겠어요.',
   w1:          (v) => `${v}이시군요. 많이 걱정되셨을 것 같아요. 그 마음 충분히 이해합니다. 바로 그 문제를 해결하기 위해 오늘 진단을 하는 것입니다.`,
   income:      (v) => `월 ${v} 수령이시군요. 감사합니다.`,
