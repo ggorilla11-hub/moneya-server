@@ -899,6 +899,25 @@ wss.on('connection', (ws, req) => {
                 // ━━━ 단계별 마지막 질문 → 다음 단계 자동 전환 ━━━
                 // 각 단계의 마지막 필드가 채워지면 다음 단계 프롬프트 즉시 주입
 
+                const STEP_TRIGGER = {
+                  1: '인적사항을 수집하세요. 반드시 성함부터 물어보세요.',
+                  2: '경제적 고민을 물어보세요. "지금 경제적으로 가장 큰 고민이 무엇인가요?"',
+                  3: '수입지출 분석을 시작하세요. 수입부터 물어보세요.',
+                  4: '자산부채 분석을 시작하세요. 예적금부터 물어보세요.',
+                  5: '금융집짓기 설계도를 설명하세요.',
+                  6: '저축투자 포트폴리오를 안내하세요.',
+                  7: '자산배분 포트폴리오를 안내하세요.',
+                  '8_1': '종합재무설계 은퇴설계를 시작하세요.',
+                  '8_2': '부채설계를 안내하세요.',
+                  '8_3': '저축설계를 안내하세요.',
+                  '8_4': '투자설계를 안내하세요.',
+                  '8_5': '세금설계를 안내하세요.',
+                  '8_6': '부동산설계를 안내하세요.',
+                  '8_7': '보험설계를 안내하세요.',
+                  9: '최종의견을 말씀드리세요.',
+                  10: '클로징을 진행하세요.'
+                };
+
                 function goNextStep(nextStep, nextSubStep=null, delay=500) {
                   setTimeout(() => {
                     if (openaiWs?.readyState === 1) {
@@ -907,49 +926,69 @@ wss.on('connection', (ws, req) => {
                         financialContext, nextStep, nextSubStep, collectedData
                       );
                       openaiWs.send(JSON.stringify({type:'session.update',session:{instructions:np}}));
+                      // 트리거 메시지 전송 — 머니야가 다음 단계를 바로 시작
+                      const triggerKey = nextSubStep ? `${nextStep}_${nextSubStep}` : nextStep;
+                      const triggerMsg = STEP_TRIGGER[triggerKey] || `${nextStep}단계를 진행하세요.`;
+                      openaiWs.send(JSON.stringify({
+                        type:'conversation.item.create',
+                        item:{type:'message',role:'user',content:[{type:'input_text',text:triggerMsg}]}
+                      }));
+                      openaiWs.send(JSON.stringify({type:'response.create'}));
                       console.log(`[상담WS] → ${nextStep}단계${nextSubStep?'.'+nextSubStep:''} 전환 (고객데이터 ${Object.keys(collectedData).length}개)`);
                     }
                   }, delay);
                 }
 
-                // 0단계: disclaimer(동의) 또는 session 필드 → 1단계(인적사항)
-                if (notePage===0 && (fields.disclaimer||fields.session)) goNextStep(1);
+                // ━━━ 단계별 마지막 필드 → 다음 단계 전환 (중복 방지) ━━━
+                // notePage가 정확히 일치할 때만 전환 — 필드명 겹침 방지
 
-                // 1단계: dual(맞벌이) 마지막 질문 → 2단계(경제적고민)
-                if (notePage===1 && fields.dual) goNextStep(2);
-
-                // 2단계: w1(고민) 또는 goal(목표) → 3단계(수입지출)
-                if (notePage===2 && (fields.w1||fields.goal)) goNextStep(3);
-
-                // 3단계: surplus(잉여자금) 또는 living_cur(생활비) → 4단계(자산부채)
-                if (notePage===3 && (fields.surplus||fields.living_cur)) goNextStep(4);
-
-                // 4단계: wealth_index(부자지수) 또는 net(순자산) → 5단계(집짓기)
-                if (notePage===4 && (fields.wealth_index||fields.net)) goNextStep(5);
-
-                // 5단계: life_age(수명) 또는 strategy → 6단계(저축투자)
-                if (notePage===5 && (fields.life_age||fields.strategy)) goNextStep(6);
-
-                // 6단계: net(순투자재원) → 7단계(자산배분)
-                if (notePage===6 && fields.net) goNextStep(7);
-
-                // 7단계: inv(금융비중) 또는 res(부동산비중) → 8단계(종합재무설계 은퇴)
-                if (notePage===7 && (fields.inv||fields.res)) goNextStep(8, 1);
-
-                // 8단계 세부: 각 소단계 마지막 필드 → 다음 소단계
-                if (notePage===8) {
-                  const sp = args.sub_page||1;
-                  if (sp===1 && fields.monthly)  goNextStep(8, 2); // 은퇴→부채
-                  if (sp===2 && fields.priority) goNextStep(8, 3); // 부채→저축
-                  if (sp===3 && fields.monthly)  goNextStep(8, 4); // 저축→투자
-                  if (sp===4 && fields.rate)     goNextStep(8, 5); // 투자→세금
-                  if (sp===5 && fields.refund)   goNextStep(8, 6); // 세금→부동산
-                  if (sp===6 && fields.strategy) goNextStep(8, 7); // 부동산→보험
-                  if (sp===7 && fields.premium)  goNextStep(9);    // 보험→최종의견
+                // 0단계 → 1단계: session 또는 disclaimer
+                if (notePage===0 && (fields.session||fields.disclaimer)) {
+                  goNextStep(1);
                 }
-
-                // 9단계: score(점수) 또는 grade → 10단계(클로징)
-                if (notePage===9 && (fields.score||fields.grade)) goNextStep(10);
+                // 1단계 → 2단계: dual(맞벌이) 마지막
+                else if (notePage===1 && fields.dual) {
+                  goNextStep(2);
+                }
+                // 2단계 → 3단계: w1(고민내용) 마지막
+                else if (notePage===2 && fields.w1) {
+                  goNextStep(3);
+                }
+                // 3단계 → 4단계: surplus(잉여자금) 마지막
+                else if (notePage===3 && fields.surplus) {
+                  goNextStep(4);
+                }
+                // 4단계 → 5단계: wealth_index(부자지수) 마지막
+                else if (notePage===4 && fields.wealth_index) {
+                  goNextStep(5);
+                }
+                // 5단계 → 6단계: life_age(수명) 마지막
+                else if (notePage===5 && fields.life_age) {
+                  goNextStep(6);
+                }
+                // 6단계 → 7단계: inv_pct(투자비율) 마지막
+                else if (notePage===6 && fields.inv_pct) {
+                  goNextStep(7);
+                }
+                // 7단계 → 8-1단계: fin_total(금융자산합계) 마지막
+                else if (notePage===7 && fields.fin_total) {
+                  goNextStep(8, 1);
+                }
+                // 8단계 세부 전환
+                else if (notePage===8) {
+                  const sp = subPage||1;
+                  if (sp===1 && fields.monthly)   goNextStep(8,2); // 은퇴→부채
+                  if (sp===2 && fields.priority)  goNextStep(8,3); // 부채→저축
+                  if (sp===3 && fields.goal)      goNextStep(8,4); // 저축→투자
+                  if (sp===4 && fields.rate)      goNextStep(8,5); // 투자→세금
+                  if (sp===5 && fields.refund)    goNextStep(8,6); // 세금→부동산
+                  if (sp===6 && fields.realty_st) goNextStep(8,7); // 부동산→보험
+                  if (sp===7 && fields.premium)   goNextStep(9);   // 보험→최종의견
+                }
+                // 9단계 → 10단계: score(재무점수) 마지막
+                else if (notePage===9 && fields.score) {
+                  goNextStep(10);
+                }
 
                 ws.send(JSON.stringify({
                   type: 'smart_note_update',
