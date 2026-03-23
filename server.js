@@ -797,7 +797,7 @@ wss.on('connection', (ws, req) => {
               const currentStep = financialContext?.currentStep || 0;
               const triggerText = isResume
                 ? `연결이 잠시 끊어졌다가 재연결됐습니다. 오프닝 없이 ${currentStep}단계부터 바로 이어서 진행하세요.`
-                : '오프닝 멘트를 말하고 반드시 멈추세요. 고객 답변을 기다리세요. 절대 혼자 계속 말하지 마세요.';
+                : '오프닝 멘트를 말하고 반드시 멈추세요. 고객이 네 또는 괜찮습니다 라고 할 때까지 기다리세요.';
               openaiWs.send(JSON.stringify({
                 type: 'conversation.item.create',
                 item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: triggerText }] }
@@ -839,7 +839,7 @@ wss.on('connection', (ws, req) => {
                           type: 'conversation.item.create',
                           item: { type: 'message', role: 'user', content: [{
                             type: 'input_text',
-                            text: `지금 바로 이 말만 하세요: "${firstQ.ask}"`
+                            text: `고객이 시간 괜찮다고 했습니다. 이 말만 하세요: "감사합니다. 그럼 바로 시작하겠습니다. ${firstQ.ask}"`
                           }]}
                         }));
                         openaiWs.send(JSON.stringify({ type: 'response.create' }));
