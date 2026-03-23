@@ -4,7 +4,7 @@
   "description": "AI머니야 백엔드 서버 - Claude API 연동",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --max-old-space-size=1536 server.js",
     "dev": "nodemon server.js"
   },
   "dependencies": {
