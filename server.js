@@ -847,7 +847,10 @@ wss.on('connection', (ws, req) => {
                 /뉴스/, /기자/, /앵커/, /MBC/, /KBS/, /SBS/, /YTN/, /JTBC/, /TV/, /채널/,
                 /안녕하세요$/, /감사합니다$/, /수고하세요$/, /^네\s*네$/, /^고맙습니다$/,
                 /이덕영/, /뉴스투데이/, /이브닝뉴스/, /아나운서/,
-                /^[ㄱ-ㅎㅏ-ㅣ\s]+$/,  // 자모음만
+                /^[ㄱ-ㅎㅏ-ㅣ\s]+$/,
+                // ★ 추가: 확인질문, 여보세요 등 노이즈
+                /^여보세요/, /^잠깐만/, /^뭐라고/, /^다시/, /^취소/,
+                /이라고요\?$/, /라고요\?$/, /요\?\s*$/, /^아+$/, /^어+$/,
               ];
               if (noisePatterns.some(p => p.test(userText))) {
                 console.log('[상담WS] STT 소음 차단:', userText);
@@ -918,27 +921,23 @@ wss.on('connection', (ws, req) => {
                   10: '클로징을 진행하세요.'
                 };
 
-                function goNextStep(nextStep, nextSubStep=null, delay=500) {
-                  setTimeout(() => {
-                    if (openaiWs?.readyState === 1) {
-                      const np = createConsultRealtimePrompt(
-                        financialContext?.name||userName||'고객',
-                        financialContext, nextStep, nextSubStep, collectedData
-                      );
-                      openaiWs.send(JSON.stringify({type:'session.update',session:{instructions:np}}));
-                      // 트리거 메시지 전송 — 머니야가 다음 단계를 바로 시작
-                      const triggerKey = nextSubStep ? `${nextStep}_${nextSubStep}` : nextStep;
-                      const triggerMsg = STEP_TRIGGER[triggerKey] || `${nextStep}단계를 진행하세요.`;
-                      openaiWs.send(JSON.stringify({
-                        type:'conversation.item.create',
-                        item:{type:'message',role:'user',content:[{type:'input_text',text:triggerMsg}]}
-                      }));
-                      openaiWs.send(JSON.stringify({type:'response.create'}));
-                      console.log(`[상담WS] → ${nextStep}단계${nextSubStep?'.'+nextSubStep:''} 전환 (고객데이터 ${Object.keys(collectedData).length}개)`);
+                function goNextStep(nextStep, nextSubStep, delay) {
+                  if (!delay) delay = 3500;
+                  setTimeout(function() {
+                    if (openaiWs && openaiWs.readyState === 1) {
+                      try { openaiWs.send(JSON.stringify({type:'response.cancel'})); } catch(e) {}
+                      setTimeout(function() {
+                        if (!openaiWs || openaiWs.readyState !== 1) return;
+                        var np = createConsultRealtimePrompt(
+                          (financialContext && financialContext.name) || userName || '고객',
+                          financialContext, nextStep, nextSubStep || null, collectedData
+                        );
+                        openaiWs.send(JSON.stringify({type:'session.update',session:{instructions:np}}));
+                        console.log('[상담WS] → ' + nextStep + '단계' + (nextSubStep ? '.' + nextSubStep : '') + ' 전환 완료 (고객데이터 ' + Object.keys(collectedData).length + '개)');
+                      }, 600);
                     }
                   }, delay);
                 }
-
                 // ━━━ 단계별 마지막 필드 → 다음 단계 전환 (중복 방지) ━━━
                 // notePage가 정확히 일치할 때만 전환 — 필드명 겹침 방지
 
