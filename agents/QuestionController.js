@@ -8,7 +8,7 @@
 const QUESTIONS = {
   // 1단계: 인적사항
   1: [
-    { id:'name',    ask:'먼저 성함이 어떻게 되시나요?',        field:'name' },
+    { id:'name',    ask:'먼저 성함이 어떻게 되시나요?',        field:'name', noWait:true },
     { id:'age',     ask:'나이가 어떻게 되시나요?',              field:'age' },
     { id:'marry',   ask:'결혼은 하셨나요?',                     field:'marry' },
     { id:'family',  ask:'가족이 몇 분이세요?',                  field:'family' },
@@ -54,8 +54,8 @@ const QUESTIONS = {
 
 // 공감 표현 (랜덤 선택)
 const EMPATHY = {
-  name:        (v) => `아, ${v}님이시군요. 반갑습니다!`,
-  age:         (v) => `${v}세이시군요. ${v}세에 이 진단을 받으시는 게 정말 중요한 시점이에요.`,
+  name:        (v) => `아, ${v}님이시군요. 반갑습니다! 나이가 어떻게 되시나요?`,
+  age:         (v) => `아, ${v.replace('세','')}세이시군요. ${v.replace('세','')}세에 이 진단을 받으시는 게 정말 중요한 시점이에요. 결혼은 하셨나요?`,
   marry:       (v) => v.includes('기혼')||v.includes('결혼')||v.includes('네')
                       ? '기혼이시군요. 가정을 위해 더 체계적인 계획이 필요하시겠어요.'
                       : '미혼이시군요. 지금부터 준비하시면 정말 유리하세요.',
@@ -137,18 +137,23 @@ class QuestionController {
   processAnswer(field, value, step) {
     this.answers[field] = value;
     const empathy = EMPATHY[field] ? EMPATHY[field](value) : '';
+    const currentQ = this.currentQuestion();
     const nextQ = this.nextQuestion();
     
     let text = '';
-    if (empathy) text += empathy + ' ';
+    if (empathy) text += empathy;
+
+    // 공감에 이미 다음 질문이 포함된 경우 (noWait) 추가 질문 생략
+    const alreadyHasNextQ = currentQ?.noWait || empathy.includes('?');
     
     // 단계 전환 시 예고
-    if (nextQ && this.qIndex === 0 && STEP_INTRO[this.step]) {
-      text += STEP_INTRO[this.step] + ' ';
+    if (!alreadyHasNextQ && nextQ && this.qIndex === 0 && STEP_INTRO[this.step]) {
+      text += ' ' + STEP_INTRO[this.step];
     }
     
-    if (nextQ) {
-      text += nextQ.ask;
+    // 다음 질문 추가 (공감에 없는 경우만)
+    if (!alreadyHasNextQ && nextQ) {
+      text += ' ' + nextQ.ask;
     }
     
     console.log(`[QC] 답변 처리: ${field}="${value}" → 다음: ${nextQ?.id||'완료'}`);
