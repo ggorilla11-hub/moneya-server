@@ -163,6 +163,15 @@ ${name}님의 든든한 지출관리 친구가 되어드릴게요!`;
 //  멀티에이전트 라우터 (v6.9)
 //  agents/ 폴더의 단계별 에이전트 스크립트를 동적 주입
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ClaudeBrain — 머니야의 뇌 (Claude Sonnet)
+let ClaudeBrain = null;
+try {
+  ClaudeBrain = require('./agents/ClaudeBrain');
+  console.log('[ClaudeBrain] ✅ 로드 완료');
+} catch(e) {
+  console.error('[ClaudeBrain] ⚠️ 로드 실패:', e.message);
+}
+
 // QuestionController — 서버가 질문을 직접 통제
 let QuestionController = null;
 try {
@@ -739,6 +748,10 @@ wss.on('connection', (ws, req) => {
         // ★ QuestionController — 서버가 질문 직접 통제
         const qc = QuestionController ? new QuestionController() : null;
 
+        // ★ ClaudeBrain — 머니야의 뇌
+        const brain = ClaudeBrain ? new ClaudeBrain(process.env.ANTHROPIC_API_KEY) : null;
+        let waitingForAnswer = false; // 답변 대기 중 여부
+
         // ★ 응답 큐 — active_response 충돌 방지
         let isResponding = false;
         let pendingMessage = null;
@@ -905,6 +918,39 @@ wss.on('connection', (ws, req) => {
               }
               ws.send(JSON.stringify({ type: 'transcript', text: userText, role: 'user' }));
 
+              // ★ ClaudeBrain — 고객 발화 처리
+              if (brain && qc && qc.active && waitingForAnswer) {
+                waitingForAnswer = false;
+                const currentQ = qc.currentQuestion();
+                if (currentQ) {
+                  console.log(`[Brain] 고객 발화 처리 중: "${userText}" (질문: ${currentQ.id})`);
+                  brain.process(userText, currentQ.id).then(result => {
+                    if (result && result.say) {
+                      // update_smart_note 호출
+                      if (result.field && result.value) {
+                        Object.assign(collectedData, {[result.field]: result.value});
+                        ws.send(JSON.stringify({
+                          type: 'smart_note_update',
+                          notePage: qc.step,
+                          title: '인적사항',
+                          fields: {[result.field]: result.value},
+                          step: qc.step
+                        }));
+                        console.log(`[Brain] 노트 저장: ${result.field} = "${result.value}"`);
+                      }
+                      // QC 다음 질문으로 이동
+                      qc.processAnswer(result.field, result.value, qc.step);
+                      // 머니야에게 낭독 지시
+                      waitingForAnswer = true;
+                      sendWhenReady(result.say, 300);
+                    }
+                  }).catch(e => {
+                    console.error('[Brain] 처리 오류:', e.message);
+                    waitingForAnswer = true;
+                  });
+                }
+              }
+
               // ★ 고객 YES 감지 → QC 활성화 + 첫 질문 전달
               if (qc && !qc.active && currentConsultStep === 1 && !isResponding) {
                 const yesPatterns = /^(네|예|괜찮|좋아|응|어|됩니다|좋습니다|알겠|시작|부탁|해주세요)/;
@@ -921,6 +967,7 @@ wss.on('connection', (ws, req) => {
                         }]}
                       }));
                       openaiWs.send(JSON.stringify({ type: 'response.create' }));
+                        waitingForAnswer = true;
                       console.log(`[QC] 고객 YES 확인 → 첫 질문 전달: "${firstQ.ask}"`);
                     }, 300);
                   }
@@ -1011,6 +1058,11 @@ wss.on('connection', (ws, req) => {
                 };
 
                 function goNextStep(nextStep, nextSubStep, delay) {
+                  // ★ QC 활성화 중이면 QC가 단계 전환 담당 — 중복 충돌 방지
+                  if (qc && qc.active) {
+                    console.log('[상담WS] QC 활성화 중 — goNextStep 건너뜀 (step ' + nextStep + ')');
+                    return;
+                  }
                   if (!delay) delay = 3500;
                   setTimeout(function() {
                     if (openaiWs && openaiWs.readyState === 1) {
