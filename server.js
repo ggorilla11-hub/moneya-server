@@ -21,25 +21,8 @@ let ragData = {
 };
 
 function loadRAGData() {
-  // 상담 세션에 필요한 핵심 데이터만 로드 (메모리 절약)
-  const files = [
-    { key: 'consultation', file: 'consultation_chunks.json', field: null },
-    { key: 'quotes',       file: 'quotes_100.json',          field: null },
-    { key: 'cfha',         file: 'cfha_script_chunks.json',  field: null },
-  ];
-  let totalChunks = 0;
-  for (const { key, file, field } of files) {
-    try {
-      const filePath = path.join(__dirname, file);
-      if (!fs.existsSync(filePath)) { console.log(`[RAG] ⚠️  없음: ${file}`); continue; }
-      const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      ragData[key] = field ? (raw[field] || []) : raw;
-      const count = Array.isArray(ragData[key]) ? ragData[key].length : 0;
-      totalChunks += count;
-      console.log(`[RAG] ✅ ${file}: ${count}개`);
-    } catch (e) { console.error(`[RAG] ❌ ${file}:`, e.message); }
-  }
-  console.log(`[RAG] ━━━ 상담 핵심 ${totalChunks}개 청크 로드 완료 (메모리 절약 모드) ━━━`);
+  // 상담탭은 AgentRouter 프롬프트만 사용 — RAG 불필요, 메모리 최소화
+  console.log('[RAG] 상담탭 전용 모드 — RAG 로드 생략 (메모리 최소화)');
 }
 
 function searchRAG(query, topK = 3) {
