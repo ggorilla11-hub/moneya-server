@@ -28,7 +28,6 @@ const agentCache = {};
 
 function loadAgent(step, subStep) {
   const key = `${step}_${subStep||0}`;
-  // 캐시 미사용 — 항상 최신 파일 로드
   const files = {
     0:'agent_00_opening', 1:'agent_01_personal', 2:'agent_02_worry',
     3:'agent_03_income',  4:'agent_04_asset',    5:'agent_05_house',
@@ -38,7 +37,10 @@ function loadAgent(step, subStep) {
   const fileName = files[step];
   if (!fileName) return '';
   try {
-    const fn = require(path.join(__dirname, fileName));
+    // require 캐시 완전 삭제 후 로드
+    const filePath = path.join(__dirname, fileName);
+    delete require.cache[require.resolve(filePath)];
+    const fn = require(filePath);
     const result = step === 8 ? fn(subStep||1) : fn();
     agentCache[key] = result;
     return result;
