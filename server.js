@@ -176,188 +176,9 @@ ${ragSection}
 ${name}님의 든든한 지출관리 친구가 되어드릴게요!`;
 };
 
-st express = require('express');
-const WebSocket = require('ws');
-const cors = require('cors');
-const OpenAI = require('openai');
-const Anthropic = require('@anthropic-ai/sdk');
-const fs = require('fs');
-const path = require('path');
-require('dotenv').config();
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-let ragData = {
-  books: [], afpk: [], bantoe: [], quotes: [], keywords: {},
-  questions: [], workbook: [], consultation: [], lecture: [],
-  cfha: [], custQ: [], nagging: [],
-};
-
-function loadRAGData() {
-  // 상담 세션에 필요한 핵심 데이터만 로드 (메모리 절약)
-  const files = [
-    { key: 'consultation', file: 'consultation_chunks.json', field: null },
-    { key: 'quotes',       file: 'quotes_100.json',          field: null },
-    { key: 'cfha',         file: 'cfha_script_chunks.json',  field: null },
-  ];
-  let totalChunks = 0;
-  for (const { key, file, field } of files) {
-    try {
-      const filePath = path.join(__dirname, file);
-      if (!fs.existsSync(filePath)) { console.log(`[RAG] ⚠️  없음: ${file}`); continue; }
-      const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      ragData[key] = field ? (raw[field] || []) : raw;
-      const count = Array.isArray(ragData[key]) ? ragData[key].length : 0;
-      totalChunks += count;
-      console.log(`[RAG] ✅ ${file}: ${count}개`);
-    } catch (e) { console.error(`[RAG] ❌ ${file}:`, e.message); }
-  }
-  console.log(`[RAG] ━━━ 상담 핵심 ${totalChunks}개 청크 로드 완료 (메모리 절약 모드) ━━━`);
-}
-
-function searchRAG(query, topK = 3) {
-  if (!query) return [];
-  const q = query.toLowerCase();
-  const words = q.split(/\s+/).filter(w => w.length >= 2);
-  const results = [];
-  function score(chunk, titleField, contentField, label, titleBonus = 3) {
-    const title   = (chunk[titleField]   || '').toLowerCase();
-    const content = (chunk[contentField] || '').toLowerCase();
-    const kws     = (chunk.keywords || []).join(' ').toLowerCase();
-    let s = 0;
-    for (const w of words) {
-      if (title.includes(w))   s += titleBonus;
-      if (content.includes(w)) s += 2;
-      if (kws.includes(w))     s += 1;
-    }
-    if (s > 0) results.push({ source: label, score: s, topic: chunk[titleField] || '', content: (chunk[contentField] || '').slice(0, 500) });
-  }
-  for (const q2 of ragData.custQ) {
-    const text = ((q2.question||'') + ' ' + (q2.answer||'')).toLowerCase();
-    let s = 0;
-    for (const w of words) if (text.includes(w)) s += 2;
-    if (s > 0) results.push({ source: '고객Q&A', score: s, topic: q2.question||'', content: `Q: ${q2.question||''}\nA: ${q2.answer||''}`.slice(0,500) });
-  }
-  for (const n of ragData.nagging) {
-    const text = (n.nagging||n.content||'').toLowerCase();
-    let s = 0;
-    for (const w of words) if (text.includes(w)) s += 2;
-    if (s > 0) results.push({ source: '금융잔소리', score: s, topic: n.category||'', content: (n.nagging||n.content||'').slice(0,300) });
-  }
-  for (const c of ragData.books)        score(c, 'title',  'content', '저서');
-  for (const c of ragData.afpk)         score(c, 'topic',  'content', 'AFPK');
-  for (const c of ragData.bantoe)       score(c, 'title',  'content', '반퇴시대', 2);
-  for (const c of ragData.workbook)     score(c, 'topic',  'content', '워크북');
-  for (const c of ragData.consultation) score(c, 'source', 'content', '상담사례', 2);
-  for (const c of ragData.lecture)      score(c, 'source', 'content', '전문강의');
-  for (const c of ragData.cfha)         score(c, 'source', 'content', 'CFHA');
-  if (ragData.quotes.length > 0) {
-    const rq = ragData.quotes[Math.floor(Math.random() * ragData.quotes.length)];
-    results.push({ source: '명언', score: 0.5, topic: '금융명언', content: rq.quote || rq.content || '' });
-  }
-  return results.sort((a, b) => b.score - a.score).slice(0, topK);
-}
-
-let formulaChunks = [];
-
-function loadFormulaRAG() {
-  try {
-    const filePath = path.join(__dirname, 'rag_formulas.json');
-    if (!fs.existsSync(filePath)) { console.log('[RAG-공식] ⚠️  rag_formulas.json 없음 — 건너뜀'); return; }
-    const data    = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    formulaChunks = data.chunks || [];
-    console.log(`[RAG-공식] ✅ ${formulaChunks.length}개 공식 청크 로드 완료`);
-  } catch (e) { console.error('[RAG-공식] ❌ 로드 실패:', e.message); formulaChunks = []; }
-}
-
-function searchFormulaRAG(query, maxResults = 2) {
-  if (!formulaChunks.length || !query) return [];
-  const tokens = query.replace(/[^\w가-힣]/g, ' ').split(/\s+/).filter(t => t.length >= 2);
-  if (!tokens.length) return [];
-  const scored = formulaChunks.map(chunk => {
-    const text = (chunk.content + ' ' + (chunk.keywords || []).join(' ')).toLowerCase();
-    let s = 0;
-    tokens.forEach(t => {
-      s += ((text.match(new RegExp(t.toLowerCase(), 'g')) || []).length) * 2;
-      if (chunk.name.toLowerCase().includes(t.toLowerCase())) s += 4;
-    });
-    return { ...chunk, _s: s };
-  });
-  return scored.filter(c => c._s > 0).sort((a, b) => b._s - a._s).slice(0, maxResults).map(({ _s, ...c }) => c);
-}
-
-function buildFormulaContext(results) {
-  if (!results || !results.length) return '';
-  let ctx = '\n[오상열 CFP 재무설계 공식]\n';
-  results.forEach((c, i) => {
-    ctx += `${i + 1}. ${c.name}: ${c.raw.formula}\n`;
-    const detail = c.raw.details.length > 180 ? c.raw.details.slice(0, 180) + '…' : c.raw.details;
-    ctx += `   (${detail})\n`;
-  });
-  return ctx;
-}
-
-loadRAGData();
-loadFormulaRAG();
-
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  AI지출탭 전용 프롬프트 (지출관리만)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const createSpendingPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
-  const name = financialContext?.name || userName || '고객';
-  const age = financialContext?.age || 0;
-  const monthlyIncome = financialContext?.monthlyIncome || 0;
-  const dailyBudget = budgetInfo?.dailyBudget || financialContext?.dailyBudget || 0;
-  const todaySpent = budgetInfo?.todaySpent || financialContext?.todaySpent || 0;
-  const remainingBudget = budgetInfo?.remainingBudget || financialContext?.remainingBudget || 0;
-  const ragSection = ragContext ? `\n## 참고 지식 (RAG)\n${ragContext}\n` : '';
-
-  return `당신은 "머니야"입니다. ${name}님의 AI 지출관리 코치입니다.
-
-## 호출 규칙 (최우선!)
-- "${name}" 또는 "머니야"라고 부르면: "네, ${name}님!" 이것만 말하고 멈추세요
-- 절대 추가 설명하지 마세요
-
-## 말투 규칙 (필수!)
-- 반드시 존댓말을 사용하세요
-- "~입니다", "~해요", "~하세요", "~할게요" 체를 사용하세요
-- 절대 반말 금지
-
-## 기본 규칙
-- 한국어로만 대화하세요
-- 이모지 절대 사용 금지
-- 짧고 간결하게 말하세요 (최대 2-3문장)
-- 항상 "${name}님"으로 호칭하세요
-
-## 숫자 표기 규칙
-금액은 반드시 한글로만 말하세요!
-- 35,207 → 삼만오천이백칠원
-- 아라비아 숫자 절대 금지!
-
-## 역할
-- 오늘 지출 현황 안내
-- 예산 초과 경고
-- 절약 팁 제안
-- 지출 패턴 분석
-- 재무상담은 하지 않습니다 (상담탭에서 제공)
-
-## ${name}님의 지출 현황
-- 이름: ${name} | 나이: ${age}세 | 월수입: ${monthlyIncome}만원
-- 일일예산: ${dailyBudget.toLocaleString()}원 | 오늘지출: ${todaySpent.toLocaleString()}원 | 남은예산: ${remainingBudget.toLocaleString()}원
-${ragSection}
-
-${name}님의 든든한 지출관리 친구가 되어드릴게요!`;
-
-
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  멀티에이전트 라우터 연결
-//  각 단계 에이전트가 agents/ 폴더에 독립 파일로 관리됨
+//  멀티에이전트 라우터 (v6.9)
+//  agents/ 폴더의 단계별 에이전트 스크립트를 동적 주입
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const AgentRouter = require('./agents/AgentRouter');
 const createConsultRealtimePrompt = (userName, financialContext, step = 0, subStep = null) => {
@@ -366,6 +187,14 @@ const createConsultRealtimePrompt = (userName, financialContext, step = 0, subSt
 
 
 
+
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  상담탭 전용 프롬프트 (텍스트 채팅 — Claude용)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
   const name = financialContext?.name || userName || '고객';
   const age = financialContext?.age || 0;
   const monthlyIncome = financialContext?.monthlyIncome || 0;
@@ -929,25 +758,6 @@ wss.on('connection', (ws, req) => {
           ws.send(JSON.stringify({ type: 'session_started' }));
           console.log('[상담WS] session.update 전송 완료 — 프롬프트 적용됨');
 
-          // 단계 업데이트 함수 — 단계 전환 시 호출 (subStep은 8단계 세부용)
-          const updateStepPrompt = (step, subStep = null) => {
-            if (openaiWs && openaiWs.readyState === 1) {
-              const newPrompt = createConsultRealtimePrompt(
-                financialContext?.name || userName || '고객',
-                financialContext,
-                step,
-                subStep
-              );
-              console.log(`[상담WS] ${step}${subStep?'.'+subStep:''}단계 에이전트 주입 — ${newPrompt.length}자`);
-              openaiWs.send(JSON.stringify({
-                type: 'session.update',
-                session: { instructions: newPrompt }
-              }));
-            }
-          };
-          // openaiWs에 단계 업데이트 함수 연결
-          openaiWs._updateStep = updateStepPrompt;
-
           setTimeout(() => {
             if (openaiWs.readyState === 1) {
               const isResume = financialContext?.isResume;
@@ -1020,6 +830,8 @@ wss.on('connection', (ws, req) => {
                 else { result = '계산 완료.'; }
               }
               if (fnName === 'update_smart_note') {
+                let content = {};
+                // note_page + fields 기반으로 프론트에 전달
                 const notePage = args.note_page ?? 0;
                 const subPage  = args.sub_page  ?? null;
                 let fields = {};
@@ -1027,18 +839,13 @@ wss.on('connection', (ws, req) => {
 
                 ws.send(JSON.stringify({
                   type: 'smart_note_update',
-                  notePage, subPage, title: args.title, fields, step: notePage
+                  notePage,                           // 노트 번호 (0~10)
+                  subPage,                            // 8대영역 세부 번호 (1~8)
+                  title: args.title,
+                  fields,                             // {필드명: 값} 객체
+                  highlightFloor: args.highlight_floor || 'none',
+                  step: notePage                      // 단계 이동 신호
                 }));
-
-                // ★ 단계 완료 감지 → AgentRouter로 다음 단계 프롬프트 자동 주입
-                const isComplete = AgentRouter.isStepComplete(notePage, subPage, fields);
-                if (isComplete && notePage < 10) {
-                  const { step: nextStep, subStep: nextSub } = AgentRouter.getNextStep(notePage, subPage);
-                  setTimeout(() => {
-                    if (openaiWs?._updateStep) openaiWs._updateStep(nextStep, nextSub);
-                  }, 500);
-                  console.log(`[상담WS] ${notePage}${subPage?'.'+subPage:''}단계 완료 → ${nextStep}${nextSub?'.'+nextSub:''}단계 에이전트 주입`);
-                }
                 result = `노트${notePage}${subPage ? '-'+subPage : ''} "${args.title}" 기입 완료.`;
               }
               if (fnName === 'clear_smart_note') {
