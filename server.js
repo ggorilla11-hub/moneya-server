@@ -818,36 +818,17 @@ wss.on('connection', (ws, req) => {
             if (event.type === 'response.audio_transcript.done') {
               console.log('[상담WS] 머니야:', event.transcript?.slice(0, 50));
               ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
-              // ★ 머니야 첫 발화 완료 → QC 활성화 + 첫 질문 전달
+              // ★ 머니야 첫 발화 완료 → 1단계 프롬프트만 주입 (QC는 고객 YES 후 활성화)
               if (currentConsultStep === 0) {
                 currentConsultStep = 1;
                 setTimeout(() => {
                   if (openaiWs?.readyState === 1) {
-                    // 1단계 프롬프트 주입
                     const step1Prompt = createConsultRealtimePrompt(
                       financialContext?.name || userName || '고객',
                       financialContext, 1, null, collectedData
                     );
                     openaiWs.send(JSON.stringify({ type: 'session.update', session: { instructions: step1Prompt } }));
-
-                    // QC 활성화 + 첫 질문 전달
-                    if (qc) {
-                      qc.activate();
-                      const firstQ = qc.currentQuestion();
-                      if (firstQ) {
-                        openaiWs.send(JSON.stringify({
-                          type: 'conversation.item.create',
-                          item: { type: 'message', role: 'user', content: [{
-                            type: 'input_text',
-                            text: `고객이 시간 괜찮다고 했습니다. 이 말만 하세요: "감사합니다. 그럼 바로 시작하겠습니다. ${firstQ.ask}"`
-                          }]}
-                        }));
-                        openaiWs.send(JSON.stringify({ type: 'response.create' }));
-                        console.log(`[QC] 첫 질문 전달: "${firstQ.ask}"`);
-                      }
-                    } else {
-                      console.log('[상담WS] → 1단계(인적사항) 프롬프트 주입 완료');
-                    }
+                    console.log('[상담WS] → 1단계 프롬프트 주입 완료 (고객 YES 대기 중)');
                   }
                 }, 1500);
               }
@@ -875,6 +856,28 @@ wss.on('connection', (ws, req) => {
                 return;
               }
               ws.send(JSON.stringify({ type: 'transcript', text: userText, role: 'user' }));
+
+              // ★ 고객 YES 감지 → QC 활성화 + 첫 질문 전달
+              if (qc && !qc.active && currentConsultStep === 1) {
+                const yesPatterns = /^(네|예|괜찮|좋아|응|어|됩니다|좋습니다|알겠|시작|부탁|해주세요)/;
+                if (yesPatterns.test(userText.trim())) {
+                  qc.activate();
+                  const firstQ = qc.currentQuestion();
+                  if (firstQ && openaiWs?.readyState === 1) {
+                    setTimeout(() => {
+                      openaiWs.send(JSON.stringify({
+                        type: 'conversation.item.create',
+                        item: { type: 'message', role: 'user', content: [{
+                          type: 'input_text',
+                          text: `이 말만 하세요: "감사합니다. 그럼 바로 시작하겠습니다. ${firstQ.ask}"`
+                        }]}
+                      }));
+                      openaiWs.send(JSON.stringify({ type: 'response.create' }));
+                      console.log(`[QC] 고객 YES 확인 → 첫 질문 전달: "${firstQ.ask}"`);
+                    }, 300);
+                  }
+                }
+              }
             }
 
             if (event.type === 'response.function_call_arguments.done') {
