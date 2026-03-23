@@ -792,25 +792,7 @@ wss.on('connection', (ws, req) => {
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
               console.log('[상담WS] 시작 트리거 전송 완료' + (isResume ? ' (재개 모드)' : ''));
 
-              // ★ 오프닝 후 20초 뒤 자동으로 1단계 프롬프트 주입
-              // update_smart_note 호출 여부와 관계없이 보장
-              if (!isResume) {
-                setTimeout(() => {
-                  if (openaiWs && openaiWs.readyState === 1) {
-                    const step1Prompt = createConsultRealtimePrompt(
-                      financialContext?.name || userName || '고객',
-                      financialContext, 1, null, collectedData
-                    );
-                    openaiWs.send(JSON.stringify({ type: 'session.update', session: { instructions: step1Prompt } }));
-                    openaiWs.send(JSON.stringify({
-                      type: 'conversation.item.create',
-                      item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '이제 인적사항을 수집하세요. 반드시 성함부터 물어보세요.' }] }
-                    }));
-                    openaiWs.send(JSON.stringify({ type: 'response.create' }));
-                    console.log('[상담WS] 오프닝 완료 → 1단계 자동 전환');
-                  }
-                }, 20000); // 20초 후
-              }
+              // 20초 타이머 제거 — 중복 전환 방지 (2초 타이머로 통일)
             }
           }, 500);
         });
@@ -823,7 +805,7 @@ wss.on('connection', (ws, req) => {
             if (event.type === 'response.audio_transcript.done') {
               console.log('[상담WS] 머니야:', event.transcript?.slice(0, 50));
               ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
-              // ★ 오프닝 완료 후 자동으로 1단계 프롬프트 주입
+              // ★ 머니야 첫 발화 완료 → 1단계 프롬프트 1회만 주입
               if (currentConsultStep === 0) {
                 currentConsultStep = 1;
                 setTimeout(() => {
@@ -833,9 +815,9 @@ wss.on('connection', (ws, req) => {
                       financialContext, 1, null, collectedData
                     );
                     openaiWs.send(JSON.stringify({ type: 'session.update', session: { instructions: step1Prompt } }));
-                    console.log('[상담WS] 오프닝 완료 → 1단계(인적사항) 프롬프트 자동 주입');
+                    console.log('[상담WS] → 1단계(인적사항) 프롬프트 주입 완료');
                   }
-                }, 2000);
+                }, 1500);
               }
             }
             if (event.type === 'conversation.item.input_audio_transcription.completed') {
