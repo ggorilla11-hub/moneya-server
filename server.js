@@ -757,7 +757,7 @@ wss.on('connection', (ws, req) => {
                 type: 'conversation.item.create',
                 item: { type: 'message', role: 'user', content: [{
                   type: 'input_text',
-                  text: `이 말만 하세요: "${text}"`
+                  text: `[낭독 지시] 다음 문장만 읽으세요. 한 글자도 추가하지 마세요: "${text}"`
                 }]}
               }));
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
@@ -917,7 +917,7 @@ wss.on('connection', (ws, req) => {
                         type: 'conversation.item.create',
                         item: { type: 'message', role: 'user', content: [{
                           type: 'input_text',
-                          text: `이 말만 하세요: "감사합니다. 그럼 바로 시작하겠습니다. ${firstQ.ask}"`
+                          text: `[낭독 지시] 다음 문장만 읽으세요. 추가 없이: "감사합니다. 그럼 바로 시작하겠습니다. ${firstQ.ask}"`
                         }]}
                       }));
                       openaiWs.send(JSON.stringify({ type: 'response.create' }));
