@@ -1,20 +1,21 @@
 {
   "name": "moneya-server",
-  "version": "3.16.0",
-  "description": "AI머니야 서버 — Mega System Prompt v3.1",
+  "version": "9.2.0",
+  "description": "AI머니야 백엔드 서버 - Claude API 연동",
   "main": "server.js",
   "scripts": {
-  "start": "node --max-old-space-size=400 server.js"
+    "start": "node --max-old-space-size=400 server.js",
+    "dev": "nodemon server.js"
   },
   "dependencies": {
-    "express": "latest",
-    "ws": "latest",
-    "cors": "latest",
-    "openai": "latest",
     "@anthropic-ai/sdk": "latest",
+    "cors": "latest",
     "dotenv": "latest",
+    "express": "latest",
     "multer": "latest",
-    "sharp": "latest"
+    "openai": "latest",
+    "sharp": "latest",
+    "ws": "latest"
   },
   "engines": {
     "node": ">=18.0.0"
