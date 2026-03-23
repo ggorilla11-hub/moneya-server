@@ -176,165 +176,196 @@ ${ragSection}
 ${name}님의 든든한 지출관리 친구가 되어드릴게요!`;
 };
 
+st express = require('express');
+const WebSocket = require('ws');
+const cors = require('cors');
+const OpenAI = require('openai');
+const Anthropic = require('@anthropic-ai/sdk');
+const fs = require('fs');
+const path = require('path');
+require('dotenv').config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+let ragData = {
+  books: [], afpk: [], bantoe: [], quotes: [], keywords: {},
+  questions: [], workbook: [], consultation: [], lecture: [],
+  cfha: [], custQ: [], nagging: [],
+};
+
+function loadRAGData() {
+  // 상담 세션에 필요한 핵심 데이터만 로드 (메모리 절약)
+  const files = [
+    { key: 'consultation', file: 'consultation_chunks.json', field: null },
+    { key: 'quotes',       file: 'quotes_100.json',          field: null },
+    { key: 'cfha',         file: 'cfha_script_chunks.json',  field: null },
+  ];
+  let totalChunks = 0;
+  for (const { key, file, field } of files) {
+    try {
+      const filePath = path.join(__dirname, file);
+      if (!fs.existsSync(filePath)) { console.log(`[RAG] ⚠️  없음: ${file}`); continue; }
+      const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      ragData[key] = field ? (raw[field] || []) : raw;
+      const count = Array.isArray(ragData[key]) ? ragData[key].length : 0;
+      totalChunks += count;
+      console.log(`[RAG] ✅ ${file}: ${count}개`);
+    } catch (e) { console.error(`[RAG] ❌ ${file}:`, e.message); }
+  }
+  console.log(`[RAG] ━━━ 상담 핵심 ${totalChunks}개 청크 로드 완료 (메모리 절약 모드) ━━━`);
+}
+
+function searchRAG(query, topK = 3) {
+  if (!query) return [];
+  const q = query.toLowerCase();
+  const words = q.split(/\s+/).filter(w => w.length >= 2);
+  const results = [];
+  function score(chunk, titleField, contentField, label, titleBonus = 3) {
+    const title   = (chunk[titleField]   || '').toLowerCase();
+    const content = (chunk[contentField] || '').toLowerCase();
+    const kws     = (chunk.keywords || []).join(' ').toLowerCase();
+    let s = 0;
+    for (const w of words) {
+      if (title.includes(w))   s += titleBonus;
+      if (content.includes(w)) s += 2;
+      if (kws.includes(w))     s += 1;
+    }
+    if (s > 0) results.push({ source: label, score: s, topic: chunk[titleField] || '', content: (chunk[contentField] || '').slice(0, 500) });
+  }
+  for (const q2 of ragData.custQ) {
+    const text = ((q2.question||'') + ' ' + (q2.answer||'')).toLowerCase();
+    let s = 0;
+    for (const w of words) if (text.includes(w)) s += 2;
+    if (s > 0) results.push({ source: '고객Q&A', score: s, topic: q2.question||'', content: `Q: ${q2.question||''}\nA: ${q2.answer||''}`.slice(0,500) });
+  }
+  for (const n of ragData.nagging) {
+    const text = (n.nagging||n.content||'').toLowerCase();
+    let s = 0;
+    for (const w of words) if (text.includes(w)) s += 2;
+    if (s > 0) results.push({ source: '금융잔소리', score: s, topic: n.category||'', content: (n.nagging||n.content||'').slice(0,300) });
+  }
+  for (const c of ragData.books)        score(c, 'title',  'content', '저서');
+  for (const c of ragData.afpk)         score(c, 'topic',  'content', 'AFPK');
+  for (const c of ragData.bantoe)       score(c, 'title',  'content', '반퇴시대', 2);
+  for (const c of ragData.workbook)     score(c, 'topic',  'content', '워크북');
+  for (const c of ragData.consultation) score(c, 'source', 'content', '상담사례', 2);
+  for (const c of ragData.lecture)      score(c, 'source', 'content', '전문강의');
+  for (const c of ragData.cfha)         score(c, 'source', 'content', 'CFHA');
+  if (ragData.quotes.length > 0) {
+    const rq = ragData.quotes[Math.floor(Math.random() * ragData.quotes.length)];
+    results.push({ source: '명언', score: 0.5, topic: '금융명언', content: rq.quote || rq.content || '' });
+  }
+  return results.sort((a, b) => b.score - a.score).slice(0, topK);
+}
+
+let formulaChunks = [];
+
+function loadFormulaRAG() {
+  try {
+    const filePath = path.join(__dirname, 'rag_formulas.json');
+    if (!fs.existsSync(filePath)) { console.log('[RAG-공식] ⚠️  rag_formulas.json 없음 — 건너뜀'); return; }
+    const data    = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    formulaChunks = data.chunks || [];
+    console.log(`[RAG-공식] ✅ ${formulaChunks.length}개 공식 청크 로드 완료`);
+  } catch (e) { console.error('[RAG-공식] ❌ 로드 실패:', e.message); formulaChunks = []; }
+}
+
+function searchFormulaRAG(query, maxResults = 2) {
+  if (!formulaChunks.length || !query) return [];
+  const tokens = query.replace(/[^\w가-힣]/g, ' ').split(/\s+/).filter(t => t.length >= 2);
+  if (!tokens.length) return [];
+  const scored = formulaChunks.map(chunk => {
+    const text = (chunk.content + ' ' + (chunk.keywords || []).join(' ')).toLowerCase();
+    let s = 0;
+    tokens.forEach(t => {
+      s += ((text.match(new RegExp(t.toLowerCase(), 'g')) || []).length) * 2;
+      if (chunk.name.toLowerCase().includes(t.toLowerCase())) s += 4;
+    });
+    return { ...chunk, _s: s };
+  });
+  return scored.filter(c => c._s > 0).sort((a, b) => b._s - a._s).slice(0, maxResults).map(({ _s, ...c }) => c);
+}
+
+function buildFormulaContext(results) {
+  if (!results || !results.length) return '';
+  let ctx = '\n[오상열 CFP 재무설계 공식]\n';
+  results.forEach((c, i) => {
+    ctx += `${i + 1}. ${c.name}: ${c.raw.formula}\n`;
+    const detail = c.raw.details.length > 180 ? c.raw.details.slice(0, 180) + '…' : c.raw.details;
+    ctx += `   (${detail})\n`;
+  });
+  return ctx;
+}
+
+loadRAGData();
+loadFormulaRAG();
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  상담탭 Realtime 전용 프롬프트 (음성 상담)
-//  v6.3 | 2026-03-23 | 단일 함수, 중복 제거
+//  AI지출탭 전용 프롬프트 (지출관리만)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const createConsultRealtimePrompt = (userName, financialContext) => {
-  const session = financialContext?.sessionNo || 1;
-  const IS_FIRST = session === 1;
+const createSpendingPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
+  const name = financialContext?.name || userName || '고객';
+  const age = financialContext?.age || 0;
+  const monthlyIncome = financialContext?.monthlyIncome || 0;
+  const dailyBudget = budgetInfo?.dailyBudget || financialContext?.dailyBudget || 0;
+  const todaySpent = budgetInfo?.todaySpent || financialContext?.todaySpent || 0;
+  const remainingBudget = budgetInfo?.remainingBudget || financialContext?.remainingBudget || 0;
+  const ragSection = ragContext ? `\n## 참고 지식 (RAG)\n${ragContext}\n` : '';
 
-  return `당신은 AI재무진단 "머니야"입니다.
-오상열 CFP 대표님의 유일한 AI 수제자로, ${session}회차 ${IS_FIRST?'초회진단':'정기진단'}을 진행합니다.
+  return `당신은 "머니야"입니다. ${name}님의 AI 지출관리 코치입니다.
 
-━━━ 절대 원칙 ━━━
-• 한국어 존댓말만 사용
-• 특정 금융상품·회사명 언급 금지. "진단·분석·점검"만 사용 ("상담" 금지)
-• "(잠시)" 등 괄호 지시어 출력 금지
-• 단계번호·단계명 말하지 않기 ("1단계", "STEP" 금지)
-• 한 번에 질문 하나만
-• 고객이 답변하면 반드시 update_smart_note 함수를 즉시 호출한다
-• "(update_smart_note...)" 같은 텍스트를 말로 출력하는 것은 절대 금지. 반드시 실제 함수를 호출해야 한다
-• 절대 멈추지 않음. 항상 다음 질문으로 이어감
-• 어려운 질문 → "오상열 CFP 대표님께 연결해 드릴까요?"
-• 반드시 고객의 실제 답변이 있을 때만 다음 질문으로 넘어간다
-• 고객이 답변하지 않으면 같은 질문을 한 번 더 한다. 절대 스스로 답을 만들지 않는다
-• 배경 소음, TV 소리, 뉴스 소리가 들려도 무시하고 대기한다
+## 호출 규칙 (최우선!)
+- "${name}" 또는 "머니야"라고 부르면: "네, ${name}님!" 이것만 말하고 멈추세요
+- 절대 추가 설명하지 마세요
 
-━━━ 말하기 공식 ━━━
-공감 → 해석 → 질문 순서로 말한다.
-불안 표현 → "많이 걱정되셨을 것 같아요"
-막막함 → "어디서부터 시작해야 할지 막막하시죠"
-중요 정보 → 반드시 복명복창하고 공감한다
+## 말투 규칙 (필수!)
+- 반드시 존댓말을 사용하세요
+- "~입니다", "~해요", "~하세요", "~할게요" 체를 사용하세요
+- 절대 반말 금지
 
-━━━ update_smart_note 호출 원칙 (전체 단계 공통) ━━━
-• 고객이 답변하는 즉시 호출한다. 절대 모아서 한 번에 하지 않는다
-• fields에는 방금 확인한 값만 넣는다. 아직 모르는 값은 넣지 않는다
-• 빈 문자열, [이름] 같은 플레이스홀더 절대 금지
-• 예: 이름 확인 → fields={"name":"홍길동"} / 나이 확인 → fields={"age":"45세"}
+## 기본 규칙
+- 한국어로만 대화하세요
+- 이모지 절대 사용 금지
+- 짧고 간결하게 말하세요 (최대 2-3문장)
+- 항상 "${name}님"으로 호칭하세요
 
-━━━ 진단 순서 (반드시 이 순서대로, 절대 건너뛰지 않는다) ━━━
+## 숫자 표기 규칙
+금액은 반드시 한글로만 말하세요!
+- 35,207 → 삼만오천이백칠원
+- 아라비아 숫자 절대 금지!
 
-[0단계 오프닝]
-"안녕하세요. 저는 AI재무진단 머니야입니다."
-"오상열 CFP 대표님이 직접 개발하신 AI에이전트로, 대표님을 대신해 재무진단을 도와드리고 있습니다."
-"특정 금융상품이나 회사는 절대 추천하지 않으며, 순수 재무진단 목적으로만 운영됩니다."
-"오늘 진단에는 약 40~50분 소요됩니다. 지금 시간 괜찮으십니까?"
-→ YES: "감사합니다. 바로 시작하겠습니다."
-→ update_smart_note(note_page=0, title="오프닝", fields={"session":"${session}회차"})
+## 역할
+- 오늘 지출 현황 안내
+- 예산 초과 경고
+- 절약 팁 제안
+- 지출 패턴 분석
+- 재무상담은 하지 않습니다 (상담탭에서 제공)
 
-[1단계 인적사항] ← 0단계 직후 반드시 진행
-"먼저 고객님에 대해 간단히 여쭤보겠습니다. 성함이 어떻게 되시나요?"
-→ 이름 확인 즉시: update_smart_note(note_page=1, title="인적사항", fields={"name":"실제이름"})
-"나이가 어떻게 되시나요?"
-→ 나이 확인 즉시: update_smart_note(note_page=1, title="인적사항", fields={"age":"실제나이세"})
-"결혼은 하셨나요?"
-→ 확인 즉시: update_smart_note(note_page=1, title="인적사항", fields={"marry":"기혼또는미혼"})
-"가족이 몇 분이세요?"
-→ 확인 즉시: update_smart_note(note_page=1, title="인적사항", fields={"family":"숫자인"})
-"현재 어떤 일을 하고 계세요?"
-  직장인/공무원 → "월급날 이후 잔고가 빠르게 줄어드는 경험 있으시죠."
-  자영업자 → "매출은 있는데 내 소득이 불명확할 때 있으시죠."
-  프리랜서 → "수입이 불규칙하면 계획 세우기가 힘드시죠."
-→ 확인 즉시: update_smart_note(note_page=1, title="인적사항", fields={"job":"실제직업"})
-"맞벌이이신가요?"
-→ 확인 즉시: update_smart_note(note_page=1, title="인적사항", fields={"dual":"맞벌이또는외벌이"})
+## ${name}님의 지출 현황
+- 이름: ${name} | 나이: ${age}세 | 월수입: ${monthlyIncome}만원
+- 일일예산: ${dailyBudget.toLocaleString()}원 | 오늘지출: ${todaySpent.toLocaleString()}원 | 남은예산: ${remainingBudget.toLocaleString()}원
+${ragSection}
 
-[2단계 경제적 고민] ← 1단계 완료 직후 반드시 진행
-"지금 경제적으로 가장 큰 고민이나 관심이 무엇인가요?"
-→ 끝까지 듣기. 공감 2문장. 추가 질문 없음. 딱 이 한 마디만.
-→ "바로 그 문제를 해결하기 위해 오늘 진단을 하는 것입니다."
-→ update_smart_note(note_page=2, title="경제적고민", fields={"w1":"실제고민내용","goal":"해결목표"})
+${name}님의 든든한 지출관리 친구가 되어드릴게요!`;
 
-[3단계 수입지출 분석] ← 2단계 완료 직후 반드시 진행. 절대 건너뛰지 않는다.
-"지금까지 고민을 들었고, 이제 수입과 지출을 함께 정리해 보겠습니다."
-★ 반드시 이 순서대로 하나씩 질문한다 ★
-  ① "현재 세후 한 달 실수령액이 어떻게 되세요?"
-     → 확인 즉시: update_smart_note(note_page=3, title="수입지출", fields={"income":"실제금액만원"})
-     맞벌이 → "배우자분도 합산해 볼게요."
-  ② "현재 대출 원리금 상환이 있으신가요? 월 얼마인가요?"
-     → 확인 즉시: update_smart_note(note_page=3, title="수입지출", fields={"loan_cur":"실제금액만원"})
-  ③ "보험료는 한 달에 얼마나 내고 계세요?"
-     → 확인 즉시: update_smart_note(note_page=3, title="수입지출", fields={"ins_cur":"실제금액만원"})
-  ④ "연금은 따로 납입하고 계신 것 있으세요?"
-     → 확인 즉시: update_smart_note(note_page=3, title="수입지출", fields={"pension_cur":"실제금액만원"})
-  ⑤ "저축이나 투자는 한 달에 얼마 정도 하고 계세요?"
-     → 확인 즉시: update_smart_note(note_page=3, title="수입지출", fields={"save_cur":"실제금액만원"})
-  ⑥ "지금까지 빼고 매달 남는 돈이 있으세요?"
-     → 확인 즉시: update_smart_note(note_page=3, title="수입지출", fields={"surplus":"실제금액만원"})
-생활비 역산 계산 후: update_smart_note(note_page=3, title="수입지출", fields={"living_cur":"역산금액만원"})
 
-[4단계 자산부채] ← 3단계 완료 직후 진행
-"수입지출을 봤고, 이제 자산과 부채를 정리해 보겠습니다."
-① "예적금, 청약통장은 대략 얼마나 있으세요?"
-   → 확인 즉시: update_smart_note(note_page=4, title="자산부채", fields={"deposit":"실제금액"})
-② "연금 적립금은요?"
-   → 확인 즉시: update_smart_note(note_page=4, title="자산부채", fields={"pension":"실제금액"})
-③ "펀드, ETF, 주식 같은 투자 자산도 있으신가요?"
-   → 확인 즉시: update_smart_note(note_page=4, title="자산부채", fields={"invest":"실제금액"})
-④ "부동산은 어떻게 되세요? 자가이신가요?"
-   → 확인 즉시: update_smart_note(note_page=4, title="자산부채", fields={"realty":"실제금액"})
-⑤ "신용대출이 있으신가요?"
-   → 확인 즉시: update_smart_note(note_page=4, title="자산부채", fields={"credit":"실제금액"})
-⑥ "주택담보대출은요?"
-   → 확인 즉시: update_smart_note(note_page=4, title="자산부채", fields={"mortgage":"실제금액"})
-총계 계산 후: update_smart_note(note_page=4, title="자산부채", fields={"total_asset":"합계","net":"순자산","wealth_index":"부자지수"})
 
-[5단계 금융집짓기]
-"집을 그릴 때 어디서부터 그리세요?" → "바닥과 기초부터. 금융도 마찬가지입니다."
-"고객님은 현재 [나이]세, 은퇴는 몇 세로 생각하세요?"
-→ 확인 즉시: update_smart_note(note_page=5, title="설계도", fields={"retire_age":"실제은퇴나이","current_age":"실제나이","life_age":"예상수명"})
-처마보/7대방/보험8기둥 설명
-→ update_smart_note(note_page=5, title="설계도", fields={"desire":"현재DESIRE단계","strategy":"핵심전략"})
-
-[6단계 저축투자 포트폴리오]
-투자재원 계산 → 100-나이 법칙 설명
-→ update_smart_note(note_page=6, title="저축투자", fields={"source":"투자재원금액","net":"순투자재원","pen_gap":"연금갭","ins_gap":"보험갭"})
-
-[7단계 자산배분]
-부동산70% / 금융30% 기준 설명
-→ update_smart_note(note_page=7, title="자산배분", fields={"res":"부동산비중","inv":"금융비중","fin_total":"금융자산합계"})
-
-[8단계 종합재무설계 7대영역]
-8-1 은퇴: "어떤 노후를 꿈꾸세요?" → 월필요자금 → 월준비 → 부족 → 월추가저축
-→ update_smart_note(note_page=8, title="은퇴설계", sub_page=1, fields={"dream":"꿈꾸는노후","need":"월필요자금","short":"월부족","monthly":"월추가저축"})
-8-2 부채: 신용(즉시상환) 담보(은퇴전완납)
-→ update_smart_note(note_page=8, title="부채설계", sub_page=2, fields={"priority":"상환전략"})
-8-3 저축: 목표→기간→월저축
-→ update_smart_note(note_page=8, title="저축설계", sub_page=3, fields={"goal":"저축목표","gap":"월필요저축"})
-8-4 투자: 가중평균수익률
-→ update_smart_note(note_page=8, title="투자설계", sub_page=4, fields={"rebal":"리밸런싱전략"})
-8-5 세금: 연금저축+IRP 연900만 세액공제
-→ update_smart_note(note_page=8, title="세금설계", sub_page=5, fields={"pension":"연금저축현황","refund":"예상환급액"})
-8-6 부동산: 자가→주택연금(최후보루)
-→ update_smart_note(note_page=8, title="부동산설계", sub_page=6, fields={"own":"보유여부","strategy":"전략"})
-8-7 보험: 사망·장해=연봉×3, 암=연봉×2, 뇌·심=연봉×1, 실비5천
-→ update_smart_note(note_page=8, title="보험설계", sub_page=7, fields={"premium":"현재보험료","need":"필요보장액"})
-
-[9단계 최종의견]
-DESIRE 단계 + 강점3 + 개선3 + 재무점수 + 액션3
-→ update_smart_note(note_page=9, title="최종의견", fields={"score":"점수","grade":"등급","s1":"강점1","s2":"강점2","s3":"강점3","i1":"개선1","i2":"개선2","i3":"개선3","a1":"액션1","a2":"액션2","a3":"액션3"})
-
-[10단계 클로징]
-"어떻게 도움이 되셨나요?" → 공감 → 다음 약속
-"오상열 CFP 대표님을 대신한 당신만의 AI금융집사, 머니야였습니다. 감사합니다."
-→ update_smart_note(note_page=10, title="클로징", fields={"sat":"만족도","next":"다음약속일","closing":"완료"})
-
-━━━ 수정 처리 ━━━
-"아니요" "틀렸어요" "다시요" → "네, 말씀하세요." → "아, [수정내용]이시군요, 맞습니까?"
-
-오원트금융연구소 | AI머니야 v6.3 | 오상열 CFP`;
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  멀티에이전트 라우터 연결
+//  각 단계 에이전트가 agents/ 폴더에 독립 파일로 관리됨
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const AgentRouter = require('./agents/AgentRouter');
+const createConsultRealtimePrompt = (userName, financialContext, step = 0, subStep = null) => {
+  return AgentRouter.buildPrompt(step, subStep, financialContext?.sessionNo || 1);
 };
 
 
 
-
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  상담탭 전용 프롬프트 (텍스트 채팅 — Claude용)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
   const name = financialContext?.name || userName || '고객';
   const age = financialContext?.age || 0;
   const monthlyIncome = financialContext?.monthlyIncome || 0;
@@ -898,6 +929,25 @@ wss.on('connection', (ws, req) => {
           ws.send(JSON.stringify({ type: 'session_started' }));
           console.log('[상담WS] session.update 전송 완료 — 프롬프트 적용됨');
 
+          // 단계 업데이트 함수 — 단계 전환 시 호출 (subStep은 8단계 세부용)
+          const updateStepPrompt = (step, subStep = null) => {
+            if (openaiWs && openaiWs.readyState === 1) {
+              const newPrompt = createConsultRealtimePrompt(
+                financialContext?.name || userName || '고객',
+                financialContext,
+                step,
+                subStep
+              );
+              console.log(`[상담WS] ${step}${subStep?'.'+subStep:''}단계 에이전트 주입 — ${newPrompt.length}자`);
+              openaiWs.send(JSON.stringify({
+                type: 'session.update',
+                session: { instructions: newPrompt }
+              }));
+            }
+          };
+          // openaiWs에 단계 업데이트 함수 연결
+          openaiWs._updateStep = updateStepPrompt;
+
           setTimeout(() => {
             if (openaiWs.readyState === 1) {
               const isResume = financialContext?.isResume;
@@ -970,8 +1020,6 @@ wss.on('connection', (ws, req) => {
                 else { result = '계산 완료.'; }
               }
               if (fnName === 'update_smart_note') {
-                let content = {};
-                // note_page + fields 기반으로 프론트에 전달
                 const notePage = args.note_page ?? 0;
                 const subPage  = args.sub_page  ?? null;
                 let fields = {};
@@ -979,13 +1027,18 @@ wss.on('connection', (ws, req) => {
 
                 ws.send(JSON.stringify({
                   type: 'smart_note_update',
-                  notePage,                           // 노트 번호 (0~10)
-                  subPage,                            // 8대영역 세부 번호 (1~8)
-                  title: args.title,
-                  fields,                             // {필드명: 값} 객체
-                  highlightFloor: args.highlight_floor || 'none',
-                  step: notePage                      // 단계 이동 신호
+                  notePage, subPage, title: args.title, fields, step: notePage
                 }));
+
+                // ★ 단계 완료 감지 → AgentRouter로 다음 단계 프롬프트 자동 주입
+                const isComplete = AgentRouter.isStepComplete(notePage, subPage, fields);
+                if (isComplete && notePage < 10) {
+                  const { step: nextStep, subStep: nextSub } = AgentRouter.getNextStep(notePage, subPage);
+                  setTimeout(() => {
+                    if (openaiWs?._updateStep) openaiWs._updateStep(nextStep, nextSub);
+                  }, 500);
+                  console.log(`[상담WS] ${notePage}${subPage?'.'+subPage:''}단계 완료 → ${nextStep}${nextSub?'.'+nextSub:''}단계 에이전트 주입`);
+                }
                 result = `노트${notePage}${subPage ? '-'+subPage : ''} "${args.title}" 기입 완료.`;
               }
               if (fnName === 'clear_smart_note') {
