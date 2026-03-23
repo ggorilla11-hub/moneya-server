@@ -163,6 +163,16 @@ ${name}님의 든든한 지출관리 친구가 되어드릴게요!`;
 //  멀티에이전트 라우터 (v6.9)
 //  agents/ 폴더의 단계별 에이전트 스크립트를 동적 주입
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// QuestionController — 서버가 질문을 직접 통제
+let QuestionController = null;
+try {
+  const qc = require('./agents/QuestionController');
+  QuestionController = qc.QuestionController;
+  console.log('[QC] ✅ 질문 컨트롤러 로드 완료');
+} catch(e) {
+  console.error('[QC] ⚠️ 로드 실패:', e.message);
+}
+
 // AgentRouter — 실패 시 폴백으로 안전하게 처리
 let AgentRouter = null;
 try {
@@ -726,6 +736,9 @@ wss.on('connection', (ws, req) => {
         let collectedData = {};
         let currentConsultStep = 0; // 현재 상담 단계 추적
 
+        // ★ QuestionController — 서버가 질문 직접 통제
+        const qc = QuestionController ? new QuestionController() : null;
+
         openaiWs.on('open', () => {
           console.log('[상담WS] OpenAI Realtime 연결 (mini)');
           const name = financialContext?.name || userName || '고객';
@@ -805,17 +818,36 @@ wss.on('connection', (ws, req) => {
             if (event.type === 'response.audio_transcript.done') {
               console.log('[상담WS] 머니야:', event.transcript?.slice(0, 50));
               ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
-              // ★ 머니야 첫 발화 완료 → 1단계 프롬프트 1회만 주입
+              // ★ 머니야 첫 발화 완료 → QC 활성화 + 첫 질문 전달
               if (currentConsultStep === 0) {
                 currentConsultStep = 1;
                 setTimeout(() => {
                   if (openaiWs?.readyState === 1) {
+                    // 1단계 프롬프트 주입
                     const step1Prompt = createConsultRealtimePrompt(
                       financialContext?.name || userName || '고객',
                       financialContext, 1, null, collectedData
                     );
                     openaiWs.send(JSON.stringify({ type: 'session.update', session: { instructions: step1Prompt } }));
-                    console.log('[상담WS] → 1단계(인적사항) 프롬프트 주입 완료');
+
+                    // QC 활성화 + 첫 질문 전달
+                    if (qc) {
+                      qc.activate();
+                      const firstQ = qc.currentQuestion();
+                      if (firstQ) {
+                        openaiWs.send(JSON.stringify({
+                          type: 'conversation.item.create',
+                          item: { type: 'message', role: 'user', content: [{
+                            type: 'input_text',
+                            text: `지금 바로 이 말만 하세요: "${firstQ.ask}"`
+                          }]}
+                        }));
+                        openaiWs.send(JSON.stringify({ type: 'response.create' }));
+                        console.log(`[QC] 첫 질문 전달: "${firstQ.ask}"`);
+                      }
+                    } else {
+                      console.log('[상담WS] → 1단계(인적사항) 프롬프트 주입 완료');
+                    }
                   }
                 }, 1500);
               }
@@ -879,6 +911,39 @@ wss.on('connection', (ws, req) => {
 
                 // ★ 고객 데이터 누적 — 단계 전환 시 맥락 유지용
                 Object.assign(collectedData, fields);
+
+                // ★ QC — 답변 처리 후 다음 질문 자동 전달
+                if (qc && qc.active && Object.keys(fields).length > 0) {
+                  const fieldKey = Object.keys(fields)[0];
+                  const fieldVal = fields[fieldKey];
+                  const qcResult = qc.processAnswer(fieldKey, fieldVal, notePage);
+
+                  if (qcResult && qcResult.text && openaiWs?.readyState === 1) {
+                    setTimeout(() => {
+                      // 다음 단계 프롬프트 주입 (단계 전환 시)
+                      if (qcResult.nextQ && qc.step !== currentConsultStep) {
+                        currentConsultStep = qc.step;
+                        const np = createConsultRealtimePrompt(
+                          financialContext?.name||userName||'고객',
+                          financialContext, qc.step, null, collectedData
+                        );
+                        openaiWs.send(JSON.stringify({type:'session.update',session:{instructions:np}}));
+                        console.log(`[QC] → ${qc.step}단계 프롬프트 전환`);
+                      }
+
+                      // 공감 + 다음 질문 전달
+                      openaiWs.send(JSON.stringify({
+                        type: 'conversation.item.create',
+                        item: { type: 'message', role: 'user', content: [{
+                          type: 'input_text',
+                          text: `지금 바로 이 말만 하세요: "${qcResult.text}"`
+                        }]}
+                      }));
+                      openaiWs.send(JSON.stringify({ type: 'response.create' }));
+                      console.log(`[QC] 다음 전달: "${qcResult.text.slice(0,40)}..."`);
+                    }, 300);
+                  }
+                }
 
                 // 단계 완료 감지 → 다음 단계 프롬프트에 고객 데이터 포함해서 주입
                 // ━━━ 단계별 마지막 질문 → 다음 단계 자동 전환 ━━━
