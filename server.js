@@ -624,6 +624,61 @@ app.get('/video-consult/status/:roomId', (req, res) => {
   res.json({ success: true, roomId: req.params.roomId, hasHost: !!room.host, hasGuest: !!room.guest, customerName: room.customerName });
 });
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  [DEV-003] 종합재무설계 리포트 자동생성
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+app.post('/api/generate-report', async (req, res) => {
+  try {
+    const { noteData, chatHistory } = req.body;
+    if (!noteData) {
+      return res.status(400).json({ error: '상담 데이터가 없습니다' });
+    }
+
+    const prompt = `당신은 오원트금융연구소 AI재무설계사 머니야입니다.
+아래 상담 노트 데이터를 바탕으로 종합재무설계 리포트를 JSON으로 작성해주세요.
+
+상담 노트 데이터:
+${JSON.stringify(noteData, null, 2)}
+
+${chatHistory ? '대화 요약:\n' + (typeof chatHistory === 'string' ? chatHistory : JSON.stringify(chatHistory).slice(0, 2000)) : ''}
+
+반드시 아래 JSON 구조로만 응답하세요. JSON 외에 다른 텍스트를 포함하지 마세요:
+{
+  "customer": { "name": "고객명", "age": 0, "job": "직업", "family": 0 },
+  "income": { "monthly": 0, "living": 0, "savings": 0, "surplus": 0 },
+  "assets": { "total": 0, "financial": 0, "real_estate": 0, "debt": 0, "net": 0 },
+  "wealth_index": { "score": 0, "grade": "등급" },
+  "desire_stage": { "stage": "단계", "description": "설명" },
+  "finance_score": { "total": 0, "expense": 0, "asset": 0, "insurance": 0, "retirement": 0, "debt": 0 },
+  "strengths": ["강점1", "강점2", "강점3"],
+  "improvements": ["개선점1", "개선점2", "개선점3"],
+  "actions": ["액션1", "액션2", "액션3"],
+  "next_schedule": "다음 상담 권장일"
+}`;
+
+    const claudeRes = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    const text = claudeRes.content[0]?.text || '';
+    const clean = text.replace(/```json|```/g, '').trim();
+    const report = JSON.parse(clean);
+
+    console.log('[DEV-003] 리포트 생성 완료:', report.customer?.name, '재무점수:', report.finance_score?.total);
+    res.json(report);
+
+  } catch (error) {
+    console.error('[DEV-003] 리포트 생성 오류:', error.message);
+    if (error instanceof SyntaxError) {
+      res.status(500).json({ error: 'AI 응답 파싱 실패 — 다시 시도해 주세요' });
+    } else {
+      res.status(500).json({ error: '리포트 생성 실패: ' + error.message });
+    }
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => console.log(`AI머니야 서버 v9.2 시작! 포트: ${PORT}`));
 
