@@ -21,8 +21,31 @@ let ragData = {
 };
 
 function loadRAGData() {
-  // 상담탭은 AgentRouter 프롬프트만 사용 — RAG 불필요, 메모리 최소화
-  console.log('[RAG] 상담탭 전용 모드 — RAG 로드 생략 (메모리 최소화)');
+  const dataDir = __dirname;
+  const fileMap = {
+    books:        'rag_chunks.json',
+    afpk:         'afpk_knowledge_base.json',
+    bantoe:       'bantoe_cases_436.json',
+    consultation: 'consultation_chunks.json',
+    lecture:      'lecture_chunks.json',
+    workbook:     'workbook_chunks.json',
+    cfha:         'cfha_script_chunks.json',
+    quotes:       'quotes_100.json',
+    nagging:      'nagging_100.json',
+    custQ:        'customer_questions_100.json',
+  };
+  let total = 0;
+  for (const [key, fileName] of Object.entries(fileMap)) {
+    try {
+      const filePath = path.join(dataDir, fileName);
+      if (!fs.existsSync(filePath)) { console.log('[RAG] ⚠️ ' + fileName + ' 없음 — 건너뜀'); continue; }
+      const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      ragData[key] = Array.isArray(raw) ? raw : (raw.chunks || raw.items || raw.data || []);
+      console.log('[RAG] ✅ ' + fileName + ': ' + ragData[key].length + '개');
+      total += ragData[key].length;
+    } catch (e) { console.error('[RAG] ❌ ' + fileName + ' 로드 실패:', e.message); }
+  }
+  console.log('[RAG] ━━━ 총 ' + total + '개 청크 로드 완료 ━━━');
 }
 
 function searchRAG(query, topK = 3) {
@@ -467,7 +490,9 @@ app.post('/api/rag-search', (req, res) => {
   try {
     const { query, topK = 5 } = req.body;
     const results = searchRAG(query, topK);
-    res.json({ success: true, query, count: results.length, results });
+    const formulaResults = searchFormulaRAG(query, 2);
+    const allResults = [...results, ...formulaResults.map(f => ({ source: '공식', score: 10, topic: f.name, content: f.raw.formula + ' — ' + f.raw.details.slice(0,200) }))];
+    res.json({ success: true, query, count: allResults.length, results: allResults });
   } catch (error) { res.json({ success: false, error: error.message }); }
 });
 
