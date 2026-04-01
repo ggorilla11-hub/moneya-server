@@ -669,8 +669,8 @@ ${chatHistory ? '대화 요약:\n' + (typeof chatHistory === 'string' ? chatHist
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // ★ 페이플 정기결제 자동 청구 API v1.0
+// googleapis는 ohwant-webhook에서 처리 — 여기선 미사용
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const { google: googleApis } = require('googleapis');
 
 // 페이플 자동 청구 함수
 async function paypleRegularCharge({ payerId, amount, goods, orderId, payerName, payerEmail, payerPhone }) {
@@ -719,98 +719,50 @@ async function paypleRegularCharge({ payerId, amount, goods, orderId, payerName,
   return chargeData;
 }
 
-// 매월 15일 자동 청구 트리거 (make.com 스케줄에서 호출)
-// POST /api/billing/charge-all
+// 매월 15일 자동 청구 트리거
+// make.com 스케줄에서 구독자 목록(빌링키)을 읽어
+// 이 API를 반복 호출하는 방식으로 운영
+// POST /api/billing/charge-one
 // Header: x-admin-key: moneya-admin-2026
-app.post('/api/billing/charge-all', async (req, res) => {
+// Body: { payerId, amount, planName, payerName, payerEmail, payerPhone }
+app.post('/api/billing/charge-one', async (req, res) => {
   const adminKey = req.headers['x-admin-key'];
   if (adminKey !== 'moneya-admin-2026') {
     return res.status(401).json({ error: '인증 실패' });
   }
 
   try {
-    console.log('[정기청구] 자동 청구 시작');
+    const { payerId, amount, planName, payerName, payerEmail, payerPhone } = req.body;
 
-    const saJson = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT || '{}');
-    const auth   = new googleApis.auth.GoogleAuth({
-      credentials: saJson,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-    const sheets = googleApis.sheets({ version: 'v4', auth });
-
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SPREADSHEET_ID,
-      range: '빌링키_구독DB!A:J',
-    });
-
-    const rows = result.data.values || [];
-    if (rows.length <= 1) {
-      return res.json({ success: true, message: '청구 대상 없음', charged: 0 });
+    if (!payerId || !amount) {
+      return res.status(400).json({ error: '빌링키(payerId)와 금액(amount) 필수' });
     }
 
-    const today = new Date();
-    const todayDate = today.getDate();
-
-    const subscribers = rows.slice(1).filter(row => {
-      return (row[7] || '').trim() === '활성';
+    const orderId = 'FH_AUTO_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    const chargeResult = await paypleRegularCharge({
+      payerId, amount,
+      goods: (planName || 'AI머니야') + ' 정기결제',
+      orderId,
+      payerName:  payerName  || '',
+      payerEmail: payerEmail || '',
+      payerPhone: payerPhone || ''
     });
 
-    console.log('[정기청구] 활성 구독자:', subscribers.length + '명');
-
-    const results = [];
-    for (const row of subscribers) {
-      const payerName  = row[1] || '';
-      const payerPhone = row[2] || '';
-      const payerEmail = row[3] || '';
-      const payerId    = row[4] || '';
-      const planName   = row[5] || '';
-      const amount     = parseInt(row[6] || '0');
-
-      if (!payerId || !amount) continue;
-
-      if (todayDate !== 15) {
-        results.push({ payerName, status: 'skipped', reason: '결제일 아님 (오늘:' + todayDate + '일)' });
-        continue;
-      }
-
-      try {
-        const orderId = 'FH_AUTO_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-        const chargeResult = await paypleRegularCharge({
-          payerId, amount,
-          goods: planName + ' 정기결제',
-          orderId, payerName, payerEmail, payerPhone
-        });
-
-        if (chargeResult.PCD_PAY_RST === 'success') {
-          results.push({ payerName, status: 'success', amount, orderId });
-          const nextMonth = new Date(today);
-          nextMonth.setMonth(nextMonth.getMonth() + 1);
-          nextMonth.setDate(15);
-          console.log('[정기청구] 성공:', payerName, amount + '원');
-        } else {
-          results.push({ payerName, status: 'failed', msg: chargeResult.PCD_PAY_MSG });
-          console.log('[정기청구] 실패:', payerName, chargeResult.PCD_PAY_MSG);
-        }
-      } catch (e) {
-        results.push({ payerName, status: 'error', error: e.message });
-        console.error('[정기청구] 오류:', payerName, e.message);
-      }
-
-      await new Promise(r => setTimeout(r, 500));
+    if (chargeResult.PCD_PAY_RST === 'success') {
+      console.log('[정기청구] 성공:', payerName, amount + '원', orderId);
+      res.json({ success: true, orderId, amount, payerName, result: chargeResult });
+    } else {
+      console.log('[정기청구] 실패:', payerName, chargeResult.PCD_PAY_MSG);
+      res.json({ success: false, payerName, msg: chargeResult.PCD_PAY_MSG, result: chargeResult });
     }
-
-    const successCount = results.filter(r => r.status === 'success').length;
-    const failCount    = results.filter(r => r.status === 'failed').length;
-    console.log('[정기청구] 완료 — 성공:', successCount, '실패:', failCount);
-    res.json({ success: true, total: results.length, successCount, failCount, results });
 
   } catch (e) {
-    console.error('[정기청구] 전체 오류:', e.message);
+    console.error('[정기청구] 오류:', e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
 
-// 구독 해지 API
+// 구독 해지 알림 수신 API (make.com에서 호출)
 // POST /api/billing/cancel
 // Body: { payerEmail, reason }
 app.post('/api/billing/cancel', async (req, res) => {
@@ -818,37 +770,15 @@ app.post('/api/billing/cancel', async (req, res) => {
     const { payerEmail, reason } = req.body;
     if (!payerEmail) return res.status(400).json({ error: '이메일 필수' });
 
-    const saJson = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT || '{}');
-    const auth   = new googleApis.auth.GoogleAuth({
-      credentials: saJson,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-    const sheets = googleApis.sheets({ version: 'v4', auth });
-
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SPREADSHEET_ID,
-      range: '빌링키_구독DB!A:J',
-    });
-
-    const rows = result.data.values || [];
-    let foundRowIndex = -1;
-    rows.forEach((row, i) => {
-      if (i === 0) return;
-      if ((row[3] || '').trim().toLowerCase() === payerEmail.toLowerCase()) {
-        foundRowIndex = i + 1;
-      }
-    });
-
-    if (foundRowIndex === -1) {
-      return res.status(404).json({ error: '구독 정보를 찾을 수 없습니다' });
+    // make.com 웹훅으로 구글시트 해지 처리 위임
+    const MAKE_CANCEL_WEBHOOK = process.env.MAKE_CANCEL_WEBHOOK || '';
+    if (MAKE_CANCEL_WEBHOOK) {
+      await fetch(MAKE_CANCEL_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payerEmail, reason, action: 'cancel', timestamp: new Date().toISOString() })
+      });
     }
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: process.env.SPREADSHEET_ID,
-      range: `빌링키_구독DB!H${foundRowIndex}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [['해지']] }
-    });
 
     console.log('[구독해지]', payerEmail, '처리 완료. 사유:', reason || '미입력');
     res.json({ success: true, message: '구독이 해지되었습니다. 이번 달 말까지 이용 가능합니다.' });
