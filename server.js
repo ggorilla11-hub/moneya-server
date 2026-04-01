@@ -133,9 +133,6 @@ function buildFormulaContext(results) {
 loadRAGData();
 loadFormulaRAG();
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  AI지출탭 전용 프롬프트 (지출관리만)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const createSpendingPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
   const name = financialContext?.name || userName || '고객';
   const age = financialContext?.age || 0;
@@ -182,11 +179,6 @@ ${ragSection}
 ${name}님의 든든한 지출관리 친구가 되어드릴게요!`;
 };
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  멀티에이전트 라우터 (v6.9)
-//  agents/ 폴더의 단계별 에이전트 스크립트를 동적 주입
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// ClaudeBrain — 머니야의 뇌 (Claude Sonnet)
 let ClaudeBrain = null;
 try {
   ClaudeBrain = require('./agents/ClaudeBrain');
@@ -195,7 +187,6 @@ try {
   console.error('[ClaudeBrain] ⚠️ 로드 실패:', e.message);
 }
 
-// QuestionController — 서버가 질문을 직접 통제
 let QuestionController = null;
 try {
   const qc = require('./agents/QuestionController');
@@ -205,7 +196,6 @@ try {
   console.error('[QC] ⚠️ 로드 실패:', e.message);
 }
 
-// AgentRouter — 실패 시 폴백으로 안전하게 처리
 let AgentRouter = null;
 try {
   AgentRouter = require('./agents/AgentRouter');
@@ -227,15 +217,6 @@ const createConsultRealtimePrompt = (userName, financialContext, step = 0, subSt
   }
   return FALLBACK_PROMPT;
 };
-
-
-
-
-
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  상담탭 전용 프롬프트 (텍스트 채팅 — Claude용)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 const createSystemPrompt = (userName, financialContext, budgetInfo, ragContext = '') => {
   const name = financialContext?.name || userName || '고객';
@@ -375,9 +356,6 @@ DSR(%)      = 월원리금 / 월소득 × 100
 ${name}님의 든든한 금융 친구가 되어드릴게요!`;
 };
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// DESIRE-002 | desire.html 서빙 라우트 | 2026-03-13
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 app.get('/desire.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'desire.html'));
 });
@@ -387,7 +365,7 @@ app.get('/', (req, res) => {
     return res.redirect('/desire.html?mode=beta');
   }
   res.json({
-    status: 'AI머니야 서버 실행 중!', version: '9.2 (mini-realtime + speed0.85)',
+    status: 'AI머니야 서버 실행 중!', version: '9.3 (billing + regular)',
     rag: {
       저서3권: ragData.books.length, AFPK: ragData.afpk.length,
       반퇴시대: ragData.bantoe.length, 명언: ragData.quotes.length,
@@ -406,7 +384,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-/* ━━━ 신청서 파싱 API ━━━ */
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10*1024*1024 } });
 
@@ -417,7 +394,6 @@ app.post('/api/parse-application', upload.single('file'), async (req, res) => {
     const fname = req.file.originalname.toLowerCase();
     let rawText = '';
 
-    /* xlsx/xls → Claude API로 파싱 */
     const base64 = req.file.buffer.toString('base64');
     const mediaType = fname.endsWith('.xlsx')
       ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -448,7 +424,6 @@ app.post('/api/parse-application', upload.single('file'), async (req, res) => {
       const txt = response.content[0].text;
       clientData = JSON.parse(txt.replace(/```json|```/g,'').trim());
     } catch(e) {
-      /* 파싱 실패 시 기본값 */
       clientData = { name:'고객', age:0, monthlyIncome:0 };
     }
 
@@ -460,9 +435,6 @@ app.post('/api/parse-application', upload.single('file'), async (req, res) => {
   }
 });
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// DESIRE-004 | 피드백 저장 API | 2026-03-14
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const https = require('https');
 
 app.post('/api/desire-feedback', async (req, res) => {
@@ -552,9 +524,6 @@ app.post('/api/consult-chat', async (req, res) => {
   }
 });
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  Zoom API (기존 유지)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function getZoomAccessToken() {
   const credentials = Buffer.from(`${process.env.ZOOM_CLIENT_ID}:${process.env.ZOOM_CLIENT_SECRET}`).toString('base64');
   const params = new URLSearchParams();
@@ -627,9 +596,6 @@ app.post('/api/consult-tts', async (req, res) => {
   }
 });
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  WebRTC 화상상담 방 관리
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const consultRooms = new Map();
 
 app.post('/admin/video-consult/create', async (req, res) => {
@@ -649,9 +615,6 @@ app.get('/video-consult/status/:roomId', (req, res) => {
   res.json({ success: true, roomId: req.params.roomId, hasHost: !!room.host, hasGuest: !!room.guest, customerName: room.customerName });
 });
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  [DEV-003] 종합재무설계 리포트 자동생성
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 app.post('/api/generate-report', async (req, res) => {
   try {
     const { noteData, chatHistory } = req.body;
@@ -704,18 +667,211 @@ ${chatHistory ? '대화 요약:\n' + (typeof chatHistory === 'string' ? chatHist
   }
 });
 
-const PORT = process.env.PORT || 3001;
-const server = app.listen(PORT, () => console.log(`AI머니야 서버 v9.2 시작! 포트: ${PORT}`));
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ★ 페이플 정기결제 자동 청구 API v1.0
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const { google: googleApis } = require('googleapis');
 
-// ★ WebSocket keep-alive — Render 60초 타임아웃 방지
+// 페이플 자동 청구 함수
+async function paypleRegularCharge({ payerId, amount, goods, orderId, payerName, payerEmail, payerPhone }) {
+  // 1단계: 페이플 파트너 인증
+  const authRes = await fetch('https://cpay.payple.kr/php/auth.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Referer': 'https://financial-house-building.vercel.app' },
+    body: JSON.stringify({
+      cst_id:  'ohwant',
+      custKey: '44cd515b9b59314c0d1ac35653f02ffd1364fa1c4975ddfc526bd079152202d',
+    })
+  });
+  const authData = await authRes.json();
+  if (!authData.result || authData.result !== 'success') {
+    throw new Error('페이플 인증 실패: ' + JSON.stringify(authData));
+  }
+
+  // 2단계: 빌링키로 자동 청구
+  const chargeRes = await fetch('https://cpay.payple.kr/php/PayCardAuto.php', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Referer': 'https://financial-house-building.vercel.app',
+      'Authorization': 'Basic ' + Buffer.from(authData.AuthKey).toString('base64')
+    },
+    body: JSON.stringify({
+      PCD_CST_ID:       'ohwant',
+      PCD_CUST_KEY:     '44cd515b9b59314c0d1ac35653f02ffd1364fa1c4975ddfc526bd079152202d',
+      PCD_AUTH_KEY:     authData.AuthKey,
+      PCD_PAY_TYPE:     'card',
+      PCD_PAY_WORK:     'PAY',
+      PCD_PAYER_ID:     payerId,
+      PCD_PAYER_NAME:   payerName,
+      PCD_PAYER_HP:     payerPhone.replace(/[^0-9]/g, ''),
+      PCD_PAYER_EMAIL:  payerEmail,
+      PCD_PAY_GOODS:    goods,
+      PCD_PAY_TOTAL:    amount,
+      PCD_PAY_OID:      orderId,
+      PCD_REGULER_FLAG: 'Y',
+      PCD_RST_URL:      'https://ohwant-webhook.vercel.app/api/payple',
+    })
+  });
+
+  const chargeData = await chargeRes.json();
+  console.log('[정기청구]', payerName, goods, amount + '원', '->', chargeData.PCD_PAY_RST);
+  return chargeData;
+}
+
+// 매월 15일 자동 청구 트리거 (make.com 스케줄에서 호출)
+// POST /api/billing/charge-all
+// Header: x-admin-key: moneya-admin-2026
+app.post('/api/billing/charge-all', async (req, res) => {
+  const adminKey = req.headers['x-admin-key'];
+  if (adminKey !== 'moneya-admin-2026') {
+    return res.status(401).json({ error: '인증 실패' });
+  }
+
+  try {
+    console.log('[정기청구] 자동 청구 시작');
+
+    const saJson = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT || '{}');
+    const auth   = new googleApis.auth.GoogleAuth({
+      credentials: saJson,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    const sheets = googleApis.sheets({ version: 'v4', auth });
+
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      range: '빌링키_구독DB!A:J',
+    });
+
+    const rows = result.data.values || [];
+    if (rows.length <= 1) {
+      return res.json({ success: true, message: '청구 대상 없음', charged: 0 });
+    }
+
+    const today = new Date();
+    const todayDate = today.getDate();
+
+    const subscribers = rows.slice(1).filter(row => {
+      return (row[7] || '').trim() === '활성';
+    });
+
+    console.log('[정기청구] 활성 구독자:', subscribers.length + '명');
+
+    const results = [];
+    for (const row of subscribers) {
+      const payerName  = row[1] || '';
+      const payerPhone = row[2] || '';
+      const payerEmail = row[3] || '';
+      const payerId    = row[4] || '';
+      const planName   = row[5] || '';
+      const amount     = parseInt(row[6] || '0');
+
+      if (!payerId || !amount) continue;
+
+      if (todayDate !== 15) {
+        results.push({ payerName, status: 'skipped', reason: '결제일 아님 (오늘:' + todayDate + '일)' });
+        continue;
+      }
+
+      try {
+        const orderId = 'FH_AUTO_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        const chargeResult = await paypleRegularCharge({
+          payerId, amount,
+          goods: planName + ' 정기결제',
+          orderId, payerName, payerEmail, payerPhone
+        });
+
+        if (chargeResult.PCD_PAY_RST === 'success') {
+          results.push({ payerName, status: 'success', amount, orderId });
+          const nextMonth = new Date(today);
+          nextMonth.setMonth(nextMonth.getMonth() + 1);
+          nextMonth.setDate(15);
+          console.log('[정기청구] 성공:', payerName, amount + '원');
+        } else {
+          results.push({ payerName, status: 'failed', msg: chargeResult.PCD_PAY_MSG });
+          console.log('[정기청구] 실패:', payerName, chargeResult.PCD_PAY_MSG);
+        }
+      } catch (e) {
+        results.push({ payerName, status: 'error', error: e.message });
+        console.error('[정기청구] 오류:', payerName, e.message);
+      }
+
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    const successCount = results.filter(r => r.status === 'success').length;
+    const failCount    = results.filter(r => r.status === 'failed').length;
+    console.log('[정기청구] 완료 — 성공:', successCount, '실패:', failCount);
+    res.json({ success: true, total: results.length, successCount, failCount, results });
+
+  } catch (e) {
+    console.error('[정기청구] 전체 오류:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// 구독 해지 API
+// POST /api/billing/cancel
+// Body: { payerEmail, reason }
+app.post('/api/billing/cancel', async (req, res) => {
+  try {
+    const { payerEmail, reason } = req.body;
+    if (!payerEmail) return res.status(400).json({ error: '이메일 필수' });
+
+    const saJson = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT || '{}');
+    const auth   = new googleApis.auth.GoogleAuth({
+      credentials: saJson,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    const sheets = googleApis.sheets({ version: 'v4', auth });
+
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      range: '빌링키_구독DB!A:J',
+    });
+
+    const rows = result.data.values || [];
+    let foundRowIndex = -1;
+    rows.forEach((row, i) => {
+      if (i === 0) return;
+      if ((row[3] || '').trim().toLowerCase() === payerEmail.toLowerCase()) {
+        foundRowIndex = i + 1;
+      }
+    });
+
+    if (foundRowIndex === -1) {
+      return res.status(404).json({ error: '구독 정보를 찾을 수 없습니다' });
+    }
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      range: `빌링키_구독DB!H${foundRowIndex}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [['해지']] }
+    });
+
+    console.log('[구독해지]', payerEmail, '처리 완료. 사유:', reason || '미입력');
+    res.json({ success: true, message: '구독이 해지되었습니다. 이번 달 말까지 이용 가능합니다.' });
+
+  } catch (e) {
+    console.error('[구독해지] 오류:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ★ 페이플 정기결제 API 끝
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const PORT = process.env.PORT || 3001;
+const server = app.listen(PORT, () => console.log(`AI머니야 서버 v9.3 시작! 포트: ${PORT}`));
+
 server.keepAliveTimeout = 120000;
 server.headersTimeout = 125000;
 
 const wss = new WebSocket.Server({ server });
 
-// ★ DESIRE + 상담 중복 세션 차단
 const activeDesiresessions = new Map();
-const activeConsultSessions = new Map(); // 상담 세션 전역 관리
+const activeConsultSessions = new Map();
 
 wss.on('connection', (ws, req) => {
   console.log('[WS] 연결됨');
@@ -725,7 +881,6 @@ wss.on('connection', (ws, req) => {
 
   const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
 
-  // ★ 상담 모드 중복 세션 차단 — 이전 세션 강제 종료
   if (mode === 'consult') {
     const existingWs = activeConsultSessions.get(clientIP);
     if (existingWs && existingWs.readyState === 1) {
@@ -762,9 +917,6 @@ wss.on('connection', (ws, req) => {
     try {
       const msg = JSON.parse(message);
 
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      //  WebRTC 시그널링
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       if (msg.type === 'video_create_room') {
         const roomId = `room_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         consultRooms.set(roomId, { host: ws, guest: null, createdAt: new Date() });
@@ -807,38 +959,27 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      //  상담탭: OpenAI Realtime + Function Calling
-      //  ★ 수정: gpt-4o-mini-realtime + speed 0.85
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       if (msg.type === 'start_consult' || (msg.type === 'start_app' && mode === 'consult')) {
         console.log('[상담WS] 상담탭 음성 세션 시작');
         userName = msg.userName || '고객';
         financialContext = msg.financialContext || null;
 
-        // ★ 변경: gpt-4o-realtime → gpt-4o-mini-realtime
         openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview-2024-12-17', {
           headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' }
         });
 
-        // ★ 고객 데이터 누적 저장소 — 단계 전환 시 맥락 유지용
         let collectedData = {};
-        let currentConsultStep = 0; // 현재 상담 단계 추적
+        let currentConsultStep = 0;
 
-        // ★ QuestionController — 서버가 질문 직접 통제
         const qc = QuestionController ? new QuestionController() : null;
-
-        // ★ ClaudeBrain — 머니야의 뇌
         const brain = ClaudeBrain ? new ClaudeBrain(process.env.ANTHROPIC_API_KEY) : null;
-        let waitingForAnswer = false; // 답변 대기 중 여부
+        let waitingForAnswer = false;
 
-        // ★ 응답 큐 — active_response 충돌 방지
         let isResponding = false;
         let pendingMessage = null;
 
         function sendWhenReady(text, delay=200) {
           if (isResponding) {
-            // 응답 중이면 대기
             pendingMessage = text;
             console.log('[QC] 응답 중 — 큐에 저장');
             return;
@@ -876,14 +1017,13 @@ wss.on('connection', (ws, req) => {
               input_audio_transcription: { model: 'whisper-1', language: 'ko' },
               turn_detection: {
                 type: 'server_vad',
-                threshold: 0.85,           // 높을수록 확실한 음성만 인식 (TV소음 차단)
+                threshold: 0.85,
                 prefix_padding_ms: 300,
-                silence_duration_ms: 1200, // 1.2초 침묵 후 발화 종료 판단
-                create_response: true,     // 발화 종료 시 응답 생성 (침묵만이면 안 함)
+                silence_duration_ms: 1200,
+                create_response: true,
               },
               tools: [
                 {
-                  // 상담 노트 기록 — 고객 답변마다 반드시 호출
                   type: 'function',
                   name: 'update_smart_note',
                   description: '고객이 답변할 때마다 즉시 이 함수를 호출하여 노트에 기록합니다. 텍스트로 설명하지 말고 반드시 함수를 호출하세요. 예: 고객이 "오상열"→ 즉시 호출. 고객이 "55세"→ 즉시 호출. 절대 텍스트로 "(update_smart_note...)"라고 말하지 마세요.',
@@ -924,8 +1064,6 @@ wss.on('connection', (ws, req) => {
               }));
               openaiWs.send(JSON.stringify({ type: 'response.create' }));
               console.log('[상담WS] 시작 트리거 전송 완료' + (isResume ? ' (재개 모드)' : ''));
-
-              // 20초 타이머 제거 — 중복 전환 방지 (2초 타이머로 통일)
             }
           }, 500);
         });
@@ -938,20 +1076,17 @@ wss.on('connection', (ws, req) => {
             if (event.type === 'response.audio_transcript.done') {
               console.log('[상담WS] 머니야:', event.transcript?.slice(0, 50));
               ws.send(JSON.stringify({ type: 'transcript', text: event.transcript, role: 'assistant' }));
-              // 응답 완료 → 큐 처리
               isResponding = false;
               if (pendingMessage) {
                 const msg = pendingMessage;
                 pendingMessage = null;
                 sendWhenReady(msg, 300);
               }
-              // ★ Brain 활성화 중이면 머니야 발화 완료 후 답변 대기
               if (brain && qc && qc.active && !waitingForAnswer) {
                 waitingForAnswer = true;
                 console.log('[Brain] 머니야 발화 완료 → 고객 답변 대기 중');
               }
 
-              // ★ 머니야 첫 발화 완료 → 1단계 프롬프트만 주입 (QC는 고객 YES 후 활성화)
               if (currentConsultStep === 0) {
                 currentConsultStep = 1;
                 setTimeout(() => {
@@ -969,10 +1104,8 @@ wss.on('connection', (ws, req) => {
             if (event.type === 'conversation.item.input_audio_transcription.completed') {
               const userText = (event.transcript || '').trim();
               console.log('[상담WS] 사용자:', userText);
-              // STT 소음 필터 강화
               if (userText.length <= 2) return;
 
-              // ★ STT 오인식 보정
               const sttFix = {
                 '노준비':'노후준비','노줄비':'노후준비','노후비':'노후준비',
                 '직장애인':'직장인','직장에인':'직장인',
@@ -990,13 +1123,11 @@ wss.on('connection', (ws, req) => {
                 /안녕하세요$/, /감사합니다$/, /수고하세요$/, /^네\s*네$/, /^고맙습니다$/,
                 /이덕영/, /뉴스투데이/, /이브닝뉴스/, /아나운서/,
                 /^[ㄱ-ㅎㅏ-ㅣ\s]+$/,
-                // ★ 추가: 확인질문, 여보세요 등 노이즈
                 /^여보세요/, /^잠깐만/, /^뭐라고/, /^다시/, /^취소/,
                 /이라고요\?$/, /라고요\?$/, /요\?\s*$/, /^아+$/, /^어+$/,
               ];
               if (noisePatterns.some(p => p.test(userTextFinal))) {
                 console.log('[상담WS] STT 소음 차단:', userTextFinal);
-                // 진행 중인 응답이 있으면 취소
                 if (openaiWs && openaiWs.readyState === 1) {
                   try { openaiWs.send(JSON.stringify({ type: 'response.cancel' })); } catch(e) {}
                 }
@@ -1004,7 +1135,6 @@ wss.on('connection', (ws, req) => {
               }
               ws.send(JSON.stringify({ type: 'transcript', text: userText, role: 'user' }));
 
-              // ★ ClaudeBrain — 고객 발화 처리
               if (brain && qc && qc.active && waitingForAnswer) {
                 waitingForAnswer = false;
                 const currentQ = qc.currentQuestion();
@@ -1012,7 +1142,6 @@ wss.on('connection', (ws, req) => {
                   console.log(`[Brain] 고객 발화 처리 중: "${userText}" (질문: ${currentQ.id})`);
                   brain.process(userText, currentQ.id).then(result => {
                     if (result && result.say) {
-                      // update_smart_note 호출
                       if (result.field && result.value) {
                         Object.assign(collectedData, {[result.field]: result.value});
                         ws.send(JSON.stringify({
@@ -1024,9 +1153,7 @@ wss.on('connection', (ws, req) => {
                         }));
                         console.log(`[Brain] 노트 저장: ${result.field} = "${result.value}"`);
                       }
-                      // QC 다음 질문으로 이동
                       qc.processAnswer(result.field, result.value, qc.step);
-                      // 머니야에게 낭독 지시
                       waitingForAnswer = true;
                       sendWhenReady(result.say, 300);
                     }
@@ -1037,7 +1164,6 @@ wss.on('connection', (ws, req) => {
                 }
               }
 
-              // ★ 고객 YES 감지 → QC 활성화 + 첫 질문 전달
               if (qc && !qc.active && currentConsultStep === 1 && !isResponding) {
                 const yesPatterns = /^(네|예|괜찮|좋아|응|어|됩니다|좋습니다|알겠|시작|부탁|해주세요)/;
                 if (yesPatterns.test(userText.trim())) {
@@ -1053,7 +1179,7 @@ wss.on('connection', (ws, req) => {
                         }]}
                       }));
                       openaiWs.send(JSON.stringify({ type: 'response.create' }));
-                        waitingForAnswer = true;
+                      waitingForAnswer = true;
                       console.log(`[QC] 고객 YES 확인 → 첫 질문 전달: "${firstQ.ask}"`);
                     }, 300);
                   }
@@ -1093,58 +1219,30 @@ wss.on('connection', (ws, req) => {
                 let fields = {};
                 try { fields = typeof args.fields === 'string' ? JSON.parse(args.fields) : (args.fields || {}); } catch(e) { fields = {}; }
 
-                // ★ 고객 데이터 누적 — 단계 전환 시 맥락 유지용
                 Object.assign(collectedData, fields);
 
-                // ★ QC — 답변 처리 후 다음 질문 자동 전달
                 if (qc && qc.active && Object.keys(fields).length > 0) {
                   const fieldKey = Object.keys(fields)[0];
                   const fieldVal = fields[fieldKey];
                   const qcResult = qc.processAnswer(fieldKey, fieldVal, notePage);
 
                   if (qcResult && qcResult.text) {
-                      // 단계 전환 시 프롬프트 주입
-                      if (qcResult.nextQ && qc.step !== currentConsultStep) {
-                        currentConsultStep = qc.step;
-                        if (openaiWs?.readyState === 1) {
-                          const np = createConsultRealtimePrompt(
-                            financialContext?.name||userName||'고객',
-                            financialContext, qc.step, null, collectedData
-                          );
-                          openaiWs.send(JSON.stringify({type:'session.update',session:{instructions:np}}));
-                          console.log(`[QC] → ${qc.step}단계 프롬프트 전환`);
-                        }
+                    if (qcResult.nextQ && qc.step !== currentConsultStep) {
+                      currentConsultStep = qc.step;
+                      if (openaiWs?.readyState === 1) {
+                        const np = createConsultRealtimePrompt(
+                          financialContext?.name||userName||'고객',
+                          financialContext, qc.step, null, collectedData
+                        );
+                        openaiWs.send(JSON.stringify({type:'session.update',session:{instructions:np}}));
+                        console.log(`[QC] → ${qc.step}단계 프롬프트 전환`);
                       }
-                      // 공감 + 다음 질문 — 응답 큐로 전달 (충돌 방지)
-                      sendWhenReady(qcResult.text, 400);
+                    }
+                    sendWhenReady(qcResult.text, 400);
                   }
                 }
 
-                // 단계 완료 감지 → 다음 단계 프롬프트에 고객 데이터 포함해서 주입
-                // ━━━ 단계별 마지막 질문 → 다음 단계 자동 전환 ━━━
-                // 각 단계의 마지막 필드가 채워지면 다음 단계 프롬프트 즉시 주입
-
-                const STEP_TRIGGER = {
-                  1: '인적사항을 수집하세요. 반드시 성함부터 물어보세요.',
-                  2: '경제적 고민을 물어보세요. "지금 경제적으로 가장 큰 고민이 무엇인가요?"',
-                  3: '수입지출 분석을 시작하세요. 수입부터 물어보세요.',
-                  4: '자산부채 분석을 시작하세요. 예적금부터 물어보세요.',
-                  5: '금융집짓기 설계도를 설명하세요.',
-                  6: '저축투자 포트폴리오를 안내하세요.',
-                  7: '자산배분 포트폴리오를 안내하세요.',
-                  '8_1': '종합재무설계 은퇴설계를 시작하세요.',
-                  '8_2': '부채설계를 안내하세요.',
-                  '8_3': '저축설계를 안내하세요.',
-                  '8_4': '투자설계를 안내하세요.',
-                  '8_5': '세금설계를 안내하세요.',
-                  '8_6': '부동산설계를 안내하세요.',
-                  '8_7': '보험설계를 안내하세요.',
-                  9: '최종의견을 말씀드리세요.',
-                  10: '클로징을 진행하세요.'
-                };
-
                 function goNextStep(nextStep, nextSubStep, delay) {
-                  // ★ QC 활성화 중이면 QC가 단계 전환 담당 — 중복 충돌 방지
                   if (qc && qc.active) {
                     console.log('[상담WS] QC 활성화 중 — goNextStep 건너뜀 (step ' + nextStep + ')');
                     return;
@@ -1160,61 +1258,31 @@ wss.on('connection', (ws, req) => {
                           financialContext, nextStep, nextSubStep || null, collectedData
                         );
                         openaiWs.send(JSON.stringify({type:'session.update',session:{instructions:np}}));
-                        console.log('[상담WS] → ' + nextStep + '단계' + (nextSubStep ? '.' + nextSubStep : '') + ' 전환 완료 (고객데이터 ' + Object.keys(collectedData).length + '개)');
+                        console.log('[상담WS] → ' + nextStep + '단계' + (nextSubStep ? '.' + nextSubStep : '') + ' 전환 완료');
                       }, 600);
                     }
                   }, delay);
                 }
-                // ━━━ 단계별 마지막 필드 → 다음 단계 전환 (중복 방지) ━━━
-                // notePage가 정확히 일치할 때만 전환 — 필드명 겹침 방지
 
-                // 0단계 → 1단계: session 또는 disclaimer
-                if (notePage===0 && (fields.session||fields.disclaimer)) {
-                  goNextStep(1);
-                }
-                // 1단계 → 2단계: dual(맞벌이) 마지막
-                else if (notePage===1 && fields.dual) {
-                  goNextStep(2);
-                }
-                // 2단계 → 3단계: w1(고민내용) 마지막
-                else if (notePage===2 && fields.w1) {
-                  goNextStep(3);
-                }
-                // 3단계 → 4단계: surplus(잉여자금) 마지막
-                else if (notePage===3 && fields.surplus) {
-                  goNextStep(4);
-                }
-                // 4단계 → 5단계: wealth_index(부자지수) 마지막
-                else if (notePage===4 && fields.wealth_index) {
-                  goNextStep(5);
-                }
-                // 5단계 → 6단계: life_age(수명) 마지막
-                else if (notePage===5 && fields.life_age) {
-                  goNextStep(6);
-                }
-                // 6단계 → 7단계: inv_pct(투자비율) 마지막
-                else if (notePage===6 && fields.inv_pct) {
-                  goNextStep(7);
-                }
-                // 7단계 → 8-1단계: fin_total(금융자산합계) 마지막
-                else if (notePage===7 && fields.fin_total) {
-                  goNextStep(8, 1);
-                }
-                // 8단계 세부 전환
+                if (notePage===0 && (fields.session||fields.disclaimer)) { goNextStep(1); }
+                else if (notePage===1 && fields.dual) { goNextStep(2); }
+                else if (notePage===2 && fields.w1) { goNextStep(3); }
+                else if (notePage===3 && fields.surplus) { goNextStep(4); }
+                else if (notePage===4 && fields.wealth_index) { goNextStep(5); }
+                else if (notePage===5 && fields.life_age) { goNextStep(6); }
+                else if (notePage===6 && fields.inv_pct) { goNextStep(7); }
+                else if (notePage===7 && fields.fin_total) { goNextStep(8, 1); }
                 else if (notePage===8) {
                   const sp = subPage||1;
-                  if (sp===1 && fields.monthly)   goNextStep(8,2); // 은퇴→부채
-                  if (sp===2 && fields.priority)  goNextStep(8,3); // 부채→저축
-                  if (sp===3 && fields.goal)      goNextStep(8,4); // 저축→투자
-                  if (sp===4 && fields.rate)      goNextStep(8,5); // 투자→세금
-                  if (sp===5 && fields.refund)    goNextStep(8,6); // 세금→부동산
-                  if (sp===6 && fields.realty_st) goNextStep(8,7); // 부동산→보험
-                  if (sp===7 && fields.premium)   goNextStep(9);   // 보험→최종의견
+                  if (sp===1 && fields.monthly)   goNextStep(8,2);
+                  if (sp===2 && fields.priority)  goNextStep(8,3);
+                  if (sp===3 && fields.goal)      goNextStep(8,4);
+                  if (sp===4 && fields.rate)      goNextStep(8,5);
+                  if (sp===5 && fields.refund)    goNextStep(8,6);
+                  if (sp===6 && fields.realty_st) goNextStep(8,7);
+                  if (sp===7 && fields.premium)   goNextStep(9);
                 }
-                // 9단계 → 10단계: score(재무점수) 마지막
-                else if (notePage===9 && fields.score) {
-                  goNextStep(10);
-                }
+                else if (notePage===9 && fields.score) { goNextStep(10); }
 
                 ws.send(JSON.stringify({
                   type: 'smart_note_update',
@@ -1233,10 +1301,6 @@ wss.on('connection', (ws, req) => {
 
             if (event.type === 'error') {
               console.error('[상담WS] OpenAI 에러 상세:', JSON.stringify(event.error, null, 2));
-              if (event.error?.code === 'unknown_parameter') {
-                console.error('[상담WS] ★★★ session.update 파라미터 오류 — 프롬프트 미전달 가능성 있음 ★★★');
-              }
-              // active_response 충돌 — 현재 응답 취소 후 안정화
               if (event.error?.code === 'conversation_already_has_active_response') {
                 console.log('[상담WS] active_response 충돌 — 자동 취소 처리');
                 try { openaiWs.send(JSON.stringify({ type: 'response.cancel' })); } catch(e) {}
@@ -1251,9 +1315,6 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      // DESIRE-003 | start_desire WebSocket 핸들러 (기존 유지)
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       if (msg.type === 'start_desire') {
         console.log('[DESIRE-WS] DESIRE 무료 재무진단 세션 시작');
 
@@ -1326,9 +1387,6 @@ wss.on('connection', (ws, req) => {
               ws.send(JSON.stringify({ type: 'transcript', text: userText, role: 'user' }));
             }
             if (event.type === 'response.done') {
-              /* 머니야 응답 완료 → 1.5초 후 response_done 전달
-                 이것이 "하나 둘 셋" 포즈의 기술적 구현
-                 고객이 다음 답변을 생각할 시간을 줌 */
               setTimeout(() => {
                 if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'response_done' }));
               }, 1500);
@@ -1346,9 +1404,6 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      //  AI지출탭: OpenAI Realtime (기존 유지)
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       if (msg.type === 'start_app') {
         console.log('[Realtime] 앱 시작 요청');
         userName = msg.userName || '고객';
@@ -1442,11 +1497,8 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-console.log('AI머니야 서버 v9.2 초기화 완료!');
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  자동 핑 — Render 콜드 스타트 방지
-//  5분마다 자신에게 요청 → 서버 항상 깨어있음
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+console.log('AI머니야 서버 v9.3 초기화 완료!');
+
 const SELF_URL = process.env.RENDER_EXTERNAL_URL || 'https://moneya-server.onrender.com';
 setInterval(async () => {
   try {
@@ -1455,5 +1507,5 @@ setInterval(async () => {
   } catch(e) {
     console.log('[핑] 실패 (무시):', e.message);
   }
-}, 4 * 60 * 1000); // 4분마다
+}, 4 * 60 * 1000);
 console.log('[핑] 자동 활성 유지 시작 — 콜드 스타트 방지');
