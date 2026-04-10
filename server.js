@@ -1103,6 +1103,68 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// /api/consult-chat — AI재무진단 텍스트 상담 (v3.16.1)
+// 음성(Vapi)과 동일한 시스템 프롬프트 사용 → 일관성 보장
+// Claude Sonnet 4.5 사용 → 한국어 자연스러움
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+app.post('/api/consult-chat', async (req, res) => {
+  try {
+    const {
+      message,
+      userName,
+      financialContext,
+      conversationHistory,
+      planInfo,
+      resumeContext,
+      systemPrompt
+    } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ success: false, error: 'message is required' });
+    }
+
+    const defaultSystemPrompt = '당신은 AI재무진단서비스 "머니야"입니다.\n오상열 CFP 대표님이 25년간 2,000건 상담으로 직접 훈련시킨 AI 재무진단 코치입니다.\n한국어 존댓말로 친근하게 응답하세요.\n공감 → 복명복창 → 다음 질문 순서로 진행하세요.\n한 번에 질문 하나만 하세요.\n답변은 2~3문장 이내로 간결하게 하세요.';
+
+    const finalSystemPrompt = [
+      systemPrompt || defaultSystemPrompt,
+      planInfo || '',
+      resumeContext || '',
+      financialContext ? '\n[고객 정보]\n이름: ' + (financialContext.name || userName || '고객') + '\n나이: ' + (financialContext.age || '미파악') + '\n월수입: ' + (financialContext.monthlyIncome || '미파악') + '만원' : ''
+    ].filter(Boolean).join('\n\n');
+
+    const messages = [];
+    if (Array.isArray(conversationHistory)) {
+      conversationHistory.slice(-20).forEach(m => {
+        if (m.role && m.content) {
+          messages.push({
+            role: m.role === 'assistant' ? 'assistant' : 'user',
+            content: m.content
+          });
+        }
+      });
+    }
+    messages.push({ role: 'user', content: message });
+
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 500,
+      system: finalSystemPrompt,
+      messages: messages
+    });
+
+    const aiMessage = response.content[0]?.text || '죄송합니다. 다시 말씀해 주시겠어요?';
+    
+    console.log('[/api/consult-chat] ' + (userName || 'guest') + ': ' + message.substring(0, 30) + '... -> ' + aiMessage.substring(0, 30) + '...');
+    
+    res.json({ success: true, message: aiMessage });
+  } catch (error) {
+    console.error('[/api/consult-chat] Error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
 // TTS API (기존 그대로)
 app.post('/api/tts', async (req, res) => {
   try {
