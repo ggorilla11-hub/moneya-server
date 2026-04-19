@@ -1332,7 +1332,8 @@ app.post('/api/consult-chat', async (req, res) => {
       conversationHistory,
       planInfo,
       resumeContext,
-      systemPrompt
+      systemPrompt,
+      textModeInstruction
     } = req.body;
 
     if (!message) {
@@ -1341,6 +1342,7 @@ app.post('/api/consult-chat', async (req, res) => {
 
     const finalSystemPrompt = [
       systemPrompt || MONEYA_SYSTEM_PROMPT,
+      textModeInstruction || '',
       planInfo || '',
       resumeContext || '',
       financialContext ? '\n[고객 정보]\n이름: ' + (financialContext.name || userName || '고객') + '\n나이: ' + (financialContext.age || '미파악') + '\n월수입: ' + (financialContext.monthlyIncome || '미파악') + '만원' : ''
