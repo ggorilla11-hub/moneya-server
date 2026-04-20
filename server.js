@@ -1401,7 +1401,7 @@ app.post('/api/consult-chat', async (req, res) => {
     }
     messages.push({ role: 'user', content: message });
 
-    const maxTok = textModeInstruction ? 150 : 400;
+    const maxTok = textModeInstruction ? 200 : 400;
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: maxTok,
